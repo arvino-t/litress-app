@@ -5,13 +5,13 @@ import json
 import mimetypes
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QFile, QIODevice, Qt, QTimer, QUrl
+from PySide6.QtCore import QByteArray, QFile, QIODevice, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestJob,
                                      QWebEngineUrlScheme, QWebEngineUrlSchemeHandler)
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
-                               QListWidget, QListWidgetItem, QSlider, QWidget)
+                               QListWidget, QListWidgetItem, QSlider, QVBoxLayout, QWidget)
 
 from . import style
 from .core import BOOKS_DIR, DEBUG, SCHEME, WEB_DIR, log
@@ -99,7 +99,7 @@ class ReaderPage(QWidget):
         self.web.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu if DEBUG
                                       else Qt.ContextMenuPolicy.NoContextMenu)
 
-        # Верхняя панель — заголовок окна, лежит поверх текста
+        # Верхняя панель — заголовок окна
         self.header = HeaderBar(app.window, book.get("title") or "")
         back = IconButton("go-previous", "Назад")
         back.clicked.connect(app.go_back)
@@ -119,10 +119,9 @@ class ReaderPage(QWidget):
         self.toc_popover = Popover(self.toc_list)
         attach_popover(self.toc_btn, self.toc_popover)
         self.header.pack_end(self.toc_btn)
-        self.header.setParent(self)
 
         # Нижняя панель: ползунок по книге и процент
-        self.bottom = QFrame(self)
+        self.bottom = QFrame()
         self.bottom.setObjectName("headerbar")
         bl = QHBoxLayout(self.bottom)
         bl.setContentsMargins(16, 8, 16, 8)
@@ -136,23 +135,25 @@ class ReaderPage(QWidget):
         bl.addWidget(self.slider, 1)
         bl.addWidget(self.percent)
 
+        # Обычная раскладка без наложения: поверх встроенного Chromium панели
+        # при фокусе на странице могут оказаться под ней и «исчезнуть»
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self.header)
+        lay.addWidget(self.web, 1)
+        lay.addWidget(self.bottom)
+
         self.page.load(QUrl(f"{SCHEME}://app/reader.html"))
-        QTimer.singleShot(3000, lambda: self.set_ui_visible(False))
 
-    # --- раскладка: панели поверх текста, показ/скрытие не перестраивает страницы
-
-    def resizeEvent(self, e):
-        w, h = self.width(), self.height()
-        self.web.setGeometry(0, 0, w, h)
-        self.header.setGeometry(0, 0, w, self.header.height())
-        bh = self.bottom.sizeHint().height()
-        self.bottom.setGeometry(0, h - bh, w, bh)
-        super().resizeEvent(e)
+    # --- панели видны всегда; касание середины страницы прячет их для чтения без отвлечений
 
     def set_ui_visible(self, visible):
         self.ui_visible = visible
         self.header.setVisible(visible)
         self.bottom.setVisible(visible)
+        # Строка «глава · %» внутри страницы нужна, только когда панели спрятаны
+        self.js(f"document.getElementById('footer').style.display = '{'none' if visible else ''}'")
 
     # --- настройки вида
 
@@ -278,6 +279,7 @@ class ReaderPage(QWidget):
             }
             self.js(f"window.reader.open({json.dumps(params)})")
         elif t == "opened":
+            self.set_ui_visible(self.ui_visible)
             self._fill_toc(msg.get("toc") or [])
             self.app.on_book_metadata(self.book["id"], msg.get("title"), msg.get("author"))
             self._offer_remote_position()
