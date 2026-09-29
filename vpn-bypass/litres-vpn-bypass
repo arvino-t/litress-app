@@ -1,0 +1,98 @@
+#!/bin/bash
+# Пускает трафик к ЛитРес мимо VPN: маршруты к сети и доменам ЛитРес
+# идут через шлюз обычного подключения (Wi-Fi/Ethernet), а не через туннель.
+# Вызывается NetworkManager при подключении/отключении и таймером systemd.
+set -u
+
+PROTO=247   # метка наших маршрутов — по ней их удобно убирать
+NETS="193.26.19.0/24"
+DOMAINS="litres.ru www.litres.ru api.litres.ru cdn.litres.ru static.litres.ru catalit.litres.ru"
+
+ip -4 route flush proto $PROTO 2>/dev/null
+
+# Шлюз по умолчанию у интерфейса, который не является VPN (наименьшая метрика)
+read -r GW DEV < <(ip -4 route show default | awk '
+    / dev (tun|tap|wg|ppp|nordlynx|proton|mullvad)[^ ]*/ { next }
+    {
+        gw = ""; dev = ""; metric = 0
+        for (i = 1; i <= NF; i++) {
+            if ($i == "via") gw = $(i + 1)
+            if ($i == "dev") dev = $(i + 1)
+            if ($i == "metric") metric = $(i + 1)
+        }
+        if (gw != "") print metric, gw, dev
+    }' | sort -n | head -1 | cut -d" " -f2-)
+
+if [[ -z "${GW:-}" || -z "${DEV:-}" ]]; then
+    exit 0   # нет обычного подключения — делать нечего
+fi
+
+# Адреса из DNS, в обход /etc/hosts (там может быть наш закреплённый адрес CDN)
+dns_lookup() {
+    resolvectl query --synthesize=no -4 --legend=no "$1" 2>/dev/null \
+        | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort -u
+}
+
+# CDN ЛитРес меняет адрес каждые несколько минут — быстрее, чем обновляется
+# список исключений kill switch. Поэтому закрепляем его в /etc/hosts за одним
+# проверенным адресом (строка с меткой ниже) и меняем, только если тот перестал отвечать.
+PIN_DOMAIN=cdn.litres.ru
+PIN_MARK="# litres-vpn-bypass"
+pinned=$(awk -v d="$PIN_DOMAIN" -v m="$PIN_MARK" 'index($0, m) && $2 == d {print $1}' /etc/hosts | head -1)
+
+resolved="$pinned"
+for d in $DOMAINS; do
+    resolved+=" $(dns_lookup "$d" | tr '\n' ' ')"
+done
+
+# CDN отдаёт ЛитРес то один адрес, то другой. Копим адреса, которые реально
+# выдавались доменам ЛитРес, и держим каждый 7 дней после последнего появления.
+# Пересекающиеся адреса (отдельные IP внутри сети /24) объединяем.
+STATE=/var/lib/litres-vpn-bypass/seen.json
+mkdir -p "$(dirname "$STATE")"
+targets=$(python3 - "$STATE" "$NETS" $resolved <<'PY'
+import ipaddress, json, sys, time
+state_file, nets, resolved = sys.argv[1], sys.argv[2].split(), sys.argv[3:]
+now = time.time()
+try:
+    seen = json.load(open(state_file))
+except (OSError, ValueError):
+    seen = {}
+for ip in resolved:
+    seen[ip] = now
+seen = {ip: t for ip, t in seen.items() if now - t < 7 * 86400}
+json.dump(seen, open(state_file, "w"))
+addrs = [ipaddress.ip_network(n) for n in nets] + [ipaddress.ip_network(ip + "/32") for ip in seen]
+print(" ".join(map(str, ipaddress.collapse_addresses(addrs))))
+PY
+)
+
+for t in $targets; do
+    ip -4 route replace "$t" via "$GW" dev "$DEV" proto $PROTO
+done
+
+# Kill switch (vpn-killswitch) пропускает мимо VPN только адреса из этого списка
+KS_TABLE=vpn_killswitch
+KS_BYPASS=/etc/vpn-killswitch/bypass
+if [[ -d /etc/vpn-killswitch ]]; then
+    {
+        echo "# ЛитРес — обновляется автоматически скриптом litres-vpn-bypass"
+        printf '%s\n' $targets
+    } > "$KS_BYPASS.tmp" && mv "$KS_BYPASS.tmp" "$KS_BYPASS"
+    if nft list set inet $KS_TABLE bypass >/dev/null 2>&1; then
+        nft flush set inet $KS_TABLE bypass
+        nft add element inet $KS_TABLE bypass "{ $(echo $targets | tr ' ' ',') }"
+    fi
+fi
+
+# Проверяем закреплённый адрес CDN; если не отвечает — берём рабочий из свежих DNS-ответов
+reachable() { timeout 5 bash -c "</dev/tcp/$1/443" 2>/dev/null; }
+if [[ -z "$pinned" ]] || ! reachable "$pinned"; then
+    for ip in $(dns_lookup "$PIN_DOMAIN"); do
+        if reachable "$ip"; then
+            sed -i "/$PIN_MARK\$/d" /etc/hosts
+            echo "$ip $PIN_DOMAIN $PIN_MARK" >> /etc/hosts
+            break
+        fi
+    done
+fi

@@ -1,0 +1,52 @@
+:root {
+    --bg: #ffffff;
+    --fg: #1b1b1b;
+}
+html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px system-ui, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+}
+foliate-view {
+    position: absolute;
+    inset: 0;
+}
+#loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: .6;
+}
+#loading.error {
+    opacity: 1;
+    padding: 2em;
+    text-align: center;
+}
+#footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 28px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 12px;
+    opacity: .55;
+    pointer-events: none;
+    z-index: 1;
+}
+#chapter {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
