@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHB
 from . import style
 from .core import BOOKS_DIR, DEBUG, SCHEME, WEB_DIR, log
 from .litres import PREFIX
-from .widgets import HeaderBar, IconButton, Popover, Switch, attach_popover, cls, label
+from .widgets import HeaderBar, IconButton, Popover, SeekSlider, Switch, attach_popover, cls, label
 
 
 def register_scheme():
@@ -127,8 +127,9 @@ class ReaderPage(QWidget):
         bl = QHBoxLayout(self.bottom)
         bl.setContentsMargins(16, 8, 16, 8)
         bl.setSpacing(12)
-        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider = SeekSlider()
         self.slider.setRange(0, 1000)
+        self.slider.sliderMoved.connect(lambda v: self.percent.setText(f"{round(v / 10)}%"))
         self.slider.sliderReleased.connect(self._on_seek)
         self.percent = label("0%")
         self.percent.setMinimumWidth(44)

@@ -81,6 +81,8 @@ if [[ ! -x "$APP_DIR/venv/bin/python" ]]; then
 fi
 "$APP_DIR/venv/bin/python" -m pip install --upgrade --quiet pip
 "$APP_DIR/venv/bin/python" -m pip install --upgrade --quiet "$SRC"
+# Свежий код ставим всегда, даже если номер версии не менялся
+"$APP_DIR/venv/bin/python" -m pip install --quiet --force-reinstall --no-deps "$SRC"
 echo "  установлено: $("$APP_DIR/venv/bin/python" -c 'import litres_reader; print(litres_reader.__version__)')"
 
 mkdir -p "$(dirname "$BIN")"

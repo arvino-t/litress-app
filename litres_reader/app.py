@@ -187,6 +187,22 @@ class App(QObject):
             QShortcut(QKeySequence(keys), self.window, activated=slot)
 
         self.refresh_library()
+        QTimer.singleShot(0, self._open_last_book)
+
+    def _open_last_book(self):
+        """Автопереход: открыть последнюю книгу на месте, где остановились (аудио — на паузе)."""
+        if not self.settings.get("openLastBook", True):
+            return
+        book = self.library.books.get(self.settings.get("lastBook") or "")
+        path = self.library.file_path(book) if book else None
+        if not path:
+            return
+        if (self.library.progress.get(book["id"], {}).get("fraction") or 0) >= 0.999:
+            return   # дочитанную книгу сами не открываем
+        if book.get("format") in AUDIO_FORMATS:
+            self.open_player(book, path, autoplay=False)
+        else:
+            self.open_book(book, path)
 
     # --- навигация между экранами (как Adw.NavigationView)
 
@@ -261,6 +277,11 @@ class App(QObject):
         self.only_action = QAction("Только скачанные", self.menu, checkable=True)
         self.only_action.toggled.connect(self._on_only_downloaded)
         self.menu.addAction(self.only_action)
+        self.last_action = QAction("Открывать последнюю книгу при запуске", self.menu, checkable=True)
+        self.last_action.setChecked(bool(self.settings.get("openLastBook", True)))
+        self.last_action.toggled.connect(lambda on: (self.settings.__setitem__("openLastBook", on),
+                                                     self.save_settings()))
+        self.menu.addAction(self.last_action)
         self.menu.addSeparator()
         self.account_action = self.menu.addAction("Войти в ЛитРес", self._account_action)
         self.menu.addSeparator()
@@ -726,6 +747,9 @@ class App(QObject):
 
     def open_book(self, book, path: Path):
         fmt = book.get("format") or ""
+        if fmt in AUDIO_FORMATS or fmt in READABLE:
+            self.settings["lastBook"] = book["id"]
+            self.save_settings()
         if fmt in AUDIO_FORMATS:
             self.open_player(book, path)
             return
@@ -973,7 +997,9 @@ class App(QObject):
 
     # --- аудиокниги
 
-    def open_player(self, book, path: Path):
+    def open_player(self, book, path: Path, autoplay=True):
+        self.settings["lastBook"] = book["id"]
+        self.save_settings()
         if self.player.book_id != book["id"]:
             tracks = audio_tracks(path)
             if not tracks:
@@ -984,15 +1010,27 @@ class App(QObject):
             if (saved.get("fraction") or 0) >= 0.999:
                 saved = {}   # прослушанную книгу начинаем сначала
             self.player.rate = self.settings.get("audioRate", 1.0)
-            self.player.load(book["id"], tracks, saved.get("track", 0), saved.get("pos", 0.0))
+            self.player.load(book["id"], tracks, saved.get("track", 0), saved.get("pos", 0.0), play=autoplay)
             if self.player_page:
                 self.player_page.close_page()
                 self.stack.removeWidget(self.player_page)
                 self.player_page.deleteLater()
             self.player_page = PlayerPage(self, book)
-        elif not self.player.playing:
+            QTimer.singleShot(1500, lambda: self._offer_remote_audio_position(book))
+        elif not self.player.playing and autoplay:
             self.player.play()
         self.show_player()
+
+    def _offer_remote_audio_position(self, book):
+        """Если на ЛитРес книга прослушана дальше, предлагаем перейти туда."""
+        if self.player.book_id != book["id"]:
+            return
+        remote = book.get("remote_percent") or 0
+        local = self.player.fraction() * 100
+        if remote < 1 or remote - local < 1:
+            return
+        self.toast(f"На ЛитРес прослушано {round(remote)}%", button="Перейти", timeout=10000,
+                   on_button=lambda: self.player.go_to_fraction(remote / 100))
 
     def show_player(self):
         if not self.player_page:

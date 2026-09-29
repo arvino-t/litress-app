@@ -63,6 +63,8 @@ $VPy = Join-Path $Venv 'Scripts\python.exe'
 & $VPy -m pip install --upgrade --quiet pip
 & $VPy -m pip install --upgrade --quiet $Src
 if ($LASTEXITCODE -ne 0) { throw 'pip не смог установить приложение' }
+# Свежий код ставим всегда, даже если номер версии не менялся
+& $VPy -m pip install --quiet --force-reinstall --no-deps $Src
 Copy-Item (Join-Path $Src 'litres_reader\data\litres-reader.ico') $Icon -Force
 Copy-Item (Join-Path $PSScriptRoot 'uninstall.ps1') (Join-Path $AppDir 'uninstall.ps1') -Force
 $Version = & $VPy -c 'import litres_reader; print(litres_reader.__version__)'

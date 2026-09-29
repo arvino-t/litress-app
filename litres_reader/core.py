@@ -77,6 +77,9 @@ DEFAULT_SETTINGS = {
     "libraryFolder": None,
     "libraryType": "all",   # all / text / audio
     "audioRate": 1.0,
+    # Автопереход: при запуске открыть последнюю книгу на месте, где остановились
+    "openLastBook": True,
+    "lastBook": None,
 }
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке

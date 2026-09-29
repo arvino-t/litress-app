@@ -5,7 +5,8 @@ from PySide6.QtCore import (QEasingCurve, QPoint, QPropertyAnimation, QRect, QSi
                             Signal, Property)
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
-                               QLayout, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+                               QLayout, QPushButton, QSizePolicy, QSlider, QStyle, QStyleOptionSlider,
+                               QToolButton, QVBoxLayout, QWidget)
 
 from . import style
 
@@ -487,6 +488,28 @@ class BookCard(QFrame):
                 self._long_press()
                 return True
         return super().event(e)
+
+
+class SeekSlider(QSlider):
+    """Ползунок, который по щелчку сразу переносит в это место (как в GTK), а не шагает."""
+
+    def __init__(self, parent=None):
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton:
+            opt = QStyleOptionSlider()
+            self.initStyleOption(opt)
+            groove = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt,
+                                                 QStyle.SubControl.SC_SliderGroove, self)
+            handle = self.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt,
+                                                 QStyle.SubControl.SC_SliderHandle, self)
+            span = groove.width() - handle.width()
+            x = int(e.position().x() - groove.x() - handle.width() / 2)
+            self.setValue(QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), x, span))
+        # Ручка уже под курсором — дальше обычное перетаскивание, по отпусканию — sliderReleased
+        super().mousePressEvent(e)
 
 
 class Switch(QAbstractButton):
