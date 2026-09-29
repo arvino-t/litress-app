@@ -183,7 +183,7 @@ class SingularitySync(QObject):
             steps.append(self._sync_tasks)
         if self.state.get("daily"):
             steps.append(self._sync_habit)
-        errors = []
+        errors = self._errors = []
 
         def next_step(err=None):
             if err:
@@ -253,8 +253,12 @@ class SingularitySync(QObject):
                 next_step("не удалось создать проект «Книги» в Singularity")
                 return
             if need_wishlist:
-                self._ensure_project(EXT_WISHLIST, "Хочу прочитать", "1f516",
-                                     lambda wish_pid: with_projects(books_pid, wish_pid))
+                def with_wishlist(wish_pid):
+                    if not wish_pid:
+                        # Не молчим: без проекта «Хочу прочитать» пропускаем только его
+                        self._errors.append("не удалось создать проект «Хочу прочитать» в Singularity")
+                    with_projects(books_pid, wish_pid)
+                self._ensure_project(EXT_WISHLIST, "Хочу прочитать", "1f516", with_wishlist)
             else:
                 with_projects(books_pid, None)
 
