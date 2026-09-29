@@ -6,7 +6,8 @@ set -u
 
 PROTO=247   # метка наших маршрутов — по ней их удобно убирать
 NETS="193.26.19.0/24"
-DOMAINS="litres.ru www.litres.ru api.litres.ru cdn.litres.ru static.litres.ru catalit.litres.ru"
+DOMAINS="litres.ru www.litres.ru api.litres.ru cdn.litres.ru static.litres.ru catalit.litres.ru
+         api.singularity-app.com me.singularity-app.com singularity-app.com"
 
 ip -4 route flush proto $PROTO 2>/dev/null
 

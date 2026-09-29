@@ -300,13 +300,13 @@ class Library:
         self.save()
         save_json(PROGRESS_FILE, self.progress)
 
-    def set_progress(self, bid, cfi, fraction):
-        self.progress[bid] = {"cfi": cfi, "fraction": fraction}
+    def set_progress(self, bid, cfi, fraction, chapter=None):
+        self.progress[bid] = {"cfi": cfi, "fraction": fraction, "chapter": chapter or ""}
         if not self._progress_timer.isActive():
             self._progress_timer.start()
 
-    def set_audio_progress(self, bid, track, position, fraction):
-        self.progress[bid] = {"track": track, "pos": position, "fraction": fraction}
+    def set_audio_progress(self, bid, track, position, fraction, chapter=None):
+        self.progress[bid] = {"track": track, "pos": position, "fraction": fraction, "chapter": chapter or ""}
         if not self._progress_timer.isActive():
             self._progress_timer.start()
 

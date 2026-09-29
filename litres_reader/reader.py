@@ -292,7 +292,8 @@ class ReaderPage(QWidget):
             self.percent.setText(f"{round(frac * 100)}%")
             self.header.set_title(self.book.get("title") or "", msg.get("chapter") or "")
             if msg.get("cfi"):
-                self.app.library.set_progress(self.book["id"], msg["cfi"], frac)
+                self.app.library.set_progress(self.book["id"], msg["cfi"], frac, msg.get("chapter"))
+                self.app.note_activity()
             if msg.get("atEnd") and not self.book.get("finished"):
                 self.app.set_finished(self.book, True, auto=True)
             if not self._remote_checked:

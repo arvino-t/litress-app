@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPaint
 from PySide6.QtNetwork import QLocalServer, QLocalSocket, QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QFrame,
                                QHBoxLayout, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
-                               QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
+                               QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import __version__, style
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, BOOKS_DIR, CONFIG_FILE,
@@ -24,6 +25,7 @@ from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, 
 from .litres import LitresSession
 from .player import AudioPlayer, PlayerPage, audio_tracks
 from .reader import ReaderPage
+from .singularity import SingularitySync
 from .widgets import (BookCard, FlowLayout, HeaderBar, IconButton, Switch, Toast, cls, label)
 
 EBOOK_PATTERNS = "*.epub *.fb2 *.fb2.zip *.fbz *.mobi *.azw3"
@@ -172,6 +174,14 @@ class App(QObject):
         self.litres = LitresSession(self)
         self.litres.state_changed.connect(self.on_login_state)
 
+        # Singularity: задачи книг, прогресс, «Хочу прочитать», привычка «Чтение N минут»
+        self.singularity = SingularitySync(self)
+        self._last_activity = 0.0
+        self._activity_timer = QTimer(self, interval=30_000)
+        self._activity_timer.timeout.connect(self._count_reading_time)
+        self._activity_timer.start()
+        QTimer.singleShot(10_000, self.singularity.sync)
+
         self.window = MainWindow(self)
         self.window.setWindowIcon(QIcon(str(APP_ICON)))
         self.stack = QStackedWidget()
@@ -285,6 +295,7 @@ class App(QObject):
         self.menu.addAction(self.last_action)
         self.menu.addSeparator()
         self.account_action = self.menu.addAction("Войти в ЛитРес", self._account_action)
+        self.menu.addAction("Singularity…", self.show_singularity_dialog)
         self.menu.addSeparator()
         self.menu.addAction("О приложении", self.on_about)
         menu_btn.clicked.connect(lambda: self.menu.popup(menu_btn.mapToGlobal(QPoint(0, menu_btn.height() + 4))))
@@ -661,6 +672,7 @@ class App(QObject):
                 text += ". Не получено: " + ", ".join(problems)
             if not quiet or problems:
                 self.toast(text)
+            self.singularity.schedule(soon=True)
 
         def got_arts(arts, status):
             if arts is None:
@@ -724,6 +736,7 @@ class App(QObject):
     def set_finished(self, book, finished: bool, auto=False):
         """Отметка «прочитано»: локально и на ЛитРес (сразу или при следующей синхронизации)."""
         book["finished"] = finished
+        self.singularity.schedule(soon=True)
         if book.get("source") == "litres":
             book["finished_pending"] = finished
         self.library.save()
@@ -1086,8 +1099,9 @@ class App(QObject):
         bid = self.player.book_id
         if not bid or not self.player.tracks:
             return
+        ch = self.player.chapters[self.player.current_chapter()]["title"] if self.player.chapters else ""
         self.library.set_audio_progress(bid, self.player.index, self.player.position(),
-                                        self.player.fraction())
+                                        self.player.fraction(), ch)
         if bid in self.cards and not self.player.playing:
             self.refresh_card(bid)
 
@@ -1129,6 +1143,133 @@ class App(QObject):
                                               f"Электронные книги ({EBOOK_PATTERNS})")
         if path:
             self.import_and_open(Path(path))
+
+    # --- Singularity
+
+    def note_activity(self):
+        """Читатель листает книгу — для учёта времени чтения и отправки прогресса."""
+        self._last_activity = time.monotonic()
+        self.singularity.schedule()
+
+    def _count_reading_time(self):
+        reading = (self.reader is not None and self.current() is self.reader
+                   and self.window.isActiveWindow() and time.monotonic() - self._last_activity < 180)
+        if reading or self.player.playing:
+            self.singularity.add_reading_time(30)
+            if self.player.playing:
+                self.singularity.schedule()
+
+    def show_singularity_dialog(self):
+        s = self.singularity
+        dlg = QDialog(self.window, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        dlg.setMinimumWidth(460)
+        v = QVBoxLayout(dlg)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        header = HeaderBar(dlg, "Singularity", show_controls=False)
+        close = IconButton("window-close", "Закрыть", flat=False)
+        cls(close, "wincontrol")
+        close.clicked.connect(dlg.accept)
+        header.pack_end(close)
+        v.addWidget(header)
+
+        body = QWidget()
+        b = QVBoxLayout(body)
+        b.setContentsMargins(18, 18, 18, 18)
+        b.setSpacing(8)
+        intro = label("Книги, прогресс и ежедневное чтение — в планировщике SingularityApp.<br>"
+                      "Токен создаётся в <a href='https://me.singularity-app.com'>личном кабинете</a> → "
+                      "«Доступ к API» (нужен доступ к задачам, проектам и привычкам).", wrap=True)
+        intro.setOpenExternalLinks(True)
+        b.addWidget(intro)
+        token = QLineEdit(s.state.get("token", ""))
+        token.setEchoMode(QLineEdit.EchoMode.Password)
+        token.setPlaceholderText("API-токен Singularity")
+        b.addWidget(token)
+        b.addSpacing(6)
+
+        boxed = QFrame()
+        cls(boxed, "boxed")
+        rows = QVBoxLayout(boxed)
+        rows.setContentsMargins(0, 0, 0, 0)
+        rows.setSpacing(0)
+        switches = {}
+        for key, title, hint in (
+                ("reading", "Задачи «Читаю»", "Начатые книги — задачи в проекте «Книги», дочитанные закрываются"),
+                ("progress", "Прогресс в задаче", "Процент и текущая глава в заметке задачи"),
+                ("wishlist", "«Хочу прочитать»", "Непрочитанные книги — задачи в отдельном проекте"),
+                ("daily", "Ежедневное чтение", "Привычка отмечается сама, когда за день набралось N минут")):
+            row = QWidget()
+            h = QHBoxLayout(row)
+            h.setContentsMargins(14, 8, 14, 8)
+            texts = QVBoxLayout()
+            texts.setSpacing(0)
+            texts.addWidget(label(title))
+            texts.addWidget(label(hint, "dim", "caption", wrap=True))
+            h.addLayout(texts, 1)
+            sw = Switch(bool(s.state.get(key)))
+            h.addWidget(sw)
+            rows.addWidget(row)
+            switches[key] = sw
+        b.addWidget(boxed)
+
+        goal_row = QHBoxLayout()
+        goal_row.addWidget(label("Цель чтения в день, минут"), 1)
+        goal = QSpinBox()
+        goal.setRange(5, 240)
+        goal.setSingleStep(5)
+        goal.setValue(int(s.state.get("dailyMinutes") or 20))
+        goal_row.addWidget(goal)
+        b.addLayout(goal_row)
+        b.addWidget(label(f"Сегодня прочитано и прослушано: {s.today_minutes()} мин", "dim", "caption"))
+
+        status = label("", "dim", wrap=True)
+        b.addWidget(status)
+        s.status.connect(status.setText)
+        buttons = QHBoxLayout()
+        disconnect = QPushButton("Отключить")
+        run = QPushButton("Проверить и синхронизировать")
+        cls(run, "suggested")
+        buttons.addWidget(disconnect)
+        buttons.addStretch()
+        buttons.addWidget(run)
+        b.addSpacing(6)
+        b.addLayout(buttons)
+        v.addWidget(body)
+
+        def apply():
+            s.configure(token=token.text().strip(), dailyMinutes=goal.value(),
+                        **{k: sw.isChecked() for k, sw in switches.items()})
+
+        def check_and_sync():
+            apply()
+            if not s.enabled:
+                status.setText("Вставьте токен")
+                return
+            status.setText("Проверяю токен…")
+            run.setEnabled(False)
+
+            def checked(ok, text):
+                run.setEnabled(True)
+                status.setText(text + ("; синхронизирую…" if ok else ""))
+                if ok:
+                    s.sync()
+            s.check_token(checked)
+
+        def off():
+            s.configure(token="")
+            token.clear()
+            status.setText("Синхронизация с Singularity отключена")
+        run.clicked.connect(check_and_sync)
+        disconnect.clicked.connect(off)
+
+        frame = QFrame(dlg)
+        frame.setObjectName("popover")
+        frame.lower()
+        dlg.resizeEvent = lambda e: frame.setGeometry(dlg.rect())
+        dlg.exec()
+        apply()
+        s.status.disconnect(status.setText)
 
     # --- прочее
 
