@@ -27,6 +27,9 @@ gi.require_version("Adw", "1")
 gi.require_version("WebKit", "6.0")
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango, WebKit  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from audio import AUDIO_FORMATS, AudioPlayer, PlayerPage, audio_tracks  # noqa: E402
+
 APP_ID = "ru.local.LitresReader"
 APP_NAME = "Читалка ЛитРес"
 SCHEME = "litreader"
@@ -74,7 +77,13 @@ DEFAULT_SETTINGS = {
     # фильтры библиотеки
     "libraryStatus": "all",
     "libraryFolder": None,
+    "libraryType": "all",   # all / text / audio
+    "audioRate": 1.0,
 }
+
+TYPE_FILTERS = (("all", "Книги и аудио"), ("text", "Книги"), ("audio", "Аудиокниги"))
+# Аудио: сначала один файл M4B, иначе архив с MP3
+AUDIO_FILE_TYPES = (("mobile_version_mp4", "m4b"), ("zip_with_mp3", "zip"))
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
 NO_FOLDER = "__none__"
@@ -122,6 +131,8 @@ def looks_like_book(path: Path, fmt: str) -> bool:
         return False
     if head[:2] == b"PK":
         return True
+    if fmt == "m4b":
+        return head[4:8] == b"ftyp"
     if fmt.endswith("pdf"):
         return head.startswith(b"%PDF")
     if fmt.startswith("mobi"):
@@ -161,8 +172,6 @@ class Library:
         """Добавляет/обновляет книги из аккаунта, не трогая скачанные файлы."""
         ids = []
         for art in arts:
-            if art.get("art_type") == 1:  # аудиокниги пропускаем
-                continue
             bid = str(art.get("id"))
             authors = [p.get("full_name") for p in art.get("persons") or []
                        if p.get("role") == "author" and p.get("full_name")]
@@ -174,6 +183,7 @@ class Library:
                 is_drm=bool(art.get("is_drm")),
                 url=absolute(art.get("url"), SITE),
                 finished=bool(art.get("is_finished")),
+                is_audio=art.get("art_type") == 1,
             )
             if art.get("read_percent") is not None:
                 book["remote_percent"] = float(art["read_percent"] or 0)
@@ -280,7 +290,9 @@ class Library:
         if not book:
             return
         p = self.file_path(book)
-        if p:
+        if p and p.is_dir():
+            shutil.rmtree(p, ignore_errors=True)
+        elif p:
             p.unlink(missing_ok=True)
         book.pop("file", None)
         book.pop("format", None)
@@ -290,6 +302,11 @@ class Library:
             self.order = [i for i in self.order if i != bid]
         self.save()
         save_json(PROGRESS_FILE, self.progress)
+
+    def set_audio_progress(self, bid, track, position, fraction):
+        self.progress[bid] = {"track": track, "pos": position, "fraction": fraction}
+        if not self._progress_timer:
+            self._progress_timer = GLib.timeout_add_seconds(2, self._flush_progress)
 
     def set_progress(self, bid, cfi, fraction):
         self.progress[bid] = {"cfi": cfi, "fraction": fraction}
@@ -657,6 +674,14 @@ class BookCard(Gtk.FlowBoxChild):
         self.cloud.add_css_class("book-badge")
         overlay.add_overlay(self.cloud)
 
+        self.audio_icon = Gtk.Image(icon_name="litreader-audio-headphones-symbolic", pixel_size=16,
+                                    halign=Gtk.Align.END, valign=Gtk.Align.END,
+                                    tooltip_text="Аудиокнига", visible=False)
+        self.audio_icon.set_margin_bottom(6)
+        self.audio_icon.set_margin_end(6)
+        self.audio_icon.add_css_class("book-badge")
+        overlay.add_overlay(self.audio_icon)
+
         self.progress = Gtk.ProgressBar(valign=Gtk.Align.END, visible=False)
         self.progress.set_margin_start(8)
         self.progress.set_margin_end(8)
@@ -709,6 +734,7 @@ class BookCard(Gtk.FlowBoxChild):
             self.badge.set_label("Новая")
         self.badge.set_visible(downloaded or status != "unread")
         self.cloud.set_visible(not downloaded)
+        self.audio_icon.set_visible(bool(book.get("is_audio")))
 
     def set_download_progress(self, fraction):
         if fraction is None:
@@ -996,6 +1022,8 @@ class App(Adw.Application):
         self.litres: LitresSession | None = None
         self.window = None
         self.reader: ReaderPage | None = None
+        self.player: AudioPlayer | None = None
+        self.player_page: PlayerPage | None = None
         self.cards: dict[str, BookCard] = {}
         self.downloading: set[str] = set()
         self.syncing = False
@@ -1011,7 +1039,16 @@ class App(Adw.Application):
     def do_startup(self):
         Adw.Application.do_startup(self)
         Gtk.Window.set_default_icon_name(APP_ID)
+        # Свои копии значков Adwaita: не во всех темах они отображаются правильно
+        Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).add_search_path(
+            str(HERE / "data" / "icons"))
         self.library = Library()
+        self.player = AudioPlayer()
+        self.player.connect("finished", self._on_audio_finished)
+        self.player.connect("error", lambda _p, msg: self.toast(f"Ошибка воспроизведения: {msg}"))
+        self.player.connect("state-changed", lambda *_: self._on_player_state())
+        # Место прослушивания сохраняем раз в 5 секунд
+        GLib.timeout_add_seconds(5, lambda: (self.save_audio_progress(), True)[1])
 
         ctx = WebKit.WebContext.get_default()
         ctx.register_uri_scheme(SCHEME, self._serve)
@@ -1036,6 +1073,7 @@ class App(Adw.Application):
                 font-weight: bold;
             }
             .book-badge.finished { background: alpha(@success_bg_color, .9); }
+            .player-play { min-width: 64px; min-height: 64px; -gtk-icon-size: 28px; }
             flowboxchild.book-card { border-radius: 12px; }
         """)
         Gtk.StyleContext.add_provider_for_display(
@@ -1118,6 +1156,12 @@ class App(Adw.Application):
         self.sync_spinner = Adw.Spinner(visible=False)
         header.pack_start(self.sync_btn)
         header.pack_start(self.sync_spinner)
+
+        # Возврат к плееру, пока звучит (или поставлена на паузу) аудиокнига
+        self.now_playing_btn = Gtk.Button(visible=False, tooltip_text="Вернуться к плееру")
+        self.now_playing_btn.add_css_class("flat")
+        self.now_playing_btn.connect("clicked", lambda *_: self.show_player())
+        header.pack_start(self.now_playing_btn)
 
         menu = Gio.Menu()
         menu.append("Открыть файл…", "app.open-file")
@@ -1203,8 +1247,20 @@ class App(Adw.Application):
         self.folder_drop = Gtk.DropDown(model=self.folder_model, tooltip_text="Папка на ЛитРес")
         self.folder_drop.connect("notify::selected", self._on_folder_selected)
         bar.append(self.folder_drop)
+
+        self.type_drop = Gtk.DropDown.new_from_strings([label for _k, label in TYPE_FILTERS])
+        keys = [k for k, _l in TYPE_FILTERS]
+        current = self.settings.get("libraryType", "all")
+        self.type_drop.set_selected(keys.index(current) if current in keys else 0)
+        self.type_drop.connect("notify::selected", self._on_type_selected)
+        bar.append(self.type_drop)
         self._update_filter_bar()
         return bar
+
+    def _on_type_selected(self, drop, _pspec):
+        self.settings["libraryType"] = TYPE_FILTERS[drop.get_selected()][0]
+        self.save_settings()
+        self.flow.invalidate_filter()
 
     def _set_status_filter(self, key):
         self.settings["libraryStatus"] = key
@@ -1240,6 +1296,8 @@ class App(Adw.Application):
         if current not in self._folder_ids:
             self.settings["libraryFolder"] = None
         self.folder_drop.set_visible(bool(folders))
+        if hasattr(self, "type_drop"):
+            self.type_drop.set_visible(any(b.get("is_audio") for b in books))
 
     def _build_login_page(self):
         header = Adw.HeaderBar(title_widget=Adw.WindowTitle(
@@ -1262,6 +1320,8 @@ class App(Adw.Application):
         return False
 
     def _on_close(self, *_):
+        self.save_audio_progress()
+        self.player.unload()
         self.library.flush()
         return False
 
@@ -1288,6 +1348,9 @@ class App(Adw.Application):
             return False
         status = self.settings.get("libraryStatus", "all")
         if status != "all" and self.library.status(book) != status:
+            return False
+        kind = self.settings.get("libraryType", "all")
+        if kind != "all" and bool(book.get("is_audio")) != (kind == "audio"):
             return False
         folder = self.settings.get("libraryFolder")
         if folder == NO_FOLDER:
@@ -1544,7 +1607,7 @@ class App(Adw.Application):
                 if bid in self.library.books:
                     self.set_finished(self.library.books[bid], value)
             self.sync_state = {
-                "count": sum(1 for a in arts if a.get("art_type") != 1),
+                "count": len(arts),
                 "has_folders_field": any("in_folders" in a for a in arts),
             }
             self.litres.fetch_list("/users/me/arts/in-progress", got_progress)
@@ -1602,6 +1665,9 @@ class App(Adw.Application):
 
     def open_book(self, book, path: Path):
         fmt = book.get("format") or ""
+        if fmt in AUDIO_FORMATS:
+            self.open_player(book, path)
+            return
         if fmt not in READABLE:
             # PDF и прочее — в приложении по умолчанию
             Gtk.FileLauncher.new(Gio.File.new_for_path(str(path))).launch(self.window, None, None)
@@ -1610,6 +1676,81 @@ class App(Adw.Application):
             self.nav.pop_to_tag("library")
         self.reader = ReaderPage(self, book, path)
         self.nav.push(self.reader)
+
+    # --- аудиокниги
+
+    def open_player(self, book, path: Path):
+        if self.player.book_id != book["id"]:
+            tracks = audio_tracks(path)
+            if not tracks:
+                self.toast("В аудиокниге не найдено звуковых файлов")
+                return
+            self.save_audio_progress()
+            saved = self.library.progress.get(book["id"], {})
+            if (saved.get("fraction") or 0) >= 0.999:
+                saved = {}   # прослушанную книгу начинаем сначала
+            self.player.rate = self.settings.get("audioRate", 1.0)
+            self.player.load(book["id"], tracks, saved.get("track", 0), saved.get("pos", 0.0))
+            if self.player_page:
+                self.player_page.destroy_page()
+            self.player_page = PlayerPage(self, book)
+        elif not self.player.playing:
+            self.player.play()
+        self.show_player()
+
+    def show_player(self):
+        if not self.player_page:
+            return
+        if self.nav.get_visible_page() is not self.player_page:
+            self.nav.pop_to_tag("library")
+            self.nav.push(self.player_page)
+
+    def save_audio_progress(self):
+        bid = self.player.book_id if self.player else None
+        if not bid or not self.player.tracks:
+            return
+        self.library.set_audio_progress(bid, self.player.index, self.player.position(),
+                                        self.player.fraction())
+        if bid in self.cards and not self.player.playing:
+            self.refresh_card(bid)
+
+    def _on_player_state(self):
+        book = self.library.books.get(self.player.book_id or "")
+        if not book or not hasattr(self, "now_playing_btn"):
+            return
+        icon = "media-playback-start-symbolic" if self.player.playing else "media-playback-pause-symbolic"
+        content = Gtk.Box(spacing=6)
+        content.append(Gtk.Image(icon_name=icon))
+        content.append(Gtk.Label(label=book.get("title") or "", ellipsize=Pango.EllipsizeMode.END,
+                                 max_width_chars=24))
+        self.now_playing_btn.set_child(content)
+        self.now_playing_btn.set_visible(True)
+        self.save_audio_progress()
+
+    def _on_audio_finished(self, *_):
+        book = self.library.books.get(self.player.book_id or "")
+        if not book:
+            return
+        self.library.set_audio_progress(book["id"], len(self.player.tracks) - 1, 0.0, 1.0)
+        if not book.get("finished"):
+            self.set_finished(book, True)
+            self.toast("Аудиокнига прослушана — отмечена прочитанной")
+
+    def _extract_audio_zip(self, zip_path: Path, dest_dir: Path, on_done):
+        """Распаковка MP3-архива в отдельном потоке (архивы бывают большими)."""
+        import threading
+        import zipfile
+
+        def work():
+            try:
+                with zipfile.ZipFile(zip_path) as z:
+                    z.extractall(dest_dir)
+                zip_path.unlink(missing_ok=True)
+                GLib.idle_add(on_done, None)
+            except (OSError, zipfile.BadZipFile) as e:
+                shutil.rmtree(dest_dir, ignore_errors=True)
+                GLib.idle_add(on_done, str(e))
+        threading.Thread(target=work, daemon=True).start()
 
     def download_book(self, book, open_after=False):
         bid = book["id"]
@@ -1635,6 +1776,20 @@ class App(Adw.Application):
                 fail(f"Не удалось получить файлы книги (код {status})")
                 return
             main = [f for f in files if not f.get("is_additional")] or files
+            if book.get("is_audio"):
+                by_type = {f.get("file_type"): f for f in main if f.get("file_type")}
+                choice = next(((t, ext) for t, ext in AUDIO_FILE_TYPES if t in by_type), None)
+                if not choice:
+                    fail("Для этой аудиокниги доступны только отдельные главы — пока не поддерживается")
+                    return
+                ftype, local = choice
+                f = by_type[ftype]
+                remote_ext = f.get("extension") or local
+                dest = BOOKS_DIR / f"{bid}.{local}"
+                attempts = [f"{SITE}/download_book/{bid}/{f['id']}/{bid}.{remote_ext}",
+                            f"{SITE}/download_book_subscr/{bid}/{f['id']}/{bid}.{remote_ext}"]
+                try_next(attempts, dest, local, local)
+                return
             by_ext = {f.get("extension"): f for f in main if f.get("extension")}
             fmt = next((e for e in FORMAT_ORDER if e in by_ext), None)
             if not fmt:
@@ -1651,11 +1806,30 @@ class App(Adw.Application):
             url = attempts.pop(0)
 
             def done(ok, err):
+                if ok and looks_like_book(dest, fmt) and book.get("is_audio") and fmt == "zip":
+                    # MP3-архив распаковываем в папку книги
+                    folder = BOOKS_DIR / bid
+
+                    def extracted(err):
+                        self.downloading.discard(bid)
+                        if card:
+                            card.set_download_progress(None)
+                        if err:
+                            self.toast(f"Не удалось распаковать аудиокнигу: {err}")
+                            return
+                        book.update(file=folder.name, format="mp3dir")
+                        self.library.save()
+                        self.refresh_card(bid)
+                        if open_after:
+                            self.open_book(book, folder)
+                    self._extract_audio_zip(dest, folder, extracted)
+                    return
                 if ok and looks_like_book(dest, fmt):
                     self.downloading.discard(bid)
                     if card:
                         card.set_download_progress(None)
-                    book.update(file=dest.name, format=local_ext if local_ext in READABLE else fmt)
+                    book.update(file=dest.name, format=local_ext if local_ext in READABLE | AUDIO_FORMATS
+                                else fmt)
                     self.library.save()
                     self.refresh_card(bid)
                     if book.get("is_drm"):
@@ -1691,7 +1865,8 @@ class App(Adw.Application):
 
         downloaded = self.library.file_path(book) is not None
         if downloaded:
-            item("Читать", lambda: self.on_book_activated(book["id"]))
+            item("Слушать" if book.get("is_audio") else "Читать",
+                 lambda: self.on_book_activated(book["id"]))
         if book.get("finished"):
             item("Снять отметку «Прочитано»", lambda: self.set_finished(book, False))
         else:
@@ -1705,9 +1880,21 @@ class App(Adw.Application):
                 item("Открыть на сайте ЛитРес",
                      lambda: Gtk.UriLauncher.new(book["url"]).launch(self.window, None, None))
         if downloaded or book.get("source") == "local":
-            item("Удалить с устройства", lambda: (self.library.remove_file(book["id"]),
-                                                   self.refresh_library()))
+            item("Удалить с устройства", lambda: self.remove_book_file(book["id"]))
         pop.popup()
+
+    def remove_book_file(self, bid):
+        if self.player.book_id == bid:
+            # Удаляем то, что сейчас звучит — сначала останавливаем плеер
+            if self.player_page:
+                if self.nav.get_visible_page() is self.player_page:
+                    self.nav.pop_to_tag("library")
+                self.player_page.destroy_page()
+                self.player_page = None
+            self.player.unload()
+            self.now_playing_btn.set_visible(False)
+        self.library.remove_file(bid)
+        self.refresh_library()
 
     def import_and_open(self, path: Path):
         if not self.window:
