@@ -1,9 +1,9 @@
 // Читалка: открывает книгу через foliate-js и общается с Python-частью
-// через window.webkit.messageHandlers.reader (туда) и window.reader (оттуда).
+// через консоль с меткой (туда) и window.reader (оттуда).
 import './foliate/view.js'
 
 const $ = s => document.querySelector(s)
-const post = msg => window.webkit.messageHandlers.reader.postMessage(JSON.stringify(msg))
+const post = msg => console.log('\u2063LITREADER:' + JSON.stringify(msg))
 
 const THEMES = {
     light: { bg: '#ffffff', fg: '#1b1b1b', link: '#1a5fb4' },

@@ -1,18 +1,19 @@
-// Встраивается в страницы litres.ru. Запоминает служебные заголовки
-// (app-id, session-id и т.п.), которые сайт сам добавляет к запросам в свой API,
-// и передаёт их приложению — без них API отвечает 403.
+// Встраивается в страницы litres.ru до их собственных скриптов. Запоминает служебные
+// заголовки (app-id, session-id и т.п.), которые сайт сам добавляет к запросам
+// в свой API, и передаёт их приложению — без них API отвечает 403.
 // Пароль и содержимое форм сюда не попадают.
 (() => {
     if (window.__litreaderHook) return
     window.__litreaderHook = true
 
+    // Сообщения приложению идут через консоль с меткой. Берём исходный console.log,
+    // пока сайт не успел его подменить.
+    const log = console.log.bind(console)
+    const prefix = window.__litreaderPrefix
+    const post = msg => { try { log(prefix + JSON.stringify(msg)) } catch (_) {} }
+    window.__litreaderPost = post
+
     const API = 'api.litres.ru/foundation/api/'
-    const post = (headers, url) => {
-        try {
-            window.webkit.messageHandlers.litres.postMessage(
-                JSON.stringify({ type: 'headers', url, headers }))
-        } catch (_) {}
-    }
     const norm = h => {
         const out = {}
         if (!h) return out
@@ -29,7 +30,8 @@
             const url = typeof input === 'string' ? input
                 : input instanceof URL ? input.href : input?.url
             if (url && url.includes(API))
-                post({ ...(input instanceof Request ? norm(input.headers) : {}), ...norm(init?.headers) }, url)
+                post({ type: 'headers', url, headers: {
+                    ...(input instanceof Request ? norm(input.headers) : {}), ...norm(init?.headers) } })
         } catch (_) {}
         return origFetch.apply(this, arguments)
     }
@@ -45,7 +47,12 @@
         return setRequestHeader.apply(this, arguments)
     }
     XMLHttpRequest.prototype.send = function () {
-        if (this.__lrUrl?.includes(API)) post(this.__lrHeaders, this.__lrUrl)
+        if (this.__lrUrl?.includes(API)) post({ type: 'headers', url: this.__lrUrl, headers: this.__lrHeaders })
         return send.apply(this, arguments)
     }
+
+    // Документ готов — можно выполнять запросы, не дожидаясь рекламы и счётчиков
+    const ready = () => post({ type: 'ready', url: location.href })
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready)
+    else ready()
 })()
