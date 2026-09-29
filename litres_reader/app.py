@@ -1,6 +1,7 @@
 """Главное окно и логика приложения: библиотека, вход в ЛитРес, синхронизация, скачивание."""
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -200,7 +201,7 @@ class App(QObject):
         if (self.library.progress.get(book["id"], {}).get("fraction") or 0) >= 0.999:
             return   # дочитанную книгу сами не открываем
         if book.get("format") in AUDIO_FORMATS:
-            self.open_player(book, path, autoplay=False)
+            self.open_player(book, path)
         else:
             self.open_book(book, path)
 
@@ -576,8 +577,10 @@ class App(QObject):
                 self.go_back()
                 self.toast("Вы вошли в ЛитРес")
                 self.sync()
-            elif not self.library.books:
-                self.sync()
+            elif not getattr(self, "_startup_synced", False):
+                # При запуске тихо забираем свежие данные (в том числе место чтения на ЛитРес)
+                self._startup_synced = True
+                self.sync(quiet=bool(self.library.books))
 
     def _update_account_ui(self):
         if self.litres.logged_in:
@@ -637,7 +640,7 @@ class App(QObject):
         self.sync_btn.setVisible(not on)
         self.sync_spinner.setVisible(on)
 
-    def sync(self):
+    def sync(self, quiet=False):
         if self.syncing:
             return
         if not self.litres.logged_in:
@@ -650,9 +653,14 @@ class App(QObject):
         def finish(text):
             self._set_syncing(False)
             self.refresh_library()
+            # Открытая книга могла уйти дальше на ЛитРес — подтягиваем место
+            for bid in {self.reader.book["id"] if self.reader else None, self.player.book_id} - {None}:
+                if bid in self.library.books:
+                    self.apply_remote_position(self.library.books[bid])
             if problems:
                 text += ". Не получено: " + ", ".join(problems)
-            self.toast(text)
+            if not quiet or problems:
+                self.toast(text)
 
         def got_arts(arts, status):
             if arts is None:
@@ -1016,21 +1024,56 @@ class App(QObject):
                 self.stack.removeWidget(self.player_page)
                 self.player_page.deleteLater()
             self.player_page = PlayerPage(self, book)
-            QTimer.singleShot(1500, lambda: self._offer_remote_audio_position(book))
+            QTimer.singleShot(1500, lambda: self.apply_remote_position(book))
         elif not self.player.playing and autoplay:
             self.player.play()
         self.show_player()
 
-    def _offer_remote_audio_position(self, book):
-        """Если на ЛитРес книга прослушана дальше, предлагаем перейти туда."""
-        if self.player.book_id != book["id"]:
-            return
+    def apply_remote_position(self, book, _attempt=0):
+        """Синхронизация места: если на ЛитРес ушли дальше — переходим туда сами.
+
+        В уведомлении есть «Вернуть»; после него это место с ЛитРес больше не применяется.
+        """
         remote = book.get("remote_percent") or 0
-        local = self.player.fraction() * 100
-        if remote < 1 or remote - local < 1:
+        if remote < 1 or book.get("remote_ignored") == remote:
             return
-        self.toast(f"На ЛитРес прослушано {round(remote)}%", button="Перейти", timeout=10000,
-                   on_button=lambda: self.player.go_to_fraction(remote / 100))
+        bid = book["id"]
+        target = min(remote, 99.9) / 100
+
+        def ignore():
+            book["remote_ignored"] = remote
+            self.library.save()
+
+        if self.reader and self.reader.book["id"] == bid:
+            local = (self.library.progress.get(bid, {}).get("fraction") or 0) * 100
+            if remote - local < 1:
+                return
+            back_cfi = self.library.progress.get(bid, {}).get("cfi")
+            self.reader.js(f"window.reader.goToFraction({target})")
+
+            def undo():
+                ignore()
+                if back_cfi and self.reader and self.reader.book["id"] == bid:
+                    self.reader.js(f"window.reader.goTo({json.dumps(back_cfi)})")
+            self.toast(f"Продолжаю с места на ЛитРес — {round(remote)}%", button="Вернуть",
+                       on_button=undo, timeout=8000)
+        elif self.player.book_id == bid:
+            if not self.player.duration():
+                # Файл ещё загружается — попробуем чуть позже
+                if _attempt < 10:
+                    QTimer.singleShot(1000, lambda: self.apply_remote_position(book, _attempt + 1))
+                return
+            if remote - self.player.fraction() * 100 < 1:
+                return
+            index, pos = self.player.index, self.player.position()
+            self.player.go_to_fraction(target)
+
+            def undo():
+                ignore()
+                if self.player.book_id == bid:
+                    self.player.go_to(index, pos)
+            self.toast(f"Продолжаю с места на ЛитРес — {round(remote)}%", button="Вернуть",
+                       on_button=undo, timeout=8000)
 
     def show_player(self):
         if not self.player_page:

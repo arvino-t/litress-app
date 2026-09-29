@@ -329,6 +329,13 @@ class AudioPlayer(QObject):
         start, _ = self.chapter_bounds(i)
         self.go_to_chapter(i if self.position() - start > 3 or i == 0 else i - 1)
 
+    def go_to(self, index, position):
+        """Перейти к файлу index и позиции в нём (например, вернуть прежнее место)."""
+        if index == self.index and self._pending_seek is None:
+            self.media.setPosition(int(position * 1000))
+        else:
+            self._set_track(index, position)
+
     def go_to_fraction(self, fraction):
         """Перейти к доле всей книги (например, к месту, прослушанному на ЛитРес)."""
         if not self.tracks:

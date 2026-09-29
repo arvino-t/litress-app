@@ -92,6 +92,7 @@ class ReaderPage(QWidget):
         self.path = path
         self.toc: list[dict] = []
         self.ui_visible = True
+        self._remote_checked = False
 
         self.web = QWebEngineView(self)
         self.page = _ReaderWebPage(reader_profile(), self._on_message, self)
@@ -282,7 +283,6 @@ class ReaderPage(QWidget):
             self.set_ui_visible(self.ui_visible)
             self._fill_toc(msg.get("toc") or [])
             self.app.on_book_metadata(self.book["id"], msg.get("title"), msg.get("author"))
-            self._offer_remote_position()
         elif t == "relocate":
             if msg.get("fraction") is None:
                 return
@@ -295,6 +295,10 @@ class ReaderPage(QWidget):
                 self.app.library.set_progress(self.book["id"], msg["cfi"], frac)
             if msg.get("atEnd") and not self.book.get("finished"):
                 self.app.set_finished(self.book, True, auto=True)
+            if not self._remote_checked:
+                # Книга встала на своё место — теперь можно подтянуть место с ЛитРес
+                self._remote_checked = True
+                self.app.apply_remote_position(self.book)
         elif t == "toggle-ui":
             self.set_ui_visible(not self.ui_visible)
         elif t == "escape":
@@ -307,15 +311,6 @@ class ReaderPage(QWidget):
         elif t == "error":
             self.app.toast(f"Не удалось открыть книгу: {msg.get('message')}")
         log("reader:", t)
-
-    def _offer_remote_position(self):
-        """Если на ЛитРес книга прочитана дальше, предлагаем перейти туда."""
-        remote = self.book.get("remote_percent") or 0
-        local = (self.app.library.progress.get(self.book["id"], {}).get("fraction") or 0) * 100
-        if remote < 1 or remote - local < 1:
-            return
-        self.app.toast(f"На ЛитРес прочитано {round(remote)}%", button="Перейти", timeout=10000,
-                       on_button=lambda: self.js(f"window.reader.goToFraction({min(remote, 100) / 100})"))
 
     def _fill_toc(self, toc):
         self.toc = toc
