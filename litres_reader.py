@@ -76,6 +76,9 @@ DEFAULT_SETTINGS = {
     "libraryFolder": None,
 }
 
+# Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
+NO_FOLDER = "__none__"
+
 STATUS_FILTERS = (("all", "Все"), ("reading", "Читаю"), ("unread", "Не читал"), ("finished", "Прочитано"))
 
 
@@ -1228,9 +1231,9 @@ class App(Adw.Application):
 
         folders = self.library.folders
         self._filling_folders = True
-        self._folder_ids = [None] + list(folders)
+        self._folder_ids = [None, NO_FOLDER] + list(folders)
         self.folder_model.splice(0, self.folder_model.get_n_items(),
-                                 ["Все папки"] + [folders[f] for f in folders])
+                                 ["Все папки", "Без папки"] + [folders[f] for f in folders])
         current = self.settings.get("libraryFolder")
         self.folder_drop.set_selected(self._folder_ids.index(current) if current in self._folder_ids else 0)
         self._filling_folders = False
@@ -1287,7 +1290,10 @@ class App(Adw.Application):
         if status != "all" and self.library.status(book) != status:
             return False
         folder = self.settings.get("libraryFolder")
-        if folder and folder not in (book.get("folders") or []):
+        if folder == NO_FOLDER:
+            if book.get("folders"):
+                return False
+        elif folder and folder not in (book.get("folders") or []):
             return False
         q = self.search.get_text().strip().lower()
         if q:
