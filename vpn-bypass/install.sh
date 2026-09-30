@@ -1,7 +1,7 @@
 #!/bin/bash
 # Устанавливает обход VPN для ЛитРес (нужен sudo).
-#   sudo bash ~/litres-reader/vpn-bypass/install.sh            — установить
-#   sudo bash ~/litres-reader/vpn-bypass/install.sh --remove   — удалить
+#   sudo bash vpn-bypass/install.sh            — установить
+#   sudo bash vpn-bypass/install.sh --remove   — удалить
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
