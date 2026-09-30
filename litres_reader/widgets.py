@@ -410,8 +410,10 @@ class BookCard(QFrame):
         self.title = label("", wrap=True, align=Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         self.title.setObjectName("booktitle")
         self.author = label("", "dim", "caption", align=Qt.AlignmentFlag.AlignHCenter)
+        self.series = label("", "dim", "caption", align=Qt.AlignmentFlag.AlignHCenter)
         lay.addWidget(self.title)
         lay.addWidget(self.author)
+        lay.addWidget(self.series)
         lay.addStretch()
 
         self.badge = Badge(self.cover)
@@ -439,6 +441,13 @@ class BookCard(QFrame):
         self.title.setToolTip(title if elided != title else "")
         authors = ", ".join(book.get("authors") or [])
         self.author.setText(self.author.fontMetrics().elidedText(authors, Qt.TextElideMode.ElideRight, Cover.W))
+        s = book.get("series")
+        if s:
+            order = s.get("order")
+            text = s["name"] + (f" · №{order:g}" if order is not None else "")
+            self.series.setText(self.series.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, Cover.W))
+            self.series.setToolTip(text)
+        self.series.setVisible(bool(s))
         self.cover.set_cover(lib.cover_path(book), title)
 
         downloaded = lib.file_path(book) is not None

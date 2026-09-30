@@ -41,6 +41,7 @@ SESSION_DIR = DATA_DIR / "webengine"
 CONFIG_FILE = CONFIG_DIR / "settings.json"
 LIBRARY_FILE = DATA_DIR / "library.json"
 PROGRESS_FILE = DATA_DIR / "progress.json"
+STATS_FILE = DATA_DIR / "stats.json"
 HEADERS_FILE = SESSION_DIR / "api-headers.json"
 
 API = "https://api.litres.ru/foundation/api"
@@ -77,6 +78,7 @@ DEFAULT_SETTINGS = {
     "libraryStatus": "all",
     "libraryFolder": None,
     "libraryType": "all",   # all / text / audio
+    "librarySort": "recent",
     "audioRate": 1.0,
     # Автопереход: при запуске открыть последнюю книгу на месте, где остановились
     "openLastBook": True,
@@ -86,6 +88,9 @@ DEFAULT_SETTINGS = {
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
 NO_FOLDER = "__none__"
 STATUS_FILTERS = (("all", "Все"), ("reading", "Читаю"), ("unread", "Не читал"), ("finished", "Прочитано"))
+SORT_MODES = (("recent", "Недавние"), ("litres", "Как на ЛитРес"), ("title", "По названию"),
+              ("author", "По автору"), ("series", "По сериям"), ("progress", "По прогрессу"),
+              ("purchased", "По дате покупки"))
 TYPE_FILTERS = (("all", "Книги и аудио"), ("text", "Книги"), ("audio", "Аудиокниги"))
 
 
@@ -153,6 +158,8 @@ class Library:
         # Изменения папок, ещё не отправленные на ЛитРес: [{op, folder, art}]
         self.folder_ops: list[dict] = data.get("folder_ops", [])
         self.progress: dict[str, dict] = load_json(PROGRESS_FILE, {})
+        # Статистика: секунды чтения по дням и по книгам, даты дочитывания
+        self.stats: dict = {"days": {}, "books": {}, "finished": {}, **load_json(STATS_FILE, {})}
         for d in (BOOKS_DIR, COVERS_DIR, SESSION_DIR):
             d.mkdir(parents=True, exist_ok=True)
         # Пишем прогресс на диск не чаще раза в 2 секунды — при листании событий много
@@ -188,6 +195,16 @@ class Library:
             if art.get("in_folders") is not None:
                 book["folders"] = [str(f.get("folder_id")) for f in art["in_folders"]
                                    if f.get("folder_id") is not None]
+            if art.get("purchased_at"):
+                book["purchased_at"] = art["purchased_at"]
+            # Серия: первая из списка — название и номер книги в ней
+            series = [s for s in art.get("series") or [] if isinstance(s, dict) and s.get("name")]
+            if series:
+                order = series[0].get("art_order")
+                book["series"] = {"name": series[0]["name"],
+                                  "order": float(order) if order is not None else None}
+            else:
+                book.pop("series", None)
             ids.append(bid)
         local = [i for i in self.order if i in self.books and i not in ids]
         self.order = ids + local
@@ -312,6 +329,31 @@ class Library:
                               "chapter": chapter or "", "ts": time.time()}
         if not self._progress_timer.isActive():
             self._progress_timer.start()
+
+    # --- статистика чтения
+
+    def add_reading_time(self, bid, seconds):
+        day = time.strftime("%Y-%m-%d")
+        self.stats["days"][day] = self.stats["days"].get(day, 0) + seconds
+        if bid:
+            self.stats["books"][bid] = self.stats["books"].get(bid, 0) + seconds
+        save_json(STATS_FILE, self.stats)
+
+    def mark_finished_stat(self, bid):
+        if bid not in self.stats["finished"]:
+            self.stats["finished"][bid] = time.strftime("%Y-%m-%d")
+            save_json(STATS_FILE, self.stats)
+
+    def next_in_series(self, book):
+        """Следующая книга той же серии среди ваших книг (или None)."""
+        s = book.get("series")
+        if not s or s.get("order") is None:
+            return None
+        candidates = [b for b in self.books.values()
+                      if (b.get("series") or {}).get("name") == s["name"]
+                      and (b.get("series") or {}).get("order") is not None
+                      and b["series"]["order"] > s["order"]]
+        return min(candidates, key=lambda b: b["series"]["order"]) if candidates else None
 
     def recent(self, count=2, last_book=None):
         """Последние читаемые (начатые и не дочитанные) книги — новые первыми.

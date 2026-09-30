@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 from . import __version__, style
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, BOOKS_DIR, CONFIG_FILE,
                    COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
-                   READABLE, SITE, STATUS_FILTERS, TYPE_FILTERS, Library, load_json,
+                   READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, load_json,
                    looks_like_book, save_json)
 from .litres import LitresSession
 from .player import AudioPlayer, PlayerPage, audio_tracks
@@ -300,6 +300,7 @@ class App(QObject):
         self.menu.addSeparator()
         self.account_action = self.menu.addAction("Войти в ЛитРес", self._account_action)
         self.menu.addAction("Singularity…", self.show_singularity_dialog)
+        self.menu.addAction("Статистика чтения", self.show_stats_dialog)
         self.menu.addSeparator()
         self.menu.addAction("О приложении", self.on_about)
         menu_btn.clicked.connect(lambda: self.menu.popup(menu_btn.mapToGlobal(QPoint(0, menu_btn.height() + 4))))
@@ -422,6 +423,15 @@ class App(QObject):
         self.type_combo.setCurrentIndex(keys.index(cur) if cur in keys else 0)
         self.type_combo.currentIndexChanged.connect(self._on_type_selected)
         h.addWidget(self.type_combo)
+
+        self.sort_combo = QComboBox()
+        self.sort_combo.setToolTip("Сортировка")
+        self.sort_combo.addItems([text for _k, text in SORT_MODES])
+        keys = [k for k, _t in SORT_MODES]
+        cur = self.settings.get("librarySort", "recent")
+        self.sort_combo.setCurrentIndex(keys.index(cur) if cur in keys else 0)
+        self.sort_combo.currentIndexChanged.connect(self._on_sort_selected)
+        h.addWidget(self.sort_combo)
         h.addStretch()
         return bar
 
@@ -465,6 +475,38 @@ class App(QObject):
         self.settings["libraryFolder"] = self._folder_ids[idx] if idx < len(self._folder_ids) else None
         self.save_settings()
         self._apply_filter()
+
+    def _on_sort_selected(self, idx):
+        self.settings["librarySort"] = SORT_MODES[idx][0]
+        self.save_settings()
+        self.refresh_library()
+
+    def _sorted(self, books):
+        """Порядок книг в сетке по выбранной сортировке."""
+        mode = self.settings.get("librarySort", "recent")
+        lib = self.library
+        if mode == "litres":
+            return books
+        if mode == "title":
+            return sorted(books, key=lambda b: (b.get("title") or "").lower())
+        if mode == "author":
+            return sorted(books, key=lambda b: (", ".join(b.get("authors") or []).lower() or "я",
+                                                (b.get("title") or "").lower()))
+        if mode == "series":
+            # Книги одной серии рядом и по порядку; без серии — в конце по названию
+            return sorted(books, key=lambda b: (
+                0 if b.get("series") else 1,
+                ((b.get("series") or {}).get("name") or "").lower(),
+                (b.get("series") or {}).get("order") or 0,
+                (b.get("title") or "").lower()))
+        if mode == "progress":
+            return sorted(books, key=lambda b: -(lib.percent(b) or 0))
+        if mode == "purchased":
+            return sorted(books, key=lambda b: b.get("purchased_at") or "", reverse=True)
+        # «Недавние»: сначала то, что читали/слушали последним, потом остальное как на ЛитРес
+        last = self.settings.get("lastBook")
+        return sorted(books, key=lambda b: -(lib.progress.get(b["id"], {}).get("ts")
+                                             or (1 if b["id"] == last else 0)))
 
     def _on_type_selected(self, idx):
         self.settings["libraryType"] = TYPE_FILTERS[idx][0]
@@ -527,7 +569,7 @@ class App(QObject):
     # --- сетка книг
 
     def refresh_library(self):
-        ordered = self.library.ordered()
+        ordered = self._sorted(self.library.ordered())
         ids = [b["id"] for b in ordered]
         for bid in list(self.cards):
             if bid not in ids:
@@ -762,8 +804,10 @@ class App(QObject):
             book["finished_pending"] = finished
         self.library.save()
         self.refresh_card(book["id"])
+        if finished:
+            self.library.mark_finished_stat(book["id"])
         if auto:
-            self.toast("Книга дочитана — отмечена прочитанной")
+            self._toast_finished(book, "Книга дочитана — отмечена прочитанной")
         if book.get("source") != "litres" or not self.litres.logged_in:
             return
 
@@ -774,6 +818,15 @@ class App(QObject):
             else:
                 self.toast("Не удалось обновить отметку на ЛитРес — повторю при синхронизации")
         self.litres.set_finished(book["id"], finished, done)
+
+    def _toast_finished(self, book, text):
+        """Уведомление о дочитанной книге; если есть следующая в серии — кнопка «Дальше»."""
+        nxt = self.library.next_in_series(book)
+        if nxt:
+            self.toast(f"{text}. Следующая в серии: «{nxt.get('title')}»", button="Открыть",
+                       on_button=lambda: self.on_book_activated(nxt["id"]), timeout=10000)
+        else:
+            self.toast(text)
 
     # --- книги
 
@@ -921,6 +974,9 @@ class App(QObject):
             menu.addAction("Отметить прочитанной", lambda: self.set_finished(book, True))
         if book.get("source") == "litres":
             menu.addAction("Папки…", lambda: self.show_folders_dialog(book))
+        nxt = self.library.next_in_series(book)
+        if nxt:
+            menu.addAction(f"Следующая в серии: {nxt.get('title')}", lambda: self.on_book_activated(nxt["id"]))
             menu.addAction("Скачать заново" if downloaded else "Скачать", lambda: self.download_book(book))
             if book.get("url"):
                 menu.addAction("Открыть на сайте ЛитРес", lambda: QDesktopServices.openUrl(QUrl(book["url"])))
@@ -1145,7 +1201,7 @@ class App(QObject):
         self.library.set_audio_progress(book["id"], len(self.player.tracks) - 1, 0.0, 1.0)
         if not book.get("finished"):
             self.set_finished(book, True)
-            self.toast("Аудиокнига прослушана — отмечена прочитанной")
+            self._toast_finished(book, "Аудиокнига прослушана — отмечена прочитанной")
 
     # --- открытие своих файлов
 
@@ -1175,10 +1231,17 @@ class App(QObject):
     def _count_reading_time(self):
         reading = (self.reader is not None and self.current() is self.reader
                    and self.window.isActiveWindow() and time.monotonic() - self._last_activity < 180)
-        if reading or self.player.playing:
+        tts = self.reader is not None and getattr(self.reader, "tts_active", False)
+        if reading or tts or self.player.playing:
+            bid = self.reader.book["id"] if (reading or tts) else self.player.book_id
+            self.library.add_reading_time(bid, 30)
             self.singularity.add_reading_time(30)
             if self.player.playing:
                 self.singularity.schedule()
+
+    def show_stats_dialog(self):
+        from .stats import show_stats
+        show_stats(self)
 
     def show_singularity_dialog(self):
         s = self.singularity
