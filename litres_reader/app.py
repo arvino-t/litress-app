@@ -26,7 +26,8 @@ from .litres import LitresSession
 from .player import AudioPlayer, PlayerPage, audio_tracks
 from .reader import ReaderPage
 from .singularity import SingularitySync
-from .widgets import (BookCard, FlowLayout, HeaderBar, IconButton, Switch, Toast, cls, label)
+from .widgets import (BookCard, FlowLayout, HeaderBar, IconButton, RecentPanel, Switch, Toast, cls,
+                      label)
 
 EBOOK_PATTERNS = "*.epub *.fb2 *.fb2.zip *.fbz *.mobi *.azw3"
 
@@ -122,6 +123,8 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self._place_grips()
+        if hasattr(self.app, "recent_panel"):
+            self.app._update_recent_panel()
         for t in self.findChildren(Toast):
             t.reposition()
 
@@ -154,10 +157,11 @@ class App(QObject):
         self._cover_queue: list[str] = []
 
         style.read_portal_scheme()
+        style.read_accent()
         style.apply_palette(qapp)
         qapp.styleHints().colorSchemeChanged.connect(self._on_theme_changed)
-        # Портал не шлёт сигнал в Qt — проверяем смену темы раз в 2 секунды
-        self._scheme = style.is_dark()
+        # Портал не шлёт сигнал в Qt — проверяем смену темы и акцента раз в 2 секунды
+        self._scheme = (style.is_dark(), style.ACCENT)
         self._theme_timer = QTimer(self, interval=2000)
         self._theme_timer.timeout.connect(self._poll_theme)
         self._theme_timer.start()
@@ -334,8 +338,23 @@ class App(QObject):
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.grid_widget)
         self.content.addWidget(scroll)
-        lay.addWidget(self.content, 1)
+
+        # Справа — «Продолжить чтение»: две последние читаемые книги
+        self.recent_panel = RecentPanel(count=2)
+        self.recent_panel.activated.connect(self.on_book_activated)
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        body.addWidget(self.content, 1)
+        body.addWidget(self.recent_panel)
+        lay.addLayout(body, 1)
         return page
+
+    def _update_recent_panel(self):
+        books = self.library.recent(2, self.settings.get("lastBook"))
+        self.recent_panel.update_books(books, self.library)
+        # На узком окне (портрет на планшете) панель прячем — книгам нужнее место
+        self.recent_panel.setVisible(bool(books) and self.window.width() >= 900)
 
     def _build_empty_page(self):
         w = QWidget()
@@ -533,6 +552,7 @@ class App(QObject):
         self.content.setCurrentIndex(1 if self.cards else 0)
         self._update_filter_bar()
         self._apply_filter()
+        self._update_recent_panel()
 
     def refresh_card(self, bid):
         card = self.cards.get(bid)
@@ -541,6 +561,7 @@ class App(QObject):
             card.update_book(book, self.library)
             self._update_filter_bar()
             self._apply_filter()
+            self._update_recent_panel()
 
     def on_book_metadata(self, bid, title, author):
         book = self.library.books.get(bid)
@@ -1280,11 +1301,12 @@ class App(QObject):
 
     def _poll_theme(self):
         style.read_portal_scheme()
-        if style.is_dark() != self._scheme:
+        style.read_accent()
+        if (style.is_dark(), style.ACCENT) != self._scheme:
             self._on_theme_changed()
 
     def _on_theme_changed(self, *_):
-        self._scheme = style.is_dark()
+        self._scheme = (style.is_dark(), style.ACCENT)
         style.apply_palette(self.qapp)
         for w in self.window.findChildren(HeaderBar):
             w.refresh_icons()

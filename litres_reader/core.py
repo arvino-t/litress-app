@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
@@ -301,14 +302,33 @@ class Library:
         save_json(PROGRESS_FILE, self.progress)
 
     def set_progress(self, bid, cfi, fraction, chapter=None):
-        self.progress[bid] = {"cfi": cfi, "fraction": fraction, "chapter": chapter or ""}
+        # ts — когда книгу читали последний раз (для панели «Продолжить чтение»)
+        self.progress[bid] = {"cfi": cfi, "fraction": fraction, "chapter": chapter or "", "ts": time.time()}
         if not self._progress_timer.isActive():
             self._progress_timer.start()
 
     def set_audio_progress(self, bid, track, position, fraction, chapter=None):
-        self.progress[bid] = {"track": track, "pos": position, "fraction": fraction, "chapter": chapter or ""}
+        self.progress[bid] = {"track": track, "pos": position, "fraction": fraction,
+                              "chapter": chapter or "", "ts": time.time()}
         if not self._progress_timer.isActive():
             self._progress_timer.start()
+
+    def recent(self, count=2, last_book=None):
+        """Последние читаемые (начатые и не дочитанные) книги — новые первыми.
+
+        У старых записей прогресса нет времени; тогда первой считаем последнюю открытую книгу.
+        """
+        items = []
+        for bid, p in self.progress.items():
+            book = self.books.get(bid)
+            if not book or book.get("finished") or (p.get("fraction") or 0) >= 0.999:
+                continue
+            if (p.get("fraction") or 0) <= 0.001 and not p.get("cfi") and not p.get("pos"):
+                continue
+            ts = p.get("ts") or (1 if bid == last_book else 0)
+            items.append((ts, bid))
+        items.sort(reverse=True)
+        return [self.books[bid] for _ts, bid in items[:count]]
 
     def flush(self):
         self._progress_timer.stop()

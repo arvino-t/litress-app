@@ -61,6 +61,38 @@ def read_portal_scheme() -> int | None:
     return _portal_scheme
 
 
+# Именованные акценты GNOME (libadwaita) → цвет
+GNOME_ACCENTS = {
+    "blue": "#3584e4", "teal": "#2190a4", "green": "#3a944a", "yellow": "#c88800",
+    "orange": "#ed5b00", "red": "#e62d42", "pink": "#d56199", "purple": "#9141ac", "slate": "#6f8396",
+}
+
+
+def read_accent() -> str:
+    """Цвет акцента системы: на GNOME — из настроек, на Windows — из палитры Qt."""
+    global ACCENT
+    accent = None
+    if sys.platform.startswith("linux"):
+        try:
+            import subprocess
+            out = subprocess.run(["gsettings", "get", "org.gnome.desktop.interface", "accent-color"],
+                                 capture_output=True, text=True, timeout=2).stdout.strip().strip("'")
+            accent = GNOME_ACCENTS.get(out)
+        except (OSError, subprocess.SubprocessError):
+            accent = None
+    if accent is None:
+        c = QGuiApplication.palette().color(QPalette.ColorRole.Accent)
+        if c.isValid() and c.alpha() and hasattr(QPalette.ColorRole, "Accent"):
+            accent = c.name()
+    ACCENT = accent or "#3584e4"
+    return ACCENT
+
+
+def accent_rgba(alpha: float) -> str:
+    c = QColor(ACCENT)
+    return f"rgba({c.red()},{c.green()},{c.blue()},{alpha})"
+
+
 def is_dark() -> bool:
     if _portal_scheme in (1, 2):
         return _portal_scheme == 1
@@ -135,7 +167,8 @@ def apply_palette(app):
     pal.setColor(QPalette.ColorRole.ToolTipBase, QColor(c["popover"]))
     pal.setColor(QPalette.ColorRole.ToolTipText, fg)
     pal.setColor(QPalette.ColorRole.PlaceholderText, QColor(128, 128, 128))
-    pal.setColor(QPalette.ColorRole.Link, QColor(c["accent_fg"]))
+    link = QColor(ACCENT).lighter(135) if dark else QColor(ACCENT).darker(115)
+    pal.setColor(QPalette.ColorRole.Link, link)
     app.setPalette(pal)
     app.setStyleSheet(stylesheet())
 
@@ -150,6 +183,8 @@ def app_font() -> QFont:
 
 def stylesheet() -> str:
     c = colors()
+    acc_hover = QColor(ACCENT).lighter(112).name()
+    acc_pressed = QColor(ACCENT).darker(118).name()
     return f"""
     QMainWindow, QDialog, #page {{ background: {c['window']}; color: {c['fg']}; }}
     QWidget {{ color: {c['fg']}; }}
@@ -175,13 +210,13 @@ def stylesheet() -> str:
     *[cls~="flat"]:pressed, *[cls~="flat"]:checked {{ background: {c['button']}; }}
     *[cls~="circular"] {{ border-radius: 17px; min-width: 22px; padding: 6px; }}
     *[cls~="suggested"] {{ background: {ACCENT}; color: white; }}
-    *[cls~="suggested"]:hover {{ background: #3f8ae5; }}
-    *[cls~="suggested"]:pressed {{ background: #2a6ec4; }}
+    *[cls~="suggested"]:hover {{ background: {acc_hover}; }}
+    *[cls~="suggested"]:pressed {{ background: {acc_pressed}; }}
     *[cls~="destructive"] {{ background: #c01c28; color: white; }}
     *[cls~="pill"] {{ border-radius: 20px; padding: 10px 32px; }}
     *[cls~="play"] {{ background: {ACCENT}; border-radius: 32px; min-width: 64px; min-height: 64px;
              max-width: 64px; max-height: 64px; padding: 0; }}
-    *[cls~="play"]:hover {{ background: #3f8ae5; }}
+    *[cls~="play"]:hover {{ background: {acc_hover}; }}
 
     /* Кнопки окна: свернуть/развернуть/закрыть */
     *[cls~="wincontrol"] {{ background: {c['button']}; border-radius: 12px; padding: 0;
@@ -208,7 +243,7 @@ def stylesheet() -> str:
     /* Поля ввода */
     QLineEdit {{ background: {c['entry']}; border: 2px solid transparent; border-radius: 6px;
                  padding: 6px 8px; selection-background-color: {ACCENT}; }}
-    QLineEdit:focus {{ border: 2px solid rgba(53,132,228,0.5); }}
+    QLineEdit:focus {{ border: 2px solid {accent_rgba(0.5)}; }}
 
     /* Прокрутка */
     QScrollArea, #grid {{ background: {c['window']}; border: none; }}
@@ -254,6 +289,13 @@ def stylesheet() -> str:
     #toast QLabel {{ color: white; }}
     #toast QPushButton {{ background: transparent; color: #99c1f1; padding: 4px 10px; }}
     #toast QPushButton:hover {{ background: rgba(255,255,255,0.1); }}
+
+    /* Панель «Продолжить чтение» справа в библиотеке */
+    #sidepanel {{ background: {c['header']}; border-left: 1px solid {c['border']}; }}
+    *[cls~="recentcard"] {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 12px; }}
+    *[cls~="recentcard"]:hover {{ background: {c['flat_hover']}; }}
+    QProgressBar {{ background: {c['slider_track']}; border: none; border-radius: 3px; }}
+    QProgressBar::chunk {{ background: {ACCENT}; border-radius: 3px; }}
 
     /* Панели читалки */
     #readerbar {{ background: {c['header']}; }}

@@ -5,7 +5,8 @@ from PySide6.QtCore import (QEasingCurve, QPoint, QPropertyAnimation, QRect, QSi
                             Signal, Property)
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
-                               QLayout, QPushButton, QSizePolicy, QSlider, QStyle, QStyleOptionSlider,
+                               QLayout, QProgressBar, QPushButton, QSizePolicy, QSlider, QStyle,
+                               QStyleOptionSlider,
                                QToolButton, QVBoxLayout, QWidget)
 
 from . import style
@@ -333,9 +334,9 @@ class Cover(QWidget):
 
     W, H = 132, 192
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, size: QSize | None = None):
         super().__init__(parent)
-        self.setFixedSize(self.W, self.H)
+        self.setFixedSize(size or QSize(self.W, self.H))
         self._pix: QPixmap | None = None
         self._text = ""
         self._progress: float | None = None
@@ -367,9 +368,13 @@ class Cover(QWidget):
             sh = scaled.height() / scaled.devicePixelRatio()
             p.drawPixmap(QPoint(int((self.width() - sw) / 2), int((self.height() - sh) / 2)), scaled)
         else:
-            p.fillRect(self.rect(), QColor(53, 132, 228, 46))
+            placeholder = QColor(style.ACCENT)
+            placeholder.setAlpha(46)
+            p.fillRect(self.rect(), placeholder)
             f = p.font()
             f.setBold(True)
+            if self.width() < self.W:   # уменьшенная обложка — шрифт пропорционально меньше
+                f.setPointSizeF(f.pointSizeF() * self.width() / self.W)
             p.setFont(f)
             p.setPen(style.solid_fg())
             p.drawText(self.rect().adjusted(12, 12, -12, -12),
@@ -510,6 +515,101 @@ class SeekSlider(QSlider):
             self.setValue(QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), x, span))
         # Ручка уже под курсором — дальше обычное перетаскивание, по отпусканию — sliderReleased
         super().mousePressEvent(e)
+
+
+class RecentCard(QFrame):
+    """Карточка в панели «Продолжить чтение»: обложка, название, глава, прогресс, кнопка."""
+
+    activated = Signal(str)
+    COVER = QSize(96, 140)
+
+    def __init__(self):
+        super().__init__()
+        self.book_id = None
+        cls(self, "recentcard")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(14)
+        self.cover = Cover(size=self.COVER)
+        lay.addWidget(self.cover, 0, Qt.AlignmentFlag.AlignTop)
+        col = QVBoxLayout()
+        col.setSpacing(4)
+        self.title = label("", "heading", wrap=True)
+        self.author = label("", "dim", "caption")
+        self.chapter = label("", "caption", wrap=True)
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 100)
+        self.bar.setTextVisible(False)
+        self.bar.setFixedHeight(6)
+        self.percent = label("", "dim", "caption")
+        self.button = QPushButton()
+        cls(self.button, "suggested")
+        self.button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.button.clicked.connect(lambda: self.activated.emit(self.book_id))
+        col.addWidget(self.title)
+        col.addWidget(self.author)
+        col.addWidget(self.chapter)
+        col.addStretch()
+        col.addWidget(self.bar)
+        col.addWidget(self.percent)
+        col.addWidget(self.button, 0, Qt.AlignmentFlag.AlignLeft)
+        lay.addLayout(col, 1)
+
+    def update_book(self, book, lib):
+        self.book_id = book["id"]
+        title = book.get("title") or ""
+        fm = self.title.fontMetrics()
+        self.title.setText(fm.elidedText(title, Qt.TextElideMode.ElideRight, 3 * 150))
+        self.title.setToolTip(title)
+        authors = ", ".join(book.get("authors") or [])
+        self.author.setText(self.author.fontMetrics().elidedText(authors, Qt.TextElideMode.ElideRight, 170))
+        self.author.setVisible(bool(authors))
+        chapter = lib.progress.get(book["id"], {}).get("chapter") or ""
+        self.chapter.setText(chapter)
+        self.chapter.setVisible(bool(chapter))
+        pct = lib.percent(book) or 0
+        self.bar.setValue(pct)
+        self.percent.setText(f"{'Прослушано' if book.get('is_audio') else 'Прочитано'} {pct}%")
+        self.button.setText("Слушать" if book.get("is_audio") else "Читать")
+        self.cover.set_cover(lib.cover_path(book), title)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and self.rect().contains(e.position().toPoint()):
+            self.activated.emit(self.book_id)
+
+
+class RecentPanel(QFrame):
+    """Панель справа в библиотеке: последние читаемые книги."""
+
+    activated = Signal(str)
+
+    def __init__(self, count=2):
+        super().__init__()
+        self.setObjectName("sidepanel")
+        self.setFixedWidth(340)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(12)
+        lay.addWidget(label("Продолжить чтение", "title2"))
+        self.cards = []
+        for _ in range(count):
+            card = RecentCard()
+            card.activated.connect(self.activated)
+            lay.addWidget(card)
+            self.cards.append(card)
+        lay.addStretch()
+
+    def update_books(self, books, lib):
+        for card, book in zip(self.cards, books + [None] * len(self.cards)):
+            card.setVisible(book is not None)
+            if book is not None:
+                card.update_book(book, lib)
+        self.setProperty("empty", not books)
+
+    def refresh_icons(self):
+        for card in self.cards:
+            card.cover.update()
 
 
 class Switch(QAbstractButton):
