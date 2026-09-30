@@ -79,6 +79,8 @@ DEFAULT_SETTINGS = {
     "libraryFolder": None,
     "libraryType": "all",   # all / text / audio
     "librarySort": "recent",
+    "ttsRate": 0.0,        # скорость чтения вслух, -0.5…0.8
+    "autoFlipSec": 30,     # интервал автолистания
     "audioRate": 1.0,
     # Автопереход: при запуске открыть последнюю книгу на месте, где остановились
     "openLastBook": True,

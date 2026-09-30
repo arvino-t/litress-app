@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
+import re
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QFile, QIODevice, Qt, QUrl
+from PySide6.QtCore import QByteArray, QFile, QIODevice, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestJob,
                                      QWebEngineUrlScheme, QWebEngineUrlSchemeHandler)
@@ -20,7 +22,14 @@ from .widgets import HeaderBar, IconButton, Popover, SeekSlider, Switch, attach_
 
 
 def register_scheme():
-    """Схема litreader:// для страницы читалки и файлов книг (до создания QApplication)."""
+    """Схема litreader:// для страницы читалки и файлов книг (до создания QApplication).
+
+    Заодно отключаем масштабирование страницы щипком в Chromium — щипок в читалке
+    меняет размер шрифта.
+    """
+    flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+    if "--disable-pinch" not in flags:
+        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (flags + " --disable-pinch").strip()
     s = QWebEngineUrlScheme(SCHEME.encode())
     s.setSyntax(QWebEngineUrlScheme.Syntax.Host)
     s.setFlags(QWebEngineUrlScheme.Flag.SecureScheme
@@ -120,6 +129,23 @@ class ReaderPage(QWidget):
         self.toc_popover = Popover(self.toc_list)
         attach_popover(self.toc_btn, self.toc_popover)
         self.header.pack_end(self.toc_btn)
+        self.flip_btn = IconButton("media-playlist-repeat", "Автолистание")
+        self.flip_btn.setCheckable(True)
+        self.flip_btn.toggled.connect(self._toggle_autoflip)
+        self.header.pack_end(self.flip_btn)
+        self.tts_btn = IconButton("audio-volume-high", "Читать вслух")
+        self.tts_btn.setCheckable(True)
+        self.tts_btn.toggled.connect(self._toggle_tts)
+        self.header.pack_end(self.tts_btn)
+
+        # Чтение вслух: очередь предложений текущего абзаца
+        self._tts = None
+        self.tts_active = False
+        self._tts_queue: list[dict] = []
+        # Автолистание: таймер; ручное листание его сбрасывает
+        self._flip_timer = QTimer(self)
+        self._flip_timer.timeout.connect(self._autoflip_turn)
+        self._auto_turn = False
 
         # Нижняя панель: ползунок по книге и процент
         self.bottom = QFrame()
@@ -237,6 +263,8 @@ class ReaderPage(QWidget):
         slider("Межстрочный интервал", "lineHeight", 1.1, 2.2, 10)
         slider("Поля, %", "margin", 0, 20)
         slider("Ширина строки", "lineWidth", 400, 1400)
+        slider("Скорость чтения вслух", "ttsRate", -0.5, 0.8, 10)
+        slider("Автолистание, секунд", "autoFlipSec", 5, 120)
 
         for key, text in (("twoColumns", "Две страницы в горизонтальном положении"),
                           ("justify", "Выравнивать по ширине"),
@@ -296,12 +324,34 @@ class ReaderPage(QWidget):
                 self.app.note_activity()
             if msg.get("atEnd") and not self.book.get("finished"):
                 self.app.set_finished(self.book, True, auto=True)
+            if self._flip_timer.isActive():
+                if msg.get("atEnd"):
+                    self.flip_btn.setChecked(False)   # книга кончилась — автолистание выключаем
+                elif not self._auto_turn:
+                    self._flip_timer.start()           # листнули вручную — отсчёт заново
+                self._auto_turn = False
             if not self._remote_checked:
                 # Книга встала на своё место — теперь можно подтянуть место с ЛитРес
                 self._remote_checked = True
                 self.app.apply_remote_position(self.book)
-        elif t == "toggle-ui":
+        elif t == "toggle-ui" or t == "swipe-down":
             self.set_ui_visible(not self.ui_visible)
+        elif t == "swipe-up":
+            if self.toc:
+                self.set_ui_visible(True)
+                self.toc_popover.popup_under(self.toc_btn)
+        elif t == "pinch":
+            step = 2 if float(msg.get("scale") or 1) > 1 else -2
+            st = self.app.settings
+            st["fontSize"] = max(12, min(40, st["fontSize"] + step))
+            self.app.save_settings()
+            self.app.toast(f"Размер шрифта: {st['fontSize']}", timeout=1200)
+        elif t == "tts":
+            self._tts_queue = [x for x in msg.get("segments") or [] if x.get("text")]
+            self._tts_speak_next()
+        elif t == "tts-end":
+            self.tts_btn.setChecked(False)
+            self.app.toast("Чтение вслух: книга дочитана до конца")
         elif t == "escape":
             if self.app.window.isFullScreen():
                 self.app.toggle_fullscreen()
@@ -329,6 +379,78 @@ class ReaderPage(QWidget):
     def _on_seek(self):
         self.js(f"window.reader.goToFraction({self.slider.value() / 1000})")
 
+    # --- чтение вслух
+
+    def _tts_engine(self, sample_text=""):
+        from PySide6.QtCore import QLocale
+        from PySide6.QtTextToSpeech import QTextToSpeech
+        if self._tts is None:
+            engines = [e for e in QTextToSpeech.availableEngines() if e != "mock"]
+            self._tts = QTextToSpeech(engines[0]) if engines else QTextToSpeech()
+            self._tts.stateChanged.connect(self._on_tts_state)
+            self._tts_lang = None
+        # Голос по языку текста: кириллица — русский, иначе английский
+        lang = QLocale.Language.Russian if re.search("[а-яё]", sample_text, re.I) else QLocale.Language.English
+        if lang != self._tts_lang:
+            self._tts.setLocale(QLocale(lang))
+            self._tts_lang = lang
+        self._tts.setRate(float(self.app.settings.get("ttsRate", 0.0)))
+        return self._tts
+
+    def _toggle_tts(self, on):
+        if on:
+            if self.flip_btn.isChecked():
+                self.flip_btn.setChecked(False)   # чтение вслух само листает страницы
+            self.tts_active = True
+            self._tts_queue = []
+            self.js("window.reader.ttsStart()")
+        else:
+            self.tts_active = False
+            self._tts_queue = []
+            if self._tts is not None:
+                self._tts.stop()
+            self.js("window.reader.ttsStop()")
+
+    def _tts_speak_next(self):
+        if not self.tts_active:
+            return
+        if not self._tts_queue:
+            self.js("window.reader.ttsNext()")   # абзац прочитан — следующий
+            return
+        seg = self._tts_queue.pop(0)
+        if seg.get("mark") is not None:
+            self.js(f"window.reader.ttsMark({json.dumps(seg['mark'])})")
+        self._tts_engine(seg["text"]).say(seg["text"])
+
+    def _on_tts_state(self, state):
+        from PySide6.QtTextToSpeech import QTextToSpeech
+        if state == QTextToSpeech.State.Ready and self.tts_active:
+            self._tts_speak_next()
+        elif state == QTextToSpeech.State.Error:
+            self.tts_btn.setChecked(False)
+            self.app.toast(f"Чтение вслух недоступно: {self._tts.errorString()}")
+
+    # --- автолистание
+
+    def _toggle_autoflip(self, on):
+        if on:
+            if self.tts_btn.isChecked():
+                self.tts_btn.setChecked(False)
+            sec = int(self.app.settings.get("autoFlipSec", 30))
+            self._flip_timer.start(sec * 1000)
+            self.app.toast(f"Автолистание: страница каждые {sec} с")
+        else:
+            self._flip_timer.stop()
+
+    def _autoflip_turn(self):
+        self._auto_turn = True
+        self.js("window.reader.next()")
+
     def close_page(self):
+        self._flip_timer.stop()
+        if self.tts_active:
+            self.tts_active = False
+            if self._tts is not None:
+                self._tts.stop()
         self.app.library.flush()
         self.page.deleteLater()
