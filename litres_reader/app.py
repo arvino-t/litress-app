@@ -220,19 +220,20 @@ class App(QObject):
             self.sync(quiet=True)
 
     def _open_last_book(self):
-        """Автопереход: открыть последнюю книгу на месте, где остановились (аудио — на паузе)."""
+        """Автопереход: открыть последнюю текстовую книгу на месте, где остановились.
+
+        Берётся самая свежая из начатых и не дочитанных — с учётом чтения на ЛитРес —
+        среди скачанных; аудиокниги при запуске сами не открываются.
+        """
         if not self.settings.get("openLastBook", True):
             return
-        book = self.library.books.get(self.settings.get("lastBook") or "")
-        path = self.library.file_path(book) if book else None
-        if not path:
-            return
-        if (self.library.progress.get(book["id"], {}).get("fraction") or 0) >= 0.999:
-            return   # дочитанную книгу сами не открываем
-        if book.get("format") in AUDIO_FORMATS:
-            self.open_player(book, path)
-        else:
-            self.open_book(book, path)
+        for book in self.library.recent(len(self.library.books), self.settings.get("lastBook")):
+            if book.get("is_audio") or book.get("format") in AUDIO_FORMATS:
+                continue
+            path = self.library.file_path(book)
+            if path:
+                self.open_book(book, path)
+                return
 
     # --- навигация между экранами (как Adw.NavigationView)
 
@@ -307,7 +308,7 @@ class App(QObject):
         self.only_action = QAction("Только скачанные", self.menu, checkable=True)
         self.only_action.toggled.connect(self._on_only_downloaded)
         self.menu.addAction(self.only_action)
-        self.last_action = QAction("Открывать последнюю книгу при запуске", self.menu, checkable=True)
+        self.last_action = QAction("Открывать последнюю текстовую книгу при запуске", self.menu, checkable=True)
         self.last_action.setChecked(bool(self.settings.get("openLastBook", True)))
         self.last_action.toggled.connect(lambda on: (self.settings.__setitem__("openLastBook", on),
                                                      self.save_settings()))
