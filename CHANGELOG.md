@@ -5,6 +5,8 @@
 
 ## [Не выпущено]
 
+## [0.14.0] — 2026-10-09
+
 ### Добавлено
 - Разделы для своих папок: при добавлении папки задаётся название раздела («Статьи», «Лекции»…).
   Раздел виден на карточках вместо имени папки и отдельным пунктом в фильтре библиотеки
@@ -180,7 +182,8 @@
   голоса и таймером сна.
 - Обход VPN для ЛитРес (`vpn-bypass/`).
 
-[Не выпущено]: https://github.com/arvino-t/litress-app/compare/v0.13.0...HEAD
+[Не выпущено]: https://github.com/arvino-t/litress-app/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/arvino-t/litress-app/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/arvino-t/litress-app/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/arvino-t/litress-app/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/arvino-t/litress-app/compare/v0.10.0...v0.11.0
