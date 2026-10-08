@@ -214,7 +214,7 @@ const onRelocate = ({ detail }) => {
         atEnd: !!view?.renderer?.atEnd })
 }
 
-const open = async ({ url, name, cfi, settings: s }) => {
+const open = async ({ url, name, cfi, fraction, settings: s }) => {
     try {
         const resp = await fetch(url)
         if (!resp.ok) throw new Error(`Не удалось прочитать файл (${resp.status})`)
@@ -243,7 +243,8 @@ const open = async ({ url, name, cfi, settings: s }) => {
             author: formatName(metadata.author),
             toc: flattenTOC(toc),
         })
-        await view.init({ lastLocation: cfi || null, showTextStart: !cfi })
+        await view.init({ lastLocation: cfi || null, showTextStart: !cfi && !fraction })
+        if (!cfi && fraction) await view.goToFraction(fraction)   // PDF: CFI нет
         $('#loading').remove()
     } catch (err) {
         console.error(err)

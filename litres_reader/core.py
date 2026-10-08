@@ -65,7 +65,9 @@ LOGIN_URL = f"{SITE}/auth/login/"
 
 # Форматы в порядке предпочтения: первые открывает встроенная читалка
 FORMAT_ORDER = ("epub", "ios.epub", "fb2.zip", "fb2", "mobi.prc", "a4.pdf", "a6.pdf")
-READABLE = {"epub", "ios.epub", "fb2.zip", "fb2", "mobi.prc", "fbz", "mobi", "azw3"}
+READABLE = {"epub", "ios.epub", "fb2.zip", "fb2", "mobi.prc", "fbz", "mobi", "azw3", "pdf"}
+# Форматы, которые ищутся в папках со своими книгами и статьями
+FOLDER_FORMATS = ("fb2.zip", "epub", "fb2", "fbz", "mobi", "azw3", "pdf")
 LOCAL_SUFFIX = {"ios.epub": "epub", "mobi.prc": "mobi", "a4.pdf": "pdf", "a6.pdf": "pdf"}
 AUDIO_FORMATS = {"m4b", "mp3dir"}
 # Аудио: сначала один файл M4B, иначе архив с MP3
@@ -101,6 +103,8 @@ DEFAULT_SETTINGS = {
     "lastBook": None,
     # Папка для скачанных книг; None — папка внутри данных приложения
     "booksDir": None,
+    # Папки со своими книгами и статьями; None — по умолчанию из «Документов»
+    "localFolders": None,
 }
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
@@ -109,7 +113,8 @@ STATUS_FILTERS = (("all", "Все"), ("reading", "Читаю"), ("unread", "Не
 SORT_MODES = (("recent", "Недавние"), ("litres", "Как на ЛитРес"), ("title", "По названию"),
               ("author", "По автору"), ("series", "По сериям"), ("progress", "По прогрессу"),
               ("purchased", "По дате покупки"))
-TYPE_FILTERS = (("all", "Книги и аудио"), ("text", "Книги"), ("audio", "Аудиокниги"))
+TYPE_FILTERS = (("all", "Все"), ("text", "Книги ЛитРес"), ("audio", "Аудиокниги"),
+                ("mine", "Мои книги и статьи"))
 
 
 def log(*args):
@@ -308,6 +313,9 @@ class Library:
         return bid
 
     def file_path(self, book) -> Path | None:
+        if book.get("path"):            # своя книга из папки — открываем на месте
+            p = Path(book["path"])
+            return p if p.exists() else None
         if book.get("file"):
             p = books_dir() / book["file"]
             if p.exists():
@@ -339,6 +347,52 @@ class Library:
                     errors.append(f"{name}: {e}")
         set_books_dir(str(new_dir))
         return moved, errors
+
+    def scan_folders(self, folders: list[str]) -> int:
+        """Находит свои книги и статьи в папках. Файлы не копируются и не меняются:
+        в библиотеке хранится только путь. Возвращает число найденных файлов."""
+        downloads = books_dir().resolve()
+        seen: set[str] = set()
+        changed = False
+        for folder in folders:
+            root = Path(folder).expanduser()
+            if not root.is_dir():
+                continue
+            for dirpath, dirnames, files in os.walk(root):
+                here = Path(dirpath)
+                # книги ЛитРес (если их папка внутри) уже есть в библиотеке
+                if here.resolve() == downloads:
+                    dirnames[:] = []
+                    continue
+                dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+                for name in sorted(files):
+                    low = name.lower()
+                    fmt = next((e for e in FOLDER_FORMATS if low.endswith("." + e)), None)
+                    if not fmt or name.startswith("."):
+                        continue
+                    path = here / name
+                    bid = "file-" + hashlib.sha1(str(path).encode()).hexdigest()[:12]
+                    seen.add(bid)
+                    if bid in self.books:
+                        continue
+                    rel = here.relative_to(root)
+                    self.books[bid] = {
+                        "id": bid, "source": "folder", "format": fmt, "path": str(path),
+                        "title": name[: -len(fmt) - 1].replace("_", " ").strip() or name,
+                        "authors": [],
+                        # подпись на карточке: папка, откуда книга
+                        "collection": root.name + ("" if str(rel) == "." else f" / {rel}"),
+                    }
+                    self.order.append(bid)
+                    changed = True
+        for bid in [b for b, v in self.books.items() if v.get("source") == "folder" and b not in seen]:
+            del self.books[bid]              # файл удалён или папку убрали из списка
+            if bid in self.order:
+                self.order.remove(bid)
+            changed = True
+        if changed:
+            self.save()
+        return len(seen)
 
     def remove_file(self, bid):
         book = self.books.get(bid)

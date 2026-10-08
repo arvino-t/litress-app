@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import re
+import uuid
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QFile, QIODevice, Qt, QTimer, QUrl
@@ -39,13 +40,23 @@ def register_scheme():
     QWebEngineUrlScheme.registerScheme(s)
 
 
+# Файлы, открытые в читалке: токен → путь. Отдаём только их, а не любой путь с диска.
+OPEN_FILES: dict[str, Path] = {}
+
+
 class SchemeHandler(QWebEngineUrlSchemeHandler):
     """litreader://app/… — файлы читалки, litreader://app/book/… — сами книги."""
 
     def requestStarted(self, job: QWebEngineUrlRequestJob):
         path = job.requestUrl().path().lstrip("/")
-        base, rel = (books_dir(), path[5:]) if path.startswith("book/") else (WEB_DIR, path)
-        target = (base / rel).resolve()
+        if path.startswith("file/"):
+            token = path.split("/")[1]
+            known = OPEN_FILES.get(token)
+            target = known.resolve() if known else Path("/nonexistent")
+            base = target.parent
+        else:
+            base, rel = (books_dir(), path[5:]) if path.startswith("book/") else (WEB_DIR, path)
+            target = (base / rel).resolve()
         if not target.is_file() or base.resolve() not in target.parents:
             job.fail(QWebEngineUrlRequestJob.Error.UrlNotFound)
             return
@@ -299,11 +310,17 @@ class ReaderPage(QWidget):
     def _on_message(self, msg):
         t = msg.get("type")
         if t == "ready":
-            ext = self.path.name.split(".", 1)[1] if "." in self.path.name else ""
+            ext = self.book.get("format") or (self.path.name.split(".", 1)[1] if "." in self.path.name else "")
+            ext = {"ios.epub": "epub", "mobi.prc": "mobi", "a4.pdf": "pdf", "a6.pdf": "pdf"}.get(ext, ext)
+            token = uuid.uuid4().hex
+            OPEN_FILES[token] = self.path
+            saved = self.app.library.progress.get(self.book["id"], {})
             params = {
-                "url": f"{SCHEME}://app/book/{self.path.name}",
+                "url": f"{SCHEME}://app/file/{token}/book.{ext}",
                 "name": f"book.{ext}",
-                "cfi": self.app.library.progress.get(self.book["id"], {}).get("cfi"),
+                "cfi": saved.get("cfi"),
+                # у PDF нет CFI — место восстанавливаем по доле прочитанного
+                "fraction": saved.get("fraction"),
                 "settings": self.resolved_settings(),
             }
             self.js(f"window.reader.open({json.dumps(params)})")
@@ -319,8 +336,8 @@ class ReaderPage(QWidget):
                 self.slider.setValue(int(frac * 1000))
             self.percent.setText(f"{round(frac * 100)}%")
             self.header.set_title(self.book.get("title") or "", msg.get("chapter") or "")
-            if msg.get("cfi"):
-                self.app.library.set_progress(self.book["id"], msg["cfi"], frac, msg.get("chapter"))
+            if msg.get("cfi") or self.book.get("format", "").endswith("pdf"):
+                self.app.library.set_progress(self.book["id"], msg.get("cfi"), frac, msg.get("chapter"))
                 self.app.note_activity()
             if msg.get("atEnd") and not self.book.get("finished"):
                 self.app.set_finished(self.book, True, auto=True)

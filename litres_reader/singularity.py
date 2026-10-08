@@ -314,7 +314,7 @@ class SingularitySync(QObject):
                 if patch:
                     ops.append(("PATCH", f"/task/{task['id']}", patch, bid,
                                 {"checked": checked, "percent": percent, "chapter": chapter}))
-            elif status == "unread" and wish_pid:
+            elif status == "unread" and wish_pid and book.get("source") != "folder":
                 if task is None:
                     body = {"title": title, "projectId": wish_pid, "externalId": ext, "checked": 0}
                     if book.get("url"):

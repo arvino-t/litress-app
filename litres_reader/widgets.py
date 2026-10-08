@@ -442,12 +442,16 @@ class BookCard(QFrame):
         authors = ", ".join(book.get("authors") or [])
         self.author.setText(self.author.fontMetrics().elidedText(authors, Qt.TextElideMode.ElideRight, Cover.W))
         s = book.get("series")
+        text = ""
         if s:
             order = s.get("order")
             text = s["name"] + (f" · №{order:g}" if order is not None else "")
+        elif book.get("collection"):
+            text = book["collection"]
+        if text:
             self.series.setText(self.series.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, Cover.W))
             self.series.setToolTip(text)
-        self.series.setVisible(bool(s))
+        self.series.setVisible(bool(text))
         self.cover.set_cover(lib.cover_path(book), title)
 
         downloaded = lib.file_path(book) is not None

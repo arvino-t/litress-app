@@ -10,7 +10,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRectF, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QRectF, QSize, QStandardPaths, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket, QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QFrame,
@@ -21,7 +21,7 @@ from . import __version__, style
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, CONFIG_FILE,
                    COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
                    READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
-                   load_json, looks_like_book, save_json, set_books_dir)
+                   load_json, log, looks_like_book, save_json, set_books_dir)
 from .litres import LitresSession
 from .player import AudioPlayer, PlayerPage, audio_tracks
 from .reader import ReaderPage
@@ -206,8 +206,10 @@ class App(QObject):
                            ("Alt+Left", self.go_back)):
             QShortcut(QKeySequence(keys), self.window, activated=slot)
 
+        self.library.scan_folders(self.local_folders())
         self.refresh_library()
         QTimer.singleShot(0, self._open_last_book)
+        QTimer.singleShot(1500, self._make_pdf_covers)
 
     def _open_last_book(self):
         """Автопереход: открыть последнюю книгу на месте, где остановились (аудио — на паузе)."""
@@ -303,6 +305,8 @@ class App(QObject):
                                                      self.save_settings()))
         self.menu.addAction(self.last_action)
         self.menu.addAction("Папка для книг…", self.choose_books_dir)
+        self.mine_menu = self.menu.addMenu("Мои книги и статьи")
+        self.mine_menu.aboutToShow.connect(self._fill_mine_menu)
         self.menu.addSeparator()
         self.account_action = self.menu.addAction("Войти в ЛитРес", self._account_action)
         self.menu.addAction("Singularity…", self.show_singularity_dialog)
@@ -530,7 +534,10 @@ class App(QObject):
         if status != "all" and self.library.status(book) != status:
             return False
         kind = self.settings.get("libraryType", "all")
-        if kind != "all" and bool(book.get("is_audio")) != (kind == "audio"):
+        mine = book.get("source") == "folder"
+        if kind == "mine" and not mine:
+            return False
+        if kind in ("text", "audio") and (mine or bool(book.get("is_audio")) != (kind == "audio")):
             return False
         folder = self.settings.get("libraryFolder")
         if folder == NO_FOLDER:
@@ -570,7 +577,7 @@ class App(QObject):
         if current not in self._folder_ids:
             self.settings["libraryFolder"] = None
         self.folder_combo.setVisible(bool(folders))
-        self.type_combo.setVisible(any(b.get("is_audio") for b in books))
+        self.type_combo.setVisible(any(b.get("is_audio") or b.get("source") == "folder" for b in books))
 
     # --- сетка книг
 
@@ -723,6 +730,7 @@ class App(QObject):
     def sync(self, quiet=False):
         if self.syncing:
             return
+        self.rescan_local()
         if not self.litres.logged_in:
             self.show_login()
             return
@@ -980,13 +988,17 @@ class App(QObject):
             menu.addAction("Отметить прочитанной", lambda: self.set_finished(book, True))
         if book.get("source") == "litres":
             menu.addAction("Папки…", lambda: self.show_folders_dialog(book))
-        nxt = self.library.next_in_series(book)
-        if nxt:
-            menu.addAction(f"Следующая в серии: {nxt.get('title')}", lambda: self.on_book_activated(nxt["id"]))
             menu.addAction("Скачать заново" if downloaded else "Скачать", lambda: self.download_book(book))
             if book.get("url"):
                 menu.addAction("Открыть на сайте ЛитРес", lambda: QDesktopServices.openUrl(QUrl(book["url"])))
-        if downloaded or book.get("source") == "local":
+        nxt = self.library.next_in_series(book)
+        if nxt:
+            menu.addAction(f"Следующая в серии: {nxt.get('title')}", lambda: self.on_book_activated(nxt["id"]))
+        if book.get("source") == "folder":
+            # своя книга: файл остаётся на месте, удалять его из читалки не даём
+            menu.addAction("Показать файл в папке", lambda: QDesktopServices.openUrl(
+                QUrl.fromLocalFile(str(Path(book["path"]).parent))))
+        elif downloaded or book.get("source") == "local":
             menu.addSeparator()
             menu.addAction("Удалить с устройства", lambda: self.remove_book_file(bid))
         menu.popup(pos)
@@ -1240,6 +1252,84 @@ class App(QObject):
                        + errors[0], timeout=10000)
         else:
             self.toast(f"Книги теперь в {new_dir}" + (f" — перенесено файлов: {moved}" if moved else ""))
+
+    # --- свои книги и статьи
+
+    def local_folders(self) -> list[str]:
+        """Папки со своими книгами и статьями; по умолчанию — из «Документов»."""
+        folders = self.settings.get("localFolders")
+        if folders is None:
+            docs = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation))
+            folders = [str(docs / d) for d in ("Books/others", "articles", "trainings") if (docs / d).is_dir()]
+        return folders
+
+    def rescan_local(self, report=False):
+        n = self.library.scan_folders(self.local_folders())
+        self.refresh_library()
+        QTimer.singleShot(500, self._make_pdf_covers)
+        if report:
+            self.toast(f"Своих книг и статей: {n}")
+
+    def _fill_mine_menu(self):
+        m = self.mine_menu
+        m.clear()
+        show = m.addAction("Показать в библиотеке", lambda: self._set_type_filter("mine"))
+        show.setEnabled(any(b.get("source") == "folder" for b in self.library.books.values()))
+        m.addAction("Обновить список", lambda: self.rescan_local(report=True))
+        m.addSeparator()
+        for folder in self.local_folders():
+            m.addAction(f"Убрать папку: {folder}", lambda f=folder: self._remove_local_folder(f))
+        m.addAction("Добавить папку…", self._add_local_folder)
+
+    def _set_type_filter(self, key):
+        keys = [k for k, _t in TYPE_FILTERS]
+        self.type_combo.setCurrentIndex(keys.index(key))
+
+    def _add_local_folder(self):
+        start = self.local_folders()[0] if self.local_folders() else str(Path.home())
+        path = QFileDialog.getExistingDirectory(self.window, "Папка со своими книгами и статьями", start)
+        if path and path not in self.local_folders():
+            self.settings["localFolders"] = self.local_folders() + [path]
+            self.save_settings()
+            self.rescan_local(report=True)
+
+    def _remove_local_folder(self, folder):
+        self.settings["localFolders"] = [f for f in self.local_folders() if f != folder]
+        self.save_settings()
+        self.rescan_local(report=True)
+
+    def _make_pdf_covers(self):
+        """Обложки своих PDF — первая страница; по одной за раз, чтобы не подвешивать окно."""
+        todo = [b for b in self.library.ordered()
+                if b.get("source") == "folder" and b.get("format") == "pdf"
+                and not (COVERS_DIR / f"{b['id']}.jpg").exists()]
+        if not todo:
+            return
+        book = todo[0]
+        target = COVERS_DIR / f"{book['id']}.jpg"
+        try:
+            from PySide6.QtGui import QColor, QImage, QPainter
+            from PySide6.QtPdf import QPdfDocument
+            doc = QPdfDocument()
+            doc.load(book["path"])
+            if doc.status() == QPdfDocument.Status.Ready and doc.pageCount() > 0:
+                pt = doc.pagePointSize(0)
+                h = 360
+                w = max(1, int(h * pt.width() / pt.height())) if pt.height() > 0 else 255
+                page = doc.render(0, QSize(w, h))
+                img = QImage(page.size(), QImage.Format.Format_RGB32)
+                img.fill(QColor("white"))            # у PDF прозрачный фон
+                p = QPainter(img)
+                p.drawImage(0, 0, page)
+                p.end()
+                img.save(str(target), "JPG", 85)
+            doc.close()
+        except Exception as e:
+            log("обложка PDF:", book["path"], e)
+        if not target.exists():
+            target.touch()                           # пустой файл: больше не пытаться
+        self.refresh_card(book["id"])
+        QTimer.singleShot(30, self._make_pdf_covers)
 
     def on_open_file(self):
         path, _ = QFileDialog.getOpenFileName(self.window, "Открыть книгу", str(Path.home()),
