@@ -156,6 +156,7 @@ class App(QObject):
         self._settings_timer.timeout.connect(lambda: save_json(CONFIG_FILE, self.settings))
         self.cards: dict[str, BookCard] = {}
         self.downloading: set[str] = set()
+        self.bulk = None        # скачивание всех книг разом: очередь и счётчики
         self.syncing = False
         self.only_downloaded = False
         self.reader: ReaderPage | None = None
@@ -332,6 +333,7 @@ class App(QObject):
         menu_btn = IconButton("open-menu", "Меню")
         self.menu = QMenu(menu_btn)
         self.menu.addAction("Открыть файл…", self.on_open_file)
+        self.download_all_action = self.menu.addAction("Скачать все книги…", self._download_all_action)
         self.only_action = QAction("Только скачанные", self.menu, checkable=True)
         self.only_action.toggled.connect(self._on_only_downloaded)
         self.menu.addAction(self.only_action)
@@ -703,7 +705,10 @@ class App(QObject):
                 self.sync(quiet=bool(self.library.books))
 
     def _update_account_ui(self):
-        if self.litres.logged_in:
+        if self.bulk:
+            b = self.bulk
+            self.lib_header.set_title("Библиотека", f"Скачиваю книги: {b['done'] + b['failed']} из {b['total']}")
+        elif self.litres.logged_in:
             self.account_action.setText("Выйти из ЛитРес")
             self.lib_header.set_title("Библиотека", f"ЛитРес: {self.litres.user_name}"
                                       if self.litres.user_name else "ЛитРес: вход выполнен")
@@ -904,7 +909,8 @@ class App(QObject):
         self.reader = ReaderPage(self, book, path)
         self.push(self.reader)
 
-    def download_book(self, book, open_after=False):
+    def download_book(self, book, open_after=False, on_finished=None):
+        """on_finished(ok, текст ошибки) — для скачивания всех книг: тогда ошибки не всплывают по одной."""
         bid = book["id"]
         if bid in self.downloading:
             return
@@ -921,7 +927,10 @@ class App(QObject):
             self.downloading.discard(bid)
             if card:
                 card.set_download_progress(None)
-            self.toast(text)
+            if on_finished:
+                on_finished(False, text)
+            else:
+                self.toast(text)
 
         def got_files(files, status):
             if files is None:
@@ -959,6 +968,9 @@ class App(QObject):
             book.update(file=file_name, format=fmt_saved)
             self.library.save()
             self.refresh_card(bid)
+            if on_finished:
+                on_finished(True, None)
+                return
             if book.get("is_drm"):
                 self.toast("Книга защищена DRM — она может не открыться")
             if open_after:
@@ -990,6 +1002,84 @@ class App(QObject):
             self.litres.download(url, dest, lambda f: card and card.set_download_progress(f), done)
 
         self.litres.fetch_files(bid, got_files)
+
+    # --- скачивание всех книг разом
+
+    @staticmethod
+    def _books_word(n, one, few, many):
+        if n % 10 == 1 and n % 100 != 11:
+            return one
+        return few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+
+    def _download_all_action(self):
+        if self.bulk:
+            self.bulk["queue"].clear()      # текущая книга докачается, остальные — нет
+            self.download_all_action.setText("Скачивание останавливается…")
+            return
+        if not self.litres.logged_in:
+            self.toast("Сначала войдите в ЛитРес")
+            self.show_login()
+            return
+        missing = [b for b in self.library.ordered()
+                   if b.get("source") == "litres" and b["id"] not in self.downloading
+                   and not self.library.file_path(b)]
+        texts = [b for b in missing if not b.get("is_audio")]
+        audio = [b for b in missing if b.get("is_audio")]
+        if not missing:
+            self.toast("Все книги ЛитРес уже скачаны")
+            return
+        box = QMessageBox(self.window)
+        box.setWindowTitle("Скачать все книги?")
+        box.setText("<b>Скачать все книги на компьютер?</b>")
+        box.setInformativeText(
+            f"Не скачано: {len(texts)} {self._books_word(len(texts), 'книга', 'книги', 'книг')}"
+            + (f" и {len(audio)} {self._books_word(len(audio), 'аудиокнига', 'аудиокниги', 'аудиокниг')}"
+               " (аудиокниги большие — сотни мегабайт каждая)" if audio else "")
+            + f".\nПапка: {books_dir()}\nКниги скачиваются по одной; остановить можно в меню.")
+        cancel = box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+        only_text = box.addButton(f"Книги ({len(texts)})", QMessageBox.ButtonRole.AcceptRole) if texts else None
+        everything = box.addButton(f"Всё, с аудио ({len(missing)})", QMessageBox.ButtonRole.AcceptRole) if audio else None
+        box.setDefaultButton(only_text or everything)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is cancel or clicked is None:
+            return
+        queue = missing if clicked is everything else texts
+        self.bulk = {"queue": list(queue), "total": len(queue), "done": 0, "failed": 0, "errors": []}
+        self.download_all_action.setText("Остановить скачивание книг")
+        self._bulk_next()
+
+    def _bulk_next(self):
+        b = self.bulk
+        self._update_account_ui()
+        if not b["queue"]:
+            self.bulk = None
+            self.download_all_action.setText("Скачать все книги…")
+            self._update_account_ui()
+            stopped = b["done"] + b["failed"] < b["total"]
+            text = f"Скачано {b['done']} из {b['total']}" + (" — остановлено" if stopped else "")
+            if b["failed"]:
+                text += f", не удалось: {b['failed']} (список — в журнале)"
+                for title, err in b["errors"]:
+                    print(f"litres-reader: не скачалась «{title}»: {err}", file=sys.stderr, flush=True)
+            self.toast(text, timeout=8000)
+            return
+        book = b["queue"].pop(0)
+
+        def finished(ok, err):
+            if ok:
+                b["done"] += 1
+            else:
+                b["failed"] += 1
+                b["errors"].append((book.get("title") or book["id"], err))
+            # небольшая пауза между книгами — не дёргаем ЛитРес слишком часто
+            QTimer.singleShot(500, self._bulk_next)
+
+        if not self.litres.logged_in:
+            b["queue"].clear()
+            finished(False, "вход в ЛитРес не выполнен")
+            return
+        self.download_book(book, on_finished=finished)
 
     def _extract_zip(self, zip_path: Path, dest_dir: Path, on_done):
         """Распаковка MP3-архива в отдельном потоке (архивы бывают большими)."""
