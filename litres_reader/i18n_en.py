@@ -89,6 +89,11 @@ EN = {
     "Продолжаю с места на ЛитРес — {0}%": "Continuing from the LitRes position — {0}%",
     "Аудиокнига прослушана — отмечена прочитанной": "Audiobook finished — marked as read",
     "Своих книг и статей: {0}": "Your own books and articles: {0}",
+    "Статьи": "Articles",
+    "Тренинги и презентации": "Trainings and presentations",
+    "Раздел": "Section",
+    "Название раздела для папки\n{0}": "Section name for the folder\n{0}",
+    "Эта папка уже добавлена": "This folder is already added",
     "Задачи «Читаю»": "“Reading” tasks",
     "Начатые книги — задачи в проекте «Книги», дочитанные закрываются":
         "Started books become tasks in the “Книги” project; finished ones are closed",
@@ -285,10 +290,13 @@ EN = {
     "Скачать все книги": "Download all books",
     "Скачать…": "Download…",
     "Все купленные книги ЛитРес — в папку для скачанных книг": "All purchased LitRes books, to the downloads folder",
-    "Где хранятся скачанные книги и где искать свои книги и статьи. Свои файлы открываются на месте, "
+    "Где хранятся скачанные книги и где искать свои книги и статьи. У каждой своей папки — раздел: "
+    "он виден на карточках и в фильтре библиотеки. Свои файлы открываются на месте, "
     "приложение их не копирует и не удаляет.":
         "Where downloaded books are stored and where to look for your own books and articles. "
+        "Each of your folders has a section name shown on cards and in the library filter. "
         "Your files open in place; the app doesn't copy or delete them.",
+    "Переименовать…": "Rename…",
     "Скачанные книги ЛитРес": "Downloaded LitRes books",
     "Изменить…": "Change…",
     "Статистика": "Statistics",

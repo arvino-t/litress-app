@@ -112,7 +112,7 @@ DEFAULT_SETTINGS = {
     "lastBook": None,
     # Папка для скачанных книг; None — папка внутри данных приложения
     "booksDir": None,
-    # Папки со своими книгами и статьями; None — по умолчанию из «Документов»
+    # Папки со своими книгами и статьями: [{"path": …, "name": раздел}]; None — по умолчанию из «Документов»
     "localFolders": None,
     # Как часто подтягивать библиотеку с ЛитРес, пока окно открыто (минуты; 0 — не обновлять)
     "remoteSyncMin": 15,
@@ -423,14 +423,16 @@ class Library:
         set_books_dir(str(new_dir))
         return moved, errors
 
-    def scan_folders(self, folders: list[str]) -> int:
-        """Находит свои книги и статьи в папках. Файлы не копируются и не меняются:
-        в библиотеке хранится только путь. Возвращает число найденных файлов."""
+    def scan_folders(self, folders: list[dict]) -> int:
+        """Находит свои книги и статьи в папках [{"path", "name"}]; name — раздел (подпись и фильтр).
+        Файлы не копируются и не меняются: в библиотеке хранится только путь.
+        Возвращает число найденных файлов."""
         downloads = books_dir().resolve()
         seen: set[str] = set()
         changed = False
         for folder in folders:
-            root = Path(folder).expanduser()
+            root = Path(folder["path"]).expanduser()
+            section = folder.get("name") or root.name
             if not root.is_dir():
                 continue
             for dirpath, dirnames, files in os.walk(root):
@@ -448,15 +450,21 @@ class Library:
                     path = here / name
                     bid = "file-" + hashlib.sha1(str(path).encode()).hexdigest()[:12]
                     seen.add(bid)
-                    if bid in self.books:
-                        continue
                     rel = here.relative_to(root)
+                    # подпись на карточке: раздел и вложенная папка
+                    collection = section + ("" if str(rel) == "." else f" / {rel}")
+                    if bid in self.books:
+                        book = self.books[bid]
+                        if (book.get("section"), book.get("collection")) != (section, collection):
+                            book.update(section=section, collection=collection)   # раздел переименовали
+                            changed = True
+                        continue
                     self.books[bid] = {
                         "id": bid, "source": "folder", "format": fmt, "path": str(path),
                         "title": name[: -len(fmt) - 1].replace("_", " ").strip() or name,
                         "authors": [],
-                        # подпись на карточке: папка, откуда книга
-                        "collection": root.name + ("" if str(rel) == "." else f" / {rel}"),
+                        "section": section,
+                        "collection": collection,
                     }
                     self.order.append(bid)
                     changed = True

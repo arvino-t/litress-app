@@ -329,6 +329,7 @@ class SettingsPage(QWidget):
                     tr("Все купленные книги ЛитРес — в папку для скачанных книг"))
 
         g = self.group(tr("Папки"), tr("Где хранятся скачанные книги и где искать свои книги и статьи. "
+                                "У каждой своей папки — раздел: он виден на карточках и в фильтре библиотеки. "
                                 "Свои файлы открываются на месте, приложение их не копирует и не удаляет."))
         self.books_row = self.button(g, tr("Скачанные книги ЛитРес"), tr("Изменить…"), self._choose_books_dir,
                                      hint=str(books_dir()))
@@ -459,11 +460,19 @@ class SettingsPage(QWidget):
         self._folder_rows = []
         before = g.count()
         for folder in self.app.local_folders():
-            b = QPushButton(tr("Убрать"))
-            b.clicked.connect(lambda _=False, f=folder: (self.app._remove_local_folder(f), self._fill_folders()))
-            self.row(g, tr("Мои книги и статьи"), b, folder)
+            path = folder["path"]
+            box = QWidget()
+            bh = QHBoxLayout(box)
+            bh.setContentsMargins(0, 0, 0, 0)
+            rename = QPushButton(tr("Переименовать…"))
+            rename.clicked.connect(lambda _=False, p=path: (self.app.rename_local_folder(p), self._fill_folders()))
+            remove = QPushButton(tr("Убрать"))
+            remove.clicked.connect(lambda _=False, p=path: (self.app.remove_local_folder(p), self._fill_folders()))
+            bh.addWidget(rename)
+            bh.addWidget(remove)
+            self.row(g, folder["name"], box, path)
         add = QPushButton(tr("Добавить папку…"))
-        add.clicked.connect(lambda: (self.app._add_local_folder(), self._fill_folders()))
+        add.clicked.connect(lambda: (self.app.add_local_folder(), self._fill_folders()))
         rescan = QPushButton(tr("Обновить список"))
         rescan.clicked.connect(lambda: self.app.rescan_local(report=True))
         box = QWidget()

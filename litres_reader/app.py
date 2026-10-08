@@ -15,7 +15,7 @@ from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, QRectF, QSize, QSt
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket, QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QFrame,
-                               QHBoxLayout, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
+                               QHBoxLayout, QInputDialog, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import __version__, backup, core, style
@@ -470,10 +470,8 @@ class App(QObject):
         h.addWidget(self.folder_combo)
 
         self.type_combo = QComboBox()
-        self.type_combo.addItems([text for _k, text in TYPE_FILTERS])
-        keys = [k for k, _t in TYPE_FILTERS]
-        cur = self.settings.get("libraryType", "all")
-        self.type_combo.setCurrentIndex(keys.index(cur) if cur in keys else 0)
+        self._type_keys: list[str] = []
+        self._fill_type_combo()
         self.type_combo.currentIndexChanged.connect(self._on_type_selected)
         h.addWidget(self.type_combo)
 
@@ -561,10 +559,26 @@ class App(QObject):
         return sorted(books, key=lambda b: -(lib.progress.get(b["id"], {}).get("ts")
                                              or (1 if b["id"] == last else 0)))
 
+    def _fill_type_combo(self):
+        """Книги / аудио / свои — и отдельно каждый раздел своих книг и статей."""
+        sections = list(dict.fromkeys(f["name"] for f in self.local_folders()))
+        options = list(TYPE_FILTERS) + [("section:" + s, "— " + s) for s in sections]
+        self._type_keys = [k for k, _t in options]
+        cur = self.settings.get("libraryType", "all")
+        if cur not in self._type_keys:
+            cur = "all"
+            self.settings["libraryType"] = cur
+        self.type_combo.blockSignals(True)
+        self.type_combo.clear()
+        self.type_combo.addItems([text for _k, text in options])
+        self.type_combo.setCurrentIndex(self._type_keys.index(cur))
+        self.type_combo.blockSignals(False)
+
     def _on_type_selected(self, idx):
-        self.settings["libraryType"] = TYPE_FILTERS[idx][0]
-        self.save_settings()
-        self._apply_filter()
+        if 0 <= idx < len(self._type_keys):
+            self.settings["libraryType"] = self._type_keys[idx]
+            self.save_settings()
+            self._apply_filter()
 
     def _on_only_downloaded(self, on):
         self.only_downloaded = on
@@ -579,6 +593,8 @@ class App(QObject):
         kind = self.settings.get("libraryType", "all")
         mine = book.get("source") == "folder"
         if kind == "mine" and not mine:
+            return False
+        if kind.startswith("section:") and not (mine and book.get("section") == kind[len("section:"):]):
             return False
         if kind in ("text", "audio") and (mine or bool(book.get("is_audio")) != (kind == "audio")):
             return False
@@ -1428,37 +1444,70 @@ class App(QObject):
 
     # --- свои книги и статьи
 
-    def local_folders(self) -> list[str]:
-        """Папки со своими книгами и статьями; по умолчанию — из «Документов»."""
-        folders = self.settings.get("localFolders")
-        if folders is None:
+    def local_folders(self) -> list[dict]:
+        """Папки со своими книгами и статьями: [{"path", "name"}], name — раздел.
+        По умолчанию — три папки из «Документов»; старый формат (просто пути) — раздел по имени папки."""
+        raw = self.settings.get("localFolders")
+        if raw is None:
             docs = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation))
-            folders = [str(docs / d) for d in ("Books/others", "articles", "trainings") if (docs / d).is_dir()]
-        return folders
+            defaults = (("Books/others", tr("Книги")), ("articles", tr("Статьи")),
+                        ("trainings", tr("Тренинги и презентации")))
+            return [{"path": str(docs / d), "name": name} for d, name in defaults if (docs / d).is_dir()]
+        out = []
+        for f in raw:
+            if isinstance(f, str):
+                f = {"path": f}
+            if isinstance(f, dict) and f.get("path"):
+                out.append({"path": f["path"], "name": (f.get("name") or "").strip() or Path(f["path"]).name})
+        return out
 
     def rescan_local(self, report=False):
         n = self.library.scan_folders(self.local_folders())
+        self._fill_type_combo()
         self.refresh_library()
         QTimer.singleShot(500, self._make_pdf_covers)
         if report:
             self.toast(tr('Своих книг и статей: {0}', n))
 
     def _set_type_filter(self, key):
-        keys = [k for k, _t in TYPE_FILTERS]
-        self.type_combo.setCurrentIndex(keys.index(key))
+        if key in self._type_keys:
+            self.type_combo.setCurrentIndex(self._type_keys.index(key))
 
-    def _add_local_folder(self):
-        start = self.local_folders()[0] if self.local_folders() else str(Path.home())
-        path = QFileDialog.getExistingDirectory(self.window, tr("Папка со своими книгами и статьями"), start)
-        if path and path not in self.local_folders():
-            self.settings["localFolders"] = self.local_folders() + [path]
-            self.save_settings()
-            self.rescan_local(report=True)
+    def _ask_section(self, path, current=""):
+        """Название раздела для папки; None — отменили."""
+        name, ok = QInputDialog.getText(self.window, tr("Раздел"),
+                                        tr("Название раздела для папки\n{0}", path),
+                                        text=current or Path(path).name.capitalize())
+        name = name.strip()
+        return name if ok and name else None
 
-    def _remove_local_folder(self, folder):
-        self.settings["localFolders"] = [f for f in self.local_folders() if f != folder]
+    def _save_local_folders(self, folders):
+        self.settings["localFolders"] = folders
         self.save_settings()
         self.rescan_local(report=True)
+
+    def add_local_folder(self):
+        folders = self.local_folders()
+        start = folders[0]["path"] if folders else str(Path.home())
+        path = QFileDialog.getExistingDirectory(self.window, tr("Папка со своими книгами и статьями"), start)
+        if not path:
+            return
+        if any(Path(f["path"]) == Path(path) for f in folders):
+            self.toast(tr("Эта папка уже добавлена"))
+            return
+        name = self._ask_section(path)
+        if name:
+            self._save_local_folders(folders + [{"path": path, "name": name}])
+
+    def rename_local_folder(self, path):
+        folders = self.local_folders()
+        current = next((f["name"] for f in folders if f["path"] == path), "")
+        name = self._ask_section(path, current)
+        if name and name != current:
+            self._save_local_folders([{**f, "name": name} if f["path"] == path else f for f in folders])
+
+    def remove_local_folder(self, path):
+        self._save_local_folders([f for f in self.local_folders() if f["path"] != path])
 
     def _make_pdf_covers(self):
         """Обложки своих PDF — первая страница; по одной за раз, чтобы не подвешивать окно."""
