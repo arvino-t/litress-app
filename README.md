@@ -59,6 +59,16 @@ python3 -m venv .venv && .venv/bin/pip install -e .
 
 Requires Python 3.10+ and `PySide6>=6.10,<6.12` (Qt 6 with QtWebEngine).
 
+### Tests
+
+```
+.venv/bin/pip install -e .[dev]
+.venv/bin/python -m pytest
+```
+
+The tests use the source tree and a temporary data directory (never your real data). They cover
+the library model and folder scanning, backups, translation coverage and package data.
+
 Environment variables:
 
 | Variable | Effect |

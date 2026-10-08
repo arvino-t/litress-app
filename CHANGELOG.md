@@ -9,8 +9,14 @@ All notable changes to LitRes Reader. The format is based on
 ### Added
 - User guide in Russian and English in `docs/ru/` and `docs/en/`.
 
+- Test suite (`tests/`, pytest): library model and folder scanning, backups, translation coverage,
+  package data.
+
 ### Changed
 - Project documentation (README, CHANGELOG, TODO) is now in English.
+
+### Fixed
+- Backups made within the same second could be pruned in the wrong order, deleting the newest one.
 
 ## [0.14.0] — 2026-10-09
 

@@ -89,18 +89,20 @@ def create(settings, reason: str = "") -> Path:
 
 
 def list_backups(folder: Path) -> list[tuple[Path, datetime]]:
-    """Копии в папке, новые первыми."""
+    """Копии в папке, новые первыми (в одну секунду — по времени записи файла)."""
     out = []
     try:
         for p in folder.glob(PREFIX + "*.zip"):
+            st = p.stat()
             try:
                 when = datetime.strptime(p.stem[len(PREFIX):len(PREFIX) + 17], "%Y-%m-%d_%H%M%S")
             except ValueError:
-                when = datetime.fromtimestamp(p.stat().st_mtime)
-            out.append((p, when))
+                when = datetime.fromtimestamp(st.st_mtime)
+            out.append((p, when, st.st_mtime_ns))
     except OSError:
         return []
-    return sorted(out, key=lambda x: x[1], reverse=True)
+    out.sort(key=lambda x: (x[1], x[2]), reverse=True)
+    return [(p, when) for p, when, _ns in out]
 
 
 def prune(folder: Path, keep: int):

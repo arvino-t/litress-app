@@ -4,7 +4,7 @@ Ideas for the next versions, most useful first. Finished items move to [CHANGELO
 
 ## Refactoring — before the bigger items below
 Behaviour doesn't change; after each step, check the installed version.
-- [ ] **Tests** (before splitting the code): `Library` (merging with LitRes, statuses, percentages),
+- [x] **Tests** (before splitting the code): `Library` (merging with LitRes, statuses, percentages),
   backups (create, restore, Singularity token), translation coverage (every `tr()` key is in
   `i18n_en.py`, placeholders match), all `web/` and `data/` files end up in the installed package
   (that is why the graph and PDF were broken in 0.11.0).
