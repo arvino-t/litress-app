@@ -17,8 +17,8 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
                                QListWidget, QListWidgetItem, QSlider, QVBoxLayout, QWidget)
 
-from . import style
-from .core import DEBUG, SAFE_LINK_SCHEMES, SCHEME, WEB_DIR, books_dir, log
+from . import core, style
+from .core import SAFE_LINK_SCHEMES, SCHEME, WEB_DIR, books_dir, log
 from .litres import PREFIX
 from .widgets import HeaderBar, IconButton, Popover, SeekSlider, Switch, attach_popover, cls, label
 
@@ -106,7 +106,7 @@ class _ReaderWebPage(QWebEnginePage):
         elif level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
             # ошибки страниц читалки и графа — в журнал всегда, чтобы было видно причину сбоя
             print(f"litres-reader js error: {text} ({source.rsplit('/', 1)[-1]}:{line})", file=sys.stderr, flush=True)
-        elif DEBUG:
+        elif core.DEBUG:
             log("reader console:", text)
 
     def acceptNavigationRequest(self, url, nav_type, is_main):
@@ -130,7 +130,7 @@ class ReaderPage(QWidget):
         self.web = QWebEngineView(self)
         self.page = _ReaderWebPage(reader_profile(), self._on_message, self)
         self.web.setPage(self.page)
-        self.web.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu if DEBUG
+        self.web.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu if core.DEBUG
                                       else Qt.ContextMenuPolicy.NoContextMenu)
 
         # Верхняя панель — заголовок окна

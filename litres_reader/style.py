@@ -229,6 +229,8 @@ def stylesheet() -> str:
                      border-top-left-radius: 6px; border-bottom-left-radius: 6px; }}
     *[cls~="linked-last"] {{ border-top-left-radius: 0; border-bottom-left-radius: 0;
                     border-top-right-radius: 6px; border-bottom-right-radius: 6px; }}
+    *[cls~="linked"]:checked, *[cls~="linked-first"]:checked, *[cls~="linked-last"]:checked {{
+        background: {c['button_active']}; }}
 
     /* Выпадающие списки */
     QComboBox {{ background: {c['button']}; border: none; border-radius: 6px;

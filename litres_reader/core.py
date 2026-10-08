@@ -81,6 +81,12 @@ DROP_HEADERS = {"cookie", "host", "content-length", "content-type", "connection"
 
 DEBUG = bool(os.environ.get("LITREADER_DEBUG"))
 
+
+def set_debug(on: bool):
+    """Подробный журнал: переменная LITREADER_DEBUG или настройка «Дополнительно → Подробный журнал»."""
+    global DEBUG
+    DEBUG = bool(on) or bool(os.environ.get("LITREADER_DEBUG"))
+
 DEFAULT_SETTINGS = {
     "fontSize": 19,
     "lineHeight": 1.5,
@@ -110,6 +116,10 @@ DEFAULT_SETTINGS = {
     "remoteSyncMin": 15,
     # Скорость чтения для оценки чтения на телефоне (знаков в минуту)
     "readingCharsPerMin": 1300,
+    # Подробный журнал (то же, что LITREADER_DEBUG=1)
+    "debugLog": False,
+    # Последняя открытая вкладка настроек
+    "settingsTab": "general",
 }
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке

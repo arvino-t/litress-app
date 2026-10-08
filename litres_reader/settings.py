@@ -1,26 +1,84 @@
-"""Страница «Настройки» — в духе Adw.PreferencesPage: группы со строками.
+"""Страница «Настройки» — в духе Adw.PreferencesWindow: вкладки, на них группы со строками.
 
-Всё, что раньше было разбросано по меню и всплывающим панелям: запуск и библиотека,
-папки, вид текста, чтение вслух и автолистание, аудио, синхронизация, статистика,
-интеграции и сведения о приложении. Изменения применяются сразу.
+Вкладки: «Общие» (запуск, библиотека, папки, статистика), «Чтение» (вид текста, чтение
+вслух, автолистание, аудиокниги), «Интеграции» (ЛитРес, Singularity — со значками сервисов)
+и «Дополнительно» (обновление с ЛитРес, оценка чтения на телефоне, журнал, данные, сброс).
+Изменения применяются сразу.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSlider,
-                               QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtCore import QSize, Qt, QUrl
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+                               QScrollArea, QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__
-from .core import DATA_DIR, books_dir
+from . import __version__, core, style
+from .core import CACHE_DIR, CONFIG_DIR, DATA_DIR, DEFAULT_SETTINGS, SITE, books_dir
 from .player import SPEEDS
 from .widgets import HeaderBar, IconButton, Switch, cls, label
 
 THEMES = (("auto", "Как в системе"), ("light", "Светлая"), ("sepia", "Сепия"),
           ("dark", "Тёмная"), ("black", "Чёрная"))
 FONTS = (("book", "Как в книге"), ("serif", "С засечками"), ("sans", "Без засечек"))
+
+TABS = (("general", "Общие"), ("reading", "Чтение"), ("integrations", "Интеграции"),
+        ("advanced", "Дополнительно"))
+
+# Значки сторонних сервисов: значок из темы системы (если приложение установлено),
+# иначе favicon сайта — один раз скачивается и хранится в данных приложения.
+SERVICES = {
+    "litres": {"theme": (), "favicon": SITE + "/favicon.ico", "fallback": "accessories-dictionary"},
+    "singularity": {"theme": ("singularityapp", "singularity"), "favicon": "https://singularity-app.com/favicon.ico",
+                    "fallback": "object-select"},
+}
+ICONS_DIR = CACHE_DIR / "service-icons"
+ICON_SIZE = 32
+# Настройки, которые «Сбросить» не трогает: где лежат книги, что открыто, состояние графа
+KEEP_ON_RESET = {"booksDir", "localFolders", "lastBook", "graph", "settingsTab",
+                 "libraryStatus", "libraryFolder", "libraryType", "librarySort"}
+
+_net = None
+
+
+def service_icon(target: QLabel, key: str):
+    """Ставит значок сервиса в target (сразу из кэша или темы, иначе — когда скачается)."""
+    info = SERVICES[key]
+    dpr = target.devicePixelRatioF() or 1.0
+
+    def show(icon: QIcon):
+        target.setPixmap(icon.pixmap(QSize(ICON_SIZE, ICON_SIZE), dpr))
+
+    for name in info["theme"]:
+        if QIcon.hasThemeIcon(name):
+            show(QIcon.fromTheme(name))
+            return
+    cached = ICONS_DIR / f"{key}.png"
+    if cached.exists() and not QPixmap(str(cached)).isNull():
+        show(QIcon(str(cached)))
+        return
+    show(style.icon(info["fallback"], size=ICON_SIZE))     # пока не скачался
+    global _net
+    if _net is None:
+        _net = QNetworkAccessManager()
+    reply = _net.get(QNetworkRequest(QUrl(info["favicon"])))
+
+    def done():
+        reply.deleteLater()
+        if reply.error() != QNetworkReply.NetworkError.NoError:
+            return
+        pm = QPixmap()
+        if not pm.loadFromData(bytes(reply.readAll())) or pm.isNull():
+            return
+        ICONS_DIR.mkdir(parents=True, exist_ok=True)
+        pm.save(str(cached), "PNG")
+        try:
+            show(QIcon(pm))
+        except RuntimeError:        # страницу настроек уже закрыли
+            pass
+    reply.finished.connect(done)
 
 
 class SettingsPage(QWidget):
@@ -34,13 +92,61 @@ class SettingsPage(QWidget):
         back.clicked.connect(app.go_back)
         header.pack_start(back)
 
+        # Переключатель вкладок (как Adw.ViewSwitcher) под заголовком
+        bar = QWidget()
+        bar.setObjectName("headerbar")
+        bl = QHBoxLayout(bar)
+        bl.setContentsMargins(12, 0, 12, 8)
+        seg = QWidget()
+        sl = QHBoxLayout(seg)
+        sl.setContentsMargins(0, 0, 0, 0)
+        sl.setSpacing(0)
+        self.tab_group = QButtonGroup(self)
+        self.tab_buttons = {}
+        for i, (key, text) in enumerate(TABS):
+            b = QPushButton(text)
+            b.setCheckable(True)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            cls(b, "linked-first" if i == 0 else "linked-last" if i == len(TABS) - 1 else "linked")
+            b.toggled.connect(lambda on, k=key: on and self.show_tab(k))
+            self.tab_group.addButton(b)
+            self.tab_buttons[key] = b
+            sl.addWidget(b)
+        bl.addStretch()
+        bl.addWidget(seg)
+        bl.addStretch()
+
+        self.stack = QStackedWidget()
+        self.pages = {}
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(header)
+        lay.addWidget(bar)
+        lay.addWidget(self.stack, 1)
+        app.litres.state_changed.connect(self._sync_account)
+        self.build()
+
+    def show_tab(self, key):
+        if key not in self.pages:
+            key = TABS[0][0]
+        self.stack.setCurrentWidget(self.pages[key])
+        btn = self.tab_buttons[key]
+        if not btn.isChecked():
+            btn.setChecked(True)
+        if self.app.settings.get("settingsTab") != key:
+            self.app.settings["settingsTab"] = key
+            self.app.save_settings()
+
+    def page(self, key):
+        """Новая вкладка: прокручиваемая колонка по центру не шире 640 px (как Adw.Clamp)."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         holder = QWidget()
         outer = QHBoxLayout(holder)
-        outer.setContentsMargins(16, 20, 16, 28)
-        # колонка по центру не шире 640 px (как Adw.Clamp)
+        outer.setContentsMargins(16, 16, 16, 28)
         self.col = QVBoxLayout()
         self.col.setSpacing(6)
         column = QWidget()
@@ -50,13 +156,8 @@ class SettingsPage(QWidget):
         outer.addWidget(column, 1)
         outer.addStretch()
         scroll.setWidget(holder)
-
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-        lay.addWidget(header)
-        lay.addWidget(scroll, 1)
-        self.build()
+        self.stack.addWidget(scroll)
+        self.pages[key] = scroll
 
     # --- строительные блоки
 
@@ -75,17 +176,24 @@ class SettingsPage(QWidget):
         self.col.addWidget(box)
         return rows
 
-    def row(self, rows, title, widget=None, hint=""):
+    def row(self, rows, title, widget=None, hint="", service=None):
         r = QWidget()
         if rows.count():
             cls(r, "row-top")
         h = QHBoxLayout(r)
         h.setContentsMargins(14, 9, 12, 9)
         h.setSpacing(12)
+        if service:
+            ic = QLabel()
+            ic.setFixedSize(ICON_SIZE, ICON_SIZE)
+            ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            h.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
+            service_icon(ic, service)
         texts = QVBoxLayout()
         texts.setSpacing(0)
         texts.addWidget(label(title, wrap=True))
         sub = label(hint, "dim", "caption", wrap=True)   # подпись есть всегда — её можно обновлять
+        sub.setObjectName("row-hint")
         sub.setVisible(bool(hint))
         texts.addWidget(sub)
         h.addLayout(texts, 1)
@@ -166,12 +274,12 @@ class SettingsPage(QWidget):
         self.row(rows, title, s, hint)
         return s
 
-    def button(self, rows, title, text, slot, hint="", style=None):
+    def button(self, rows, title, text, slot, hint="", style=None, service=None):
         b = QPushButton(text)
         if style:
             cls(b, style)
         b.clicked.connect(slot)
-        self.row(rows, title, b, hint)
+        self.row(rows, title, b, hint, service=service)
         return b
 
     # --- содержимое
@@ -180,14 +288,16 @@ class SettingsPage(QWidget):
         app = self.app
         st = app.settings
 
+        # --- Общие
+        self.page("general")
         g = self.group("Запуск и библиотека")
         self.switch(g, "Открывать последнюю текстовую книгу при запуске", "openLastBook",
                     "Самую свежую из начатых и скачанных — с учётом чтения на телефоне")
         only = Switch(app.only_downloaded)
         only.toggled.connect(app.only_action.setChecked)
         self.row(g, "Показывать только скачанные книги", only)
-        self.spin(g, "Обновлять библиотеку с ЛитРес каждые", "remoteSyncMin", 0, 120, 5, " мин",
-                  "Пока окно открыто; 0 — только при запуске и по F5", on_change=lambda v: app.apply_remote_sync())
+        self.button(g, "Скачать все книги", "Скачать…", app._download_all_action,
+                    "Все купленные книги ЛитРес — в папку для скачанных книг")
 
         g = self.group("Папки", "Где хранятся скачанные книги и где искать свои книги и статьи. "
                                 "Свои файлы открываются на месте, приложение их не копирует и не удаляет.")
@@ -197,6 +307,13 @@ class SettingsPage(QWidget):
         self._folder_rows = []
         self._fill_folders()
 
+        g = self.group("Статистика")
+        self.button(g, "Статистика чтения", "Открыть", app.show_stats_dialog,
+                    "Минуты по дням, серия дней подряд, дочитанные книги")
+        self.col.addStretch()
+
+        # --- Чтение
+        self.page("reading")
         g = self.group("Вид текста")
         self.spin(g, "Размер шрифта", "fontSize", 12, 40)
         self.combo(g, "Тема", "theme", THEMES)
@@ -225,26 +342,48 @@ class SettingsPage(QWidget):
             app.player.set_rate(SPEEDS[i])
         rate.currentIndexChanged.connect(rate_changed)
         self.row(g, "Скорость воспроизведения", rate, "Без изменения высоты голоса")
+        self.col.addStretch()
 
-        g = self.group("Статистика")
+        # --- Интеграции
+        self.page("integrations")
+        g = self.group("Сервисы", "Сторонние сервисы, с которыми работает приложение.")
+        self.account_btn = self.button(g, "ЛитРес", "", self._account, hint="", service="litres")
+        self._sync_account()
+        self.button(g, "Singularity", "Настроить…", app.show_singularity_dialog,
+                    "Задачи «Читаю», прогресс в заметках, привычка ежедневного чтения", service="singularity")
+        self.col.addStretch()
+
+        # --- Дополнительно
+        self.page("advanced")
+        g = self.group("Синхронизация с ЛитРес")
+        self.spin(g, "Обновлять библиотеку с ЛитРес каждые", "remoteSyncMin", 0, 120, 5, " мин",
+                  "Пока окно открыто; 0 — только при запуске и по F5", on_change=lambda v: app.apply_remote_sync())
+        self.button(g, "Обновить сейчас", "Обновить", app.sync, "То же, что F5")
         self.spin(g, "Скорость чтения для оценки чтения на телефоне", "readingCharsPerMin", 500, 4000, 100,
                   " зн/мин", "По ней прирост процента на ЛитРес переводится в минуты (аудио — по длительности)",
                   on_change=lambda v: setattr(app.library, "chars_per_min", v))
-        self.button(g, "Статистика чтения", "Открыть", app.show_stats_dialog)
 
-        g = self.group("Аккаунт и интеграции")
-        self.account_btn = self.button(g, "ЛитРес", "", self._account, hint="")
-        self._sync_account()
-        app.litres.state_changed.connect(self._sync_account)
-        self.button(g, "Singularity", "Настроить…", app.show_singularity_dialog,
-                    "Задачи «Читаю», прогресс в заметках, привычка ежедневного чтения")
+        g = self.group("Журнал")
+        self.switch(g, "Подробный журнал", "debugLog",
+                    "Запросы к ЛитРес, скачивания, сообщения страниц — в поток ошибок (терминал, журнал системы). "
+                    "Инструменты разработчика в читалке — по правой кнопке мыши.",
+                    on_change=core.set_debug)
+
+        g = self.group("Данные приложения")
+        for title, path, hint in (("Данные", DATA_DIR, "Библиотека, прогресс, статистика, обложки"),
+                                  ("Настройки", CONFIG_DIR, "settings.json"),
+                                  ("Кэш", CACHE_DIR, "Можно удалить — приложение создаст заново")):
+            self.button(g, title, "Открыть папку",
+                        lambda _=False, p=path: QDesktopServices.openUrl(QUrl.fromLocalFile(str(p))),
+                        f"{hint}\n{path}")
+        self.button(g, "Сбросить настройки", "Сбросить…", self._reset, "Вид текста, чтение, обновление, журнал. "
+                    "Папки, вход и библиотека не меняются", style="destructive")
 
         g = self.group("О приложении")
         self.row(g, "Читалка ЛитРес", label(f"версия {__version__}", "dim"))
-        self.button(g, "Данные приложения", "Открыть папку",
-                    lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(DATA_DIR))),
-                    "Библиотека, прогресс, статистика, обложки")
         self.col.addStretch()
+
+        self.show_tab(st.get("settingsTab") or "general")
 
     # --- обработчики
 
@@ -276,10 +415,45 @@ class SettingsPage(QWidget):
         self.row(g, "Найдено своих книг и статей", box, str(mine))
         self._folder_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
 
+    def _reset(self):
+        box = QMessageBox(self.app.window)
+        box.setWindowTitle("Сбросить настройки?")
+        box.setText("<b>Сбросить настройки?</b>")
+        box.setInformativeText("Вид текста, чтение вслух, аудио, обновление с ЛитРес и журнал вернутся "
+                               "к исходным. Папки, вход в ЛитРес и библиотека не изменятся.")
+        cancel = box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+        ok = box.addButton("Сбросить", QMessageBox.ButtonRole.DestructiveRole)
+        cls(ok, "destructive")
+        box.setDefaultButton(cancel)
+        box.exec()
+        if box.clickedButton() is not ok:
+            return
+        st = self.app.settings
+        for k, v in DEFAULT_SETTINGS.items():
+            if k not in KEEP_ON_RESET:
+                st[k] = v
+        core.set_debug(st.get("debugLog"))
+        self.app.library.chars_per_min = st["readingCharsPerMin"]
+        self.app.apply_remote_sync()
+        self.app.player.set_rate(st["audioRate"])
+        self.app.save_settings()
+        self._rebuild()
+        self.app.toast("Настройки сброшены")
+
+    def _rebuild(self):
+        """Заново строит вкладки, чтобы переключатели показали новые значения."""
+        for w in list(self.pages.values()):
+            self.stack.removeWidget(w)
+            w.deleteLater()
+        self.pages = {}
+        self.build()
+
     def _account(self):
         self.app._account_action()
 
     def _sync_account(self):
+        if not hasattr(self, "account_btn"):
+            return
         lit = self.app.litres
         self.account_btn.setText("Выйти" if lit.logged_in else "Войти")
         self._set_hint(self.account_btn, f"Вход выполнен: {lit.user_name}" if lit.logged_in and lit.user_name
@@ -288,8 +462,7 @@ class SettingsPage(QWidget):
     @staticmethod
     def _set_hint(widget, text):
         """Подпись под заголовком строки, в которой стоит widget."""
-        row = widget.parentWidget()
-        labels = row.findChildren(QLabel)
-        if len(labels) >= 2:
-            labels[1].setText(text)
-            labels[1].setVisible(bool(text))
+        sub = widget.parentWidget().findChild(QLabel, "row-hint")
+        if sub is not None:
+            sub.setText(text)
+            sub.setVisible(bool(text))

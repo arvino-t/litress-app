@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QHBoxLayout, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, style
+from . import __version__, core, style
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, CONFIG_FILE,
                    COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
                    API, READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
@@ -145,6 +145,7 @@ class App(QObject):
         super().__init__()
         self.qapp = qapp
         self.settings = {**DEFAULT_SETTINGS, **load_json(CONFIG_FILE, {})}
+        core.set_debug(self.settings.get("debugLog"))
         try:
             set_books_dir(self.settings.get("booksDir"))
         except OSError:
