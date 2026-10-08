@@ -122,6 +122,12 @@ TYPE_FILTERS = (("all", "Все"), ("text", "Книги ЛитРес"), ("audio"
 # ms-msdt:, search-ms: и т. п.) из книги не открываем — через них возможны атаки.
 SAFE_LINK_SCHEMES = {"http", "https", "mailto"}
 
+# Оценка времени чтения на телефоне/сайте ЛитРес по приросту процента:
+# текст — объём в знаках (symbols_count) при средней скорости чтения, аудио — длительность
+# (у аудиокниг ЛитРес отдаёт её в том же поле, в секундах)
+READING_CHARS_PER_MIN = 1300
+REMOTE_MAX_PER_SYNC = 4 * 3600   # большой скачок (перелистали к концу) — не больше 4 часов
+
 
 def parse_time(value) -> float | None:
     """Время из API ЛитРес («2026-10-04T15:28:01», без пояса — московское, как и у пользователя)."""
@@ -222,6 +228,9 @@ class Library:
             if not bid.isdigit():
                 log("пропущена книга с некорректным id:", repr(bid)[:40])
                 continue
+            prev = self.books.get(bid, {})
+            prev_percent, prev_at, was_finished = (prev.get("remote_percent"), prev.get("remote_read_at"),
+                                                   prev.get("finished"))
             authors = [p.get("full_name") for p in art.get("persons") or []
                        if p.get("role") == "author" and p.get("full_name")]
             book = self.books.setdefault(bid, {"id": bid, "source": "litres"})
@@ -247,6 +256,15 @@ class Library:
                 book["remote_chapter"] = f"Глава {chapter}"
             else:
                 book.pop("remote_chapter", None)
+            if art.get("symbols_count"):
+                book["symbols"] = int(art["symbols_count"])
+            # Прочитанное на телефоне/сайте — в статистику (только прирост с прошлой синхронизации)
+            new_percent = book.get("remote_percent")
+            if (prev_percent is not None and new_percent is not None and new_percent > prev_percent
+                    and read_at and read_at > (prev_at or 0)):
+                self.add_remote_reading(book, new_percent - prev_percent, read_at)
+            if book["finished"] and was_finished is False:
+                self.mark_finished_stat(bid)
             if art.get("in_folders") is not None:
                 book["folders"] = [str(f.get("folder_id")) for f in art["in_folders"]
                                    if f.get("folder_id") is not None]
@@ -464,6 +482,24 @@ class Library:
         if bid:
             self.stats["books"][bid] = self.stats["books"].get(bid, 0) + seconds
         save_json(STATS_FILE, self.stats)
+
+    def add_remote_reading(self, book, percent_delta: float, when: float):
+        """Время, прочитанное или прослушанное вне приложения (оценка по приросту процента)."""
+        size = book.get("symbols") or 0
+        if size <= 0 or percent_delta <= 0:
+            return
+        part = size * percent_delta / 100
+        seconds = part if book.get("is_audio") else part / READING_CHARS_PER_MIN * 60
+        seconds = int(min(seconds, REMOTE_MAX_PER_SYNC))
+        if seconds < 30:
+            return
+        day = time.strftime("%Y-%m-%d", time.localtime(when))
+        for key, k in (("days", day), ("books", book["id"])):
+            self.stats[key][k] = self.stats[key].get(k, 0) + seconds
+        remote = self.stats.setdefault("remote_days", {})
+        remote[day] = remote.get(day, 0) + seconds
+        save_json(STATS_FILE, self.stats)
+        log(f"чтение вне приложения: {book.get('title')} +{percent_delta:g}% ≈ {seconds // 60} мин ({day})")
 
     def mark_finished_stat(self, bid):
         if bid not in self.stats["finished"]:

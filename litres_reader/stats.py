@@ -42,11 +42,14 @@ def streak(days: dict) -> int:
 class BarChart(QWidget):
     """Минуты чтения за последние N дней — столбики в цвете акцента."""
 
-    def __init__(self, days: dict, count=14):
+    def __init__(self, days: dict, remote: dict | None = None, count=14):
         super().__init__()
         today = dt.date.today()
         self.items = [(today - dt.timedelta(days=i)) for i in range(count - 1, -1, -1)]
         self.values = [days.get(d.isoformat(), 0) / 60 for d in self.items]
+        # часть дня, прочитанная на телефоне/сайте ЛитРес (оценка)
+        remote = remote or {}
+        self.remote = [min(remote.get(d.isoformat(), 0) / 60, v) for d, v in zip(self.items, self.values)]
         self.setMinimumHeight(180)
 
     def paintEvent(self, e):
@@ -69,8 +72,20 @@ class BarChart(QWidget):
                 color.setAlpha(40)
                 bh = 3
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(color)
-            p.drawRoundedRect(QRectF(x, base - bh, bar, bh), 4, 4)
+            r = self.remote[i]
+            if v > 0 and r > 0:
+                # низ столбика — чтение в приложении, верх (светлее) — на телефоне/сайте ЛитРес
+                rh = bh * r / v
+                light = QColor(style.ACCENT)
+                light.setAlpha(105)
+                p.setBrush(light)
+                p.drawRoundedRect(QRectF(x, base - bh, bar, rh), 4, 4)
+                if bh - rh > 0.5:
+                    p.setBrush(color)
+                    p.drawRoundedRect(QRectF(x, base - bh + rh, bar, bh - rh), 4, 4)
+            else:
+                p.setBrush(color)
+                p.drawRoundedRect(QRectF(x, base - bh, bar, bh), 4, 4)
             p.setPen(dim)
             f = p.font()
             f.setPointSizeF(8)
@@ -95,6 +110,9 @@ def tile(value: str, caption: str) -> QFrame:
 def show_stats(app):
     lib = app.library
     days = lib.stats.get("days", {})
+    remote = lib.stats.get("remote_days", {})
+    week_remote = sum(remote.get((dt.date.today() - dt.timedelta(days=i)).isoformat(), 0) for i in range(7)) // 60
+    today_remote = remote.get(dt.date.today().isoformat(), 0) // 60
     today = dt.date.today()
     week = sum(days.get((today - dt.timedelta(days=i)).isoformat(), 0) for i in range(7)) // 60
     today_min = days.get(today.isoformat(), 0) // 60
@@ -121,14 +139,19 @@ def show_stats(app):
     b.setSpacing(14)
     tiles = QGridLayout()
     tiles.setSpacing(10)
-    tiles.addWidget(tile(f"{today_min}", f"{minutes_word(today_min)} сегодня"), 0, 0)
-    tiles.addWidget(tile(f"{week}", f"{minutes_word(week)} за неделю"), 0, 1)
+    phone = lambda m: f"\nиз них на телефоне ~{m}" if m else ""
+    tiles.addWidget(tile(f"{today_min}", f"{minutes_word(today_min)} сегодня{phone(today_remote)}"), 0, 0)
+    tiles.addWidget(tile(f"{week}", f"{minutes_word(week)} за неделю{phone(week_remote)}"), 0, 1)
     tiles.addWidget(tile(f"{st}", f"{days_word(st)} подряд"), 0, 2)
     tiles.addWidget(tile(f"{finished_month}", f"дочитано в этом месяце · всего {total_finished}"), 0, 3)
     b.addLayout(tiles)
 
     b.addWidget(label("Последние две недели, минут в день", "heading"))
-    b.addWidget(BarChart(days))
+    b.addWidget(BarChart(days, remote))
+    if any(remote.values()):
+        b.addWidget(label("Светлая часть столбика — чтение на телефоне или сайте ЛитРес. "
+                          "Оценка по приросту процента: текст — ~1300 знаков в минуту, аудио — по длительности.",
+                          "dim", "caption", wrap=True))
 
     top = sorted(lib.stats.get("books", {}).items(), key=lambda kv: -kv[1])[:5]
     top = [(lib.books[bid], sec) for bid, sec in top if bid in lib.books]
