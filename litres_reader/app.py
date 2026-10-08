@@ -210,6 +210,14 @@ class App(QObject):
         self.refresh_library()
         QTimer.singleShot(0, self._open_last_book)
         QTimer.singleShot(1500, self._make_pdf_covers)
+        # Пока окно открыто — тихо подтягиваем с ЛитРес прочитанное на других устройствах
+        self._remote_timer = QTimer(self, interval=15 * 60 * 1000)
+        self._remote_timer.timeout.connect(self._periodic_sync)
+        self._remote_timer.start()
+
+    def _periodic_sync(self):
+        if self.litres.logged_in and not self.syncing and self.window.isVisible():
+            self.sync(quiet=True)
 
     def _open_last_book(self):
         """Автопереход: открыть последнюю книгу на месте, где остановились (аудио — на паузе)."""

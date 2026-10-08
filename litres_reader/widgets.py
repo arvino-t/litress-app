@@ -578,7 +578,11 @@ class RecentCard(QFrame):
         authors = ", ".join(book.get("authors") or [])
         self.author.setText(self.author.fontMetrics().elidedText(authors, Qt.TextElideMode.ElideRight, 170))
         self.author.setVisible(bool(authors))
-        chapter = lib.progress.get(book["id"], {}).get("chapter") or ""
+        local = lib.progress.get(book["id"], {})
+        chapter = local.get("chapter") or ""
+        # читали позже на ЛитРес (телефон, сайт) — показываем главу оттуда
+        if book.get("remote_chapter") and (book.get("remote_read_at") or 0) > (local.get("ts") or 0):
+            chapter = book["remote_chapter"]
         self.chapter.setText(chapter)
         self.chapter.setVisible(bool(chapter))
         pct = lib.percent(book) or 0

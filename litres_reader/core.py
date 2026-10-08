@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
@@ -117,6 +118,16 @@ TYPE_FILTERS = (("all", "Все"), ("text", "Книги ЛитРес"), ("audio"
                 ("mine", "Мои книги и статьи"))
 
 
+def parse_time(value) -> float | None:
+    """Время из API ЛитРес («2026-10-04T15:28:01», без пояса — московское, как и у пользователя)."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value)).timestamp()
+    except ValueError:
+        return None
+
+
 def log(*args):
     if DEBUG:
         print("[litreader]", *args, file=sys.stderr, flush=True)
@@ -215,6 +226,17 @@ class Library:
             )
             if art.get("read_percent") is not None:
                 book["remote_percent"] = float(art["read_percent"] or 0)
+            # Когда и где читали на ЛитРес (телефон, сайт) — для панели «Продолжить чтение»
+            read_at = parse_time(art.get("read_at"))
+            if read_at:
+                book["remote_read_at"] = read_at
+            else:
+                book.pop("remote_read_at", None)
+            chapter = art.get("last_read_chapter_number")
+            if chapter:
+                book["remote_chapter"] = f"Глава {chapter}"
+            else:
+                book.pop("remote_chapter", None)
             if art.get("in_folders") is not None:
                 book["folders"] = [str(f.get("folder_id")) for f in art["in_folders"]
                                    if f.get("folder_id") is not None]
@@ -454,16 +476,20 @@ class Library:
 
         У старых записей прогресса нет времени; тогда первой считаем последнюю открытую книгу.
         """
-        items = []
+        when: dict[str, float] = {}
         for bid, p in self.progress.items():
             book = self.books.get(bid)
             if not book or book.get("finished") or (p.get("fraction") or 0) >= 0.999:
                 continue
             if (p.get("fraction") or 0) <= 0.001 and not p.get("cfi") and not p.get("pos"):
                 continue
-            ts = p.get("ts") or (1 if bid == last_book else 0)
-            items.append((ts, bid))
-        items.sort(reverse=True)
+            when[bid] = p.get("ts") or (1 if bid == last_book else 0)
+        # Чтение на ЛитРес (телефон, сайт): начатые там книги тоже здесь, по времени чтения
+        for bid, book in self.books.items():
+            remote_at = book.get("remote_read_at")
+            if remote_at and not book.get("finished") and 0 < (book.get("remote_percent") or 0) < 100:
+                when[bid] = max(when.get(bid, 0), remote_at)
+        items = sorted(((ts, bid) for bid, ts in when.items()), reverse=True)
         return [self.books[bid] for _ts, bid in items[:count]]
 
     def flush(self):
