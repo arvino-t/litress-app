@@ -106,6 +106,10 @@ DEFAULT_SETTINGS = {
     "booksDir": None,
     # Папки со своими книгами и статьями; None — по умолчанию из «Документов»
     "localFolders": None,
+    # Как часто подтягивать библиотеку с ЛитРес, пока окно открыто (минуты; 0 — не обновлять)
+    "remoteSyncMin": 15,
+    # Скорость чтения для оценки чтения на телефоне (знаков в минуту)
+    "readingCharsPerMin": 1300,
 }
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
@@ -489,7 +493,8 @@ class Library:
         if size <= 0 or percent_delta <= 0:
             return
         part = size * percent_delta / 100
-        seconds = part if book.get("is_audio") else part / READING_CHARS_PER_MIN * 60
+        speed = getattr(self, "chars_per_min", READING_CHARS_PER_MIN) or READING_CHARS_PER_MIN
+        seconds = part if book.get("is_audio") else part / speed * 60
         seconds = int(min(seconds, REMOTE_MAX_PER_SYNC))
         if seconds < 30:
             return

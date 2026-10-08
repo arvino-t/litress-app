@@ -90,6 +90,8 @@ class GraphPage(QWidget):
         self.setObjectName("page")
         self.app = app
         self.ready = False
+        self._layout_done = False
+        self._fetch = None      # (готово, всего) — подгрузка жанров с ЛитРес
 
         self.header = HeaderBar(app.window, "Граф книг")
         back = IconButton("go-previous", "Назад")
@@ -107,6 +109,7 @@ class GraphPage(QWidget):
         lay.addWidget(self.header)
         lay.addWidget(self.web, 1)
         self.page.load(QUrl(f"{SCHEME}://app/graph.html"))
+        self._sync_subtitle()
 
     def _data_js(self) -> str:
         return json.dumps(build_graph(self.app.library), ensure_ascii=False)
@@ -124,8 +127,33 @@ class GraphPage(QWidget):
             self.app.save_settings()
         elif t == "escape":
             self.app.go_back()
+        elif t == "layout-done":
+            self._layout_done = True
+            self._sync_subtitle()
+
+    def set_fetch_progress(self, done: int, total: int):
+        """Подгрузка жанров и тегов с ЛитРес: показываем в странице и в заголовке."""
+        self._fetch = (done, total) if done < total else None
+        if self.ready:
+            if self._fetch:
+                text = f"Загружаю жанры и теги с ЛитРес: {done} из {total}"
+                self.page.runJavaScript(f"window.graph.status({json.dumps(text)}, {done / total:.3f})")
+            else:
+                self.page.runJavaScript("window.graph.status(null)")
+        self._sync_subtitle()
+
+    def _sync_subtitle(self):
+        parts = []
+        if not self._layout_done:
+            parts.append("строю граф…")
+        if self._fetch:
+            parts.append(f"жанры с ЛитРес: {self._fetch[0]} из {self._fetch[1]}")
+        text = " · ".join(parts)
+        self.header.set_title("Граф книг", text[:1].upper() + text[1:])
 
     def refresh(self):
         """Данные поменялись (подгрузились жанры, обновилась библиотека)."""
+        self._layout_done = False
+        self._sync_subtitle()
         if self.ready:
             self.page.runJavaScript(f"window.graph.update({self._data_js()})")

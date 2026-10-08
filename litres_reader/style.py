@@ -280,6 +280,7 @@ def stylesheet() -> str:
     /* Списки в стиле boxed-list */
     *[cls~="boxed"] {{ background: {c['card']}; border-radius: 12px; border: 1px solid {c['border']}; }}
     *[cls~="row"] {{ border-bottom: 1px solid {c['border']}; }}
+    *[cls~="separator-line"] {{ background: {c['border']}; border: none; }}
     QListWidget {{ background: transparent; border: none; outline: none; }}
     QListWidget::item {{ padding: 8px 10px; border-radius: 6px; }}
     QListWidget::item:hover, QListWidget::item:selected {{ background: {c['flat_hover']}; color: {c['fg']}; }}

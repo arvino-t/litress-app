@@ -23,6 +23,7 @@ from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, 
                    API, READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
                    load_json, log, looks_like_book, save_json, set_books_dir)
 from .graph import GraphPage
+from .settings import SettingsPage
 from .litres import LitresSession
 from .player import AudioPlayer, PlayerPage, audio_tracks
 from .reader import ReaderPage
@@ -150,6 +151,7 @@ class App(QObject):
             # выбранная папка недоступна (например, отключён диск) — берём папку по умолчанию
             set_books_dir(None)
         self.library = Library()
+        self.library.chars_per_min = int(self.settings.get("readingCharsPerMin") or 1300)
         self._settings_timer = QTimer(self, singleShot=True, interval=500)
         self._settings_timer.timeout.connect(lambda: save_json(CONFIG_FILE, self.settings))
         self.cards: dict[str, BookCard] = {}
@@ -158,6 +160,7 @@ class App(QObject):
         self.only_downloaded = False
         self.reader: ReaderPage | None = None
         self.graph_page: GraphPage | None = None
+        self.settings_page: SettingsPage | None = None
         self._details_running = False
         self.player_page: PlayerPage | None = None
         self.net = QNetworkAccessManager(self)
@@ -206,7 +209,7 @@ class App(QObject):
 
         for keys, slot in (("F11", self.toggle_fullscreen), ("F5", self.sync), ("Ctrl+R", self.sync),
                            ("Ctrl+O", self.on_open_file), ("Ctrl+F", self._toggle_search),
-                           ("Ctrl+G", self.show_graph),
+                           ("Ctrl+G", self.show_graph), ("Ctrl+,", self.show_settings),
                            ("Alt+Left", self.go_back)):
             QShortcut(QKeySequence(keys), self.window, activated=slot)
 
@@ -215,9 +218,21 @@ class App(QObject):
         QTimer.singleShot(0, self._open_last_book)
         QTimer.singleShot(1500, self._make_pdf_covers)
         # Пока окно открыто — тихо подтягиваем с ЛитРес прочитанное на других устройствах
-        self._remote_timer = QTimer(self, interval=15 * 60 * 1000)
+        self._remote_timer = QTimer(self)
         self._remote_timer.timeout.connect(self._periodic_sync)
-        self._remote_timer.start()
+        self.apply_remote_sync()
+
+    def apply_remote_sync(self):
+        minutes = int(self.settings.get("remoteSyncMin") or 0)
+        if minutes > 0:
+            self._remote_timer.start(minutes * 60 * 1000)
+        else:
+            self._remote_timer.stop()
+
+    def show_settings(self):
+        if self.settings_page is None:
+            self.settings_page = SettingsPage(self)
+        self.push(self.settings_page)
 
     def _periodic_sync(self):
         if self.litres.logged_in and not self.syncing and self.window.isVisible():
@@ -271,6 +286,10 @@ class App(QObject):
             page.deleteLater()
             self.reader = None
             self.library.flush()
+        elif page is self.settings_page:
+            self.stack.removeWidget(page)
+            page.deleteLater()
+            self.settings_page = None
         elif page is self.graph_page:
             self.stack.removeWidget(page)
             page.deleteLater()
@@ -320,13 +339,9 @@ class App(QObject):
         self.last_action.setChecked(bool(self.settings.get("openLastBook", True)))
         self.last_action.toggled.connect(lambda on: (self.settings.__setitem__("openLastBook", on),
                                                      self.save_settings()))
-        self.menu.addAction(self.last_action)
-        self.menu.addAction("Папка для книг…", self.choose_books_dir)
-        self.mine_menu = self.menu.addMenu("Мои книги и статьи")
-        self.mine_menu.aboutToShow.connect(self._fill_mine_menu)
         self.menu.addSeparator()
         self.account_action = self.menu.addAction("Войти в ЛитРес", self._account_action)
-        self.menu.addAction("Singularity…", self.show_singularity_dialog)
+        self.menu.addAction("Настройки… (Ctrl+,)", self.show_settings)
         self.menu.addAction("Статистика чтения", self.show_stats_dialog)
         self.menu.addAction("Граф книг (Ctrl+G)", self.show_graph)
         self.menu.addSeparator()
@@ -1291,6 +1306,8 @@ class App(QObject):
         self._details_running = True
 
         def step(i):
+            if self.graph_page:
+                self.graph_page.set_fetch_progress(i, len(todo))
             if i >= len(todo) or not self.litres.logged_in:
                 self._details_running = False
                 self.library.save()
@@ -1330,17 +1347,6 @@ class App(QObject):
         QTimer.singleShot(500, self._make_pdf_covers)
         if report:
             self.toast(f"Своих книг и статей: {n}")
-
-    def _fill_mine_menu(self):
-        m = self.mine_menu
-        m.clear()
-        show = m.addAction("Показать в библиотеке", lambda: self._set_type_filter("mine"))
-        show.setEnabled(any(b.get("source") == "folder" for b in self.library.books.values()))
-        m.addAction("Обновить список", lambda: self.rescan_local(report=True))
-        m.addSeparator()
-        for folder in self.local_folders():
-            m.addAction(f"Убрать папку: {folder}", lambda f=folder: self._remove_local_folder(f))
-        m.addAction("Добавить папку…", self._add_local_folder)
 
     def _set_type_filter(self, key):
         keys = [k for k, _t in TYPE_FILTERS]

@@ -88,9 +88,16 @@ function build(keepView) {
         .force('y', d3.forceY(0).strength(0.035))
         .force('collide', d3.forceCollide(n => n.r + 1.5))
         .alphaDecay(0.025)
-        .on('tick', draw)
-        .on('end', () => { if (!keepView) fit() })
+        .on('tick', () => { draw(); onTickProgress() })
+        .on('end', () => {
+            if (!keepView) fit()
+            progress.layout = null
+            showProgress()
+            post({ type: 'layout-done' })
+        })
     if (!keepView) setTimeout(fit, 600)
+    progress.layout = nodes.length ? 0.01 : null
+    showProgress()
 
     $('empty').hidden = nodes.length > 0
     const books = nodes.filter(n => n.kind === 'book').length
@@ -402,7 +409,48 @@ window.graph = {
         data = d
         build(true)
     },
+    // ход подгрузки жанров с ЛитРес: text, fraction 0..1; null — закончено
+    status(text, fraction) {
+        progress.fetch = text ? { text, fraction } : null
+        showProgress()
+    },
 }
 
+// --- индикатор: раскладка графа и подгрузка жанров
+
+const progress = {
+    layout: null,     // доля раскладки 0..1 или null — готово
+    fetch: null,      // { text, fraction } или null
+}
+let lastShown = 0
+function showProgress() {
+    const box = $('progress')
+    const layoutOn = progress.layout !== null
+    $('pLayout').hidden = !layoutOn
+    if (layoutOn) {
+        const pct = Math.round(progress.layout * 100)
+        $('pLayoutText').textContent = progress.layout > 0 ? `Раскладка графа — ${pct}%` : 'Строю граф…'
+        $('pLayoutBar').classList.toggle('busy', progress.layout === 0)
+        $('pLayoutBar').style.width = `${pct}%`
+    }
+    $('pFetch').hidden = !progress.fetch
+    if (progress.fetch) {
+        $('pFetchText').textContent = progress.fetch.text
+        $('pFetchBar').style.width = `${Math.round(progress.fetch.fraction * 100)}%`
+    }
+    box.classList.toggle('done', !layoutOn && !progress.fetch)
+}
+// доля раскладки: alpha убывает экспоненциально от 1 до alphaMin
+const layoutFraction = () => Math.min(1, Math.max(0.01, Math.log(sim.alpha()) / Math.log(sim.alphaMin())))
+function onTickProgress() {
+    const now = performance.now()
+    if (now - lastShown < 120) return
+    lastShown = now
+    progress.layout = layoutFraction()
+    showProgress()
+}
+
+progress.layout = 0
+showProgress()
 resize()
 post({ type: 'ready' })
