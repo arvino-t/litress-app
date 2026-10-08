@@ -438,11 +438,22 @@ class App(QObject):
         v.addStretch()
         return w
 
+    @staticmethod
+    def _captioned(widget, caption):
+        """Фильтр с подписью сверху — чтобы было ясно, что выбирается в списке."""
+        box = QWidget()
+        v = QVBoxLayout(box)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(2)
+        v.addWidget(label(caption, "dim", "caption"))
+        v.addWidget(widget)
+        return box
+
     def _build_filter_bar(self):
-        """Статус чтения, папки пользователя и тип книг."""
+        """Статус чтения, папки пользователя, источник и сортировка — каждый с подписью."""
         bar = QWidget()
         h = QHBoxLayout(bar)
-        h.setContentsMargins(12, 6, 12, 6)
+        h.setContentsMargins(12, 4, 12, 6)
         h.setSpacing(12)
         h.addStretch()
         seg = QWidget()
@@ -461,19 +472,22 @@ class App(QObject):
             self.status_group.addButton(b)
             self.status_buttons[key] = b
             sl.addWidget(b)
-        h.addWidget(seg)
+        h.addWidget(self._captioned(seg, tr("Статус")))
 
         self._folder_ids: list = [None]
         self.folder_combo = QComboBox()
         self.folder_combo.setToolTip(tr("Папка на ЛитРес"))
         self.folder_combo.currentIndexChanged.connect(self._on_folder_selected)
-        h.addWidget(self.folder_combo)
+        self.folder_box = self._captioned(self.folder_combo, tr("Папка на ЛитРес"))
+        h.addWidget(self.folder_box)
 
         self.type_combo = QComboBox()
+        self.type_combo.setToolTip(tr("Источник"))
         self._type_keys: list[str] = []
         self._fill_type_combo()
         self.type_combo.currentIndexChanged.connect(self._on_type_selected)
-        h.addWidget(self.type_combo)
+        self.type_box = self._captioned(self.type_combo, tr("Источник"))
+        h.addWidget(self.type_box)
 
         self.sort_combo = QComboBox()
         self.sort_combo.setToolTip(tr("Сортировка"))
@@ -482,7 +496,7 @@ class App(QObject):
         cur = self.settings.get("librarySort", "recent")
         self.sort_combo.setCurrentIndex(keys.index(cur) if cur in keys else 0)
         self.sort_combo.currentIndexChanged.connect(self._on_sort_selected)
-        h.addWidget(self.sort_combo)
+        h.addWidget(self._captioned(self.sort_combo, tr("Сортировка")))
         h.addStretch()
         return bar
 
@@ -637,8 +651,8 @@ class App(QObject):
         self._filling_folders = False
         if current not in self._folder_ids:
             self.settings["libraryFolder"] = None
-        self.folder_combo.setVisible(bool(folders))
-        self.type_combo.setVisible(any(b.get("is_audio") or b.get("source") == "folder" for b in books))
+        self.folder_box.setVisible(bool(folders))
+        self.type_box.setVisible(any(b.get("is_audio") or b.get("source") == "folder" for b in books))
 
     # --- сетка книг
 
