@@ -1,204 +1,133 @@
-# Читалка ЛитРес
+# LitRes Reader
 
-Приложение для Linux и Windows: показывает книги и аудиокниги, купленные на ЛитРес,
-скачивает их, открывает во встроенной читалке и плеере. Также открывает свои файлы
-EPUB, FB2, FB2.ZIP и MOBI. Оформление в стиле GNOME (libadwaita) — одинаковое на обеих системах,
-светлая и тёмная тема переключаются вслед за системной.
+A desktop app for Linux and Windows to read and listen to the books and audiobooks you bought on
+[LitRes](https://www.litres.ru), plus your own e-books and articles from folders on disk.
+It signs in on the LitRes website in a built-in browser, downloads books, and opens them in a
+built-in reader (EPUB, FB2, MOBI, PDF) and audiobook player (M4B, MP3). The UI follows GNOME's
+libadwaita style on both systems and is available in Russian and English.
 
-## Установка
+**User guide:** [English](docs/en/user-guide.md) · [Русский](docs/ru/user-guide.md)
+
+## Features
+
+- **LitRes library** — purchased books and audiobooks, LitRes folders, "read" marks synced both
+  ways, download one book or all of them at once.
+- **Your own books and articles** — EPUB, FB2, MOBI and PDF found in your folders, grouped into
+  named sections with subfolder filtering; files are opened in place.
+- **Reader** — page turning by tap, swipe and keys; themes, fonts and layout; contents; gestures;
+  auto page turn; read aloud with sentence highlighting; PDF via pdf.js.
+- **Audiobook player** — M4B chapters, speed 0.75–2× without pitch change, sleep timer, background
+  playback.
+- **Continue reading** — resumes the last book on startup and picks up the position from your phone
+  or the LitRes website.
+- **Book graph** — an Obsidian-style graph of books and tags (genres, folders, series, authors,
+  topics).
+- **Reading statistics** — minutes per day, streaks, finished books, including reading on the phone.
+- **Backups** — manual and scheduled backups of settings, library, progress and statistics;
+  restore from a list or a file.
+- **Singularity integration** — "Reading" tasks, progress notes and a daily reading habit in
+  [SingularityApp](https://singularity-app.com).
+
+## Installation
 
 ### Linux (Fedora, Ubuntu/Debian, Arch)
 
 ```
-bash install.sh              # установить или обновить
-bash install.sh --uninstall  # удалить
+bash install.sh              # install or update
+bash install.sh --uninstall  # remove
 ```
 
-Ставится для текущего пользователя; `sudo` спросят, только если не хватает системных
-библиотек (Python 3.10+, venv, библиотеки для Qt/Chromium). Приложение с PySide6
-живёт в `~/.local/opt/litres-reader`, команда — `litres-reader`, в меню появляется
-«Читалка ЛитРес», файлы EPUB/FB2/MOBI открываются через неё.
+Installs for the current user into `~/.local/opt/litres-reader` (a venv with PySide6), adds the
+`litres-reader` command, a menu entry and file associations. `sudo` is requested only for missing
+system libraries.
 
 ### Windows 10/11
 
-Двойной щелчок по `install.cmd` (или `powershell -ExecutionPolicy Bypass -File windows\install.ps1`).
+Double-click `install.cmd` (or `powershell -ExecutionPolicy Bypass -File windows\install.ps1`).
+No administrator rights needed; Python 3.12 is installed via winget if Python 3.10+ is missing.
 
-Права администратора не нужны. Если Python 3.10+ не найден, установщик поставит
-Python 3.12 через winget. Приложение живёт в `%LOCALAPPDATA%\Programs\LitresReader`,
-ярлыки — в меню «Пуск» и на рабочем столе, EPUB/FB2/MOBI добавляются в «Открыть с помощью»
-(открытие по умолчанию у других программ не отбирается). Удаление — через
-«Параметры → Приложения».
+See the user guide for details. The first installation downloads PySide6 (~600 MB).
 
-PySide6 (Qt с Chromium) весит около 600 МБ, первая установка займёт время.
+## Development
 
-### Запуск без установки
+### Run from source
 
 ```
 python3 -m venv .venv && .venv/bin/pip install -e .
 .venv/bin/litres-reader
 ```
 
-## Как пользоваться
+Requires Python 3.10+ and `PySide6>=6.10,<6.12` (Qt 6 with QtWebEngine).
 
-- **Вход:** меню → «Войти в ЛитРес». Откроется сайт ЛитРес, войдите как обычно
-  (по паролю, коду из SMS или через соцсеть). Приложение пароль не видит и не хранит,
-  оно только пользуется сессией встроенного браузера после входа.
-- **Библиотека:** после входа книги из аккаунта загружаются сами. Обновить список: F5
-  или кнопка слева вверху. Фильтры над списком: «Читаю / Не читал / Прочитано»,
-  папки ЛитРес (и «Без папки»), «Книги / Аудиокниги». Поиск — Ctrl+F.
-- **Скачать и читать:** нажмите на обложку. Книга скачается (EPUB, иначе FB2 или MOBI)
-  и откроется. Долгое нажатие или правая кнопка мыши открывает меню: папки, отметка
-  «Прочитано», скачать заново, удалить с устройства, открыть на сайте.
-- **Скачать все книги разом:** меню → «Скачать все книги…». Можно выбрать только книги
-  или книги вместе с аудиокнигами. Книги скачиваются по одной, ход виден в заголовке;
-  остановить — тем же пунктом меню.
-- **Папки ЛитРес:** меню книги → «Папки…». Изменения сразу уходят на ЛитРес, а без
-  сети — при следующей синхронизации.
-- **Листание:** касание левой или правой трети страницы, свайп, стрелки,
-  PageUp/PageDown, пробел. Сверху — заголовок с кнопками «Назад», «Оглавление»
-  и «Вид текста», снизу — ползунок по книге; касание середины страницы прячет
-  их для чтения без отвлечений (глава и процент остаются в углах страницы).
-  F11 — во весь экран, Esc — выход из полноэкранного режима или назад.
-- **Вид текста** (кнопка «Аа»): размер шрифта, тема (авто, светлая, сепия, тёмная,
-  чёрная), шрифт, межстрочный интервал, поля, ширина строки, две страницы
-  в горизонтальном положении, выравнивание.
-- **Жесты:** щипок двумя пальцами (или Ctrl+колесо) меняет размер шрифта, свайп вверх
-  открывает оглавление, свайп вниз прячет или показывает панели.
-- **Автолистание** (кнопка со стрелками по кругу): страница перелистывается сама через
-  заданный интервал (5–120 с, в «Вид текста»). Ручное листание начинает отсчёт заново.
-- **Чтение вслух** (кнопка с динамиком): книга читается с текущего места, текущее
-  предложение подсвечивается, страницы и главы листаются сами. Голос системный
-  (Linux — speech-dispatcher, Windows — SAPI); скорость — в «Вид текста». Для более
-  естественного русского голоса на Linux поставьте RHVoice (`sudo dnf install rhvoice
-  speech-dispatcher-rhvoice` или аналог) и выберите его модулем speech-dispatcher.
-- **Свои книги и статьи:** приложение само находит EPUB, FB2, MOBI и PDF в папках
-  `Документы/Books/others`, `Документы/articles`, `Документы/trainings` — разделы «Другие книги»,
-  «Статьи», «Тренинги и презентации» («Настройки → Общие → Папки»: добавить папку с названием
-  раздела, переименовать раздел, убрать папку, обновить список; F5 тоже обновляет).
-  Раздел виден на карточках и отдельным пунктом в фильтре библиотеки.
-  Файлы открываются на месте, ничего не копируется и не удаляется; место чтения
-  запоминается, обложка PDF — первая страница. Фильтр «Мои книги и статьи» показывает только их.
-- **Сортировка:** недавние, как на ЛитРес, по названию, автору, сериям, прогрессу,
-  дате покупки. На обложке — серия и номер книги; когда книга дочитана, приложение
-  предлагает открыть следующую в серии (она же есть в меню книги).
-- **Настройки** (меню или Ctrl+,) — пять вкладок, изменения применяются сразу:
-  - **Общие:** язык интерфейса (как в системе, русский, English — после перезапуска;
-    можно и переменной `LITREADER_LANG=en`), открывать последнюю книгу при запуске, только скачанные, скачать все книги,
-    папки (скачанные книги, свои книги и статьи), статистика;
-  - **Чтение:** вид текста, чтение вслух и автолистание, скорость аудиокниг;
-  - **Интеграции:** ЛитРес (вход и выход) и Singularity — со значками сервисов;
-  - **Резервные копии:** создать копию, автоматически раз в день или неделю, сколько хранить,
-    папка (по умолчанию `Документы/Backups/litres-reader`), восстановление из списка или файла
-    с перезапуском; в копии — настройки, библиотека, место чтения, статистика, Singularity
-    (токен — только если включено); книги, обложки и вход в ЛитРес не входят;
-  - **Дополнительно:** как часто обновлять с ЛитРес, скорость чтения для оценки чтения
-    на телефоне, подробный журнал, папки данных, настроек и кэша, сброс настроек.
-- **Граф книг** (меню или Ctrl+G) — как граф в Obsidian: книги и теги — узлы, связи
-  «книга — тег» — рёбра. Теги: жанры и теги ЛитРес, ваши папки на ЛитРес, серии, авторы,
-  темы своих книг и статей; виды включаются в панели слева, там же поиск и фильтр «ЛитРес /
-  Мои». Наведение подсвечивает связи, щелчок по тегу выделяет его книги, по книге — открывает
-  её; колесо или щипок — масштаб, перетаскивание — сдвиг и перемещение узлов. Цвет книги:
-  серый — не начата, акцентный — читаю, зелёный — прочитана. Жанры и теги ЛитРес
-  подгружаются в фоне после синхронизации (по одному запросу на книгу, один раз). Ход раскладки
-  и подгрузки жанров виден в индикаторе сверху и под заголовком окна.
-- **Статистика чтения** (меню): минуты сегодня и за неделю, дни подряд, дочитанные книги,
-  график за две недели и книги, на которые ушло больше всего времени.
-  Учитывается и чтение на телефоне или сайте ЛитРес: при синхронизации прирост процента
-  переводится во время (текст — ~1300 знаков в минуту по объёму книги, аудио — по длительности)
-  и записывается на день, когда читали; на графике эта часть показана светлее.
+Environment variables:
 
-- **Аудиокниги** (значок наушников): скачивается M4B или архив MP3 и открывается плеер.
-  Главы берутся из разметки внутри M4B (для MP3 — по файлу на главу): список глав
-  с временем начала, переход к предыдущей/следующей, ползунок и время — внутри главы.
-  Перемотка на −15 и +30 секунд, скорость от 0.75× до 2× без искажения голоса,
-  таймер сна (в том числе «В конце главы»). Если уйти в библиотеку, звук не прерывается,
-  а кнопка в заголовке возвращает к плееру. Пробел — пауза, стрелки — перемотка.
-- **Позиционирование:** щелчок по ползунку сразу переносит в это место (в плеере
-  и в читалке), при перетаскивании время меняется на лету.
-- **Автопродолжение:** место чтения и прослушивания запоминается. При запуске
-  приложение само открывает последнюю текстовую книгу на этом месте — самую свежую
-  из начатых и скачанных, с учётом чтения на ЛитРес; аудиокниги само не включает.
-  Отключается в меню. При запуске же тихо синхронизируется с ЛитРес: если там книга
-  прочитана или прослушана дальше, приложение само переходит туда (в уведомлении есть
-  «Вернуть»). Дочитанная книга отмечается прочитанной и на ЛитРес.
-- **Продолжить чтение** (панель справа): последние начатые книги — и прочитанные в приложении,
-  и на телефоне или сайте ЛитРес (по времени последнего чтения и номеру главы с ЛитРес).
-  Пока окно открыто, библиотека обновляется с ЛитРес раз в 15 минут.
+| Variable | Effect |
+|---|---|
+| `LITREADER_DEBUG=1` | verbose log: LitRes requests, downloads, page messages; DevTools via right click in the reader |
+| `LITREADER_LANG=en\|ru` | force the interface language |
 
-## Singularity
+### Project layout
 
-Меню → «Singularity…». Вставьте API-токен из [личного кабинета SingularityApp](https://me.singularity-app.com)
-(«Доступ к API», с доступом к задачам, проектам и привычкам) и выберите, что синхронизировать:
+| Path | Contents |
+|---|---|
+| `litres_reader/app.py` | main window, library page, LitRes sync, downloads, dialogs, app startup |
+| `litres_reader/core.py` | paths, default settings, the `Library` model (books, progress, statistics) |
+| `litres_reader/litres.py` | LitRes session and API inside the built-in Chromium (QtWebEngine) |
+| `litres_reader/reader.py` | reader page (foliate-js in QtWebEngine), `litreader://` scheme |
+| `litres_reader/player.py` | audiobook player (QtMultimedia), M4B chapter parsing |
+| `litres_reader/settings.py` | settings page (tabs: General, Reading, Integrations, Backups, Advanced) |
+| `litres_reader/backup.py` | backup archives and two-step restore |
+| `litres_reader/graph.py` | book graph data and page |
+| `litres_reader/stats.py` | reading statistics dialog |
+| `litres_reader/singularity.py` | SingularityApp sync |
+| `litres_reader/i18n.py`, `i18n_en.py` | translations: `tr()` with Russian source strings as keys, English dictionary |
+| `litres_reader/widgets.py`, `style.py` | libadwaita-style widgets and stylesheet |
+| `litres_reader/web/` | reader and graph pages, `litres-hook.js` (passes API headers from the LitRes site; doesn't touch passwords or forms) |
+| `litres_reader/web/foliate/` | [foliate-js](https://github.com/johnfactotum/foliate-js) rendering engine (MIT) with pdf.js |
+| `litres_reader/web/vendor/` | d3-force, d3-quadtree, d3-dispatch, d3-timer (ISC) for the graph |
+| `litres_reader/data/sym/` | Adwaita symbolic icons (CC-BY-SA 3.0 / LGPLv3) |
+| `install.sh`, `install.cmd`, `windows/` | installers |
+| `vpn-bypass/` | Linux scripts to reach LitRes directly while a VPN is on |
+| `docs/en/`, `docs/ru/` | user guide in English and Russian |
 
-- **Задачи «Читаю»** — начатые книги становятся задачами в проекте «Книги»; дочитали — задача закрывается.
-- **Прогресс в задаче** — процент и текущая глава в заметке задачи.
-- **«Хочу прочитать»** — непрочитанные книги — задачи в отдельном проекте; начатая книга
-  переезжает в «Книги» (та же задача).
-- **Ежедневное чтение** — привычка «Чтение N минут» отмечается сама, когда за день набралось
-  N минут чтения или прослушивания.
+### Translations
 
-Синхронизация идёт после входа и синхронизации с ЛитРес, при отметке «Прочитано» и пачкой
-раз в пару минут во время чтения. Свои задачи приложение находит по `externalId`, поэтому
-дублей не бывает. Токен хранится только на этом компьютере (`~/.config/litres-reader/singularity.json`).
+UI strings are written in Russian and wrapped in `tr()`: `tr("Скачано {0} из {1}", done, total)`.
+The English text for each string lives in `litres_reader/i18n_en.py`; plurals use `plural()`.
+Strings for the web pages are listed in `WEB_KEYS` in `i18n.py` and passed to the page with its data.
+When adding a string, add its English translation too — a missing one falls back to Russian.
 
-## ЛитРес и VPN (Linux)
+### Packaging note
 
-ЛитРес не открывается через зарубежный VPN. Скрипты в `vpn-bypass/` пускают трафик
-к ЛитРес напрямую через обычное подключение, а весь остальной трафик — через VPN;
-при установленном `vpn-killswitch` добавляют в него исключение только для адресов ЛитРес:
+Every asset folder must be listed in `[tool.setuptools.package-data]` in `pyproject.toml`.
+Test features against the installed package (`bash install.sh`), not only the source tree.
 
-```
-sudo bash vpn-bypass/install.sh           # установить
-sudo bash vpn-bypass/install.sh --remove  # удалить (и вернуть исходный kill switch)
-```
+### Releases
 
-## Где что хранится
+Bump the version in `pyproject.toml` and `litres_reader/__init__.py`, move the "Unreleased"
+section of [CHANGELOG.md](CHANGELOG.md) under the new version, tag `vX.Y.Z` and publish a GitHub
+release with that section as notes. Planned work is in [TODO.md](TODO.md).
 
-| Что | Linux | Windows |
-|---|---|---|
-| Книги, обложки, прогресс | `~/.local/share/litres-reader/` | `%LOCALAPPDATA%\litres-reader\` |
-| Сессия ЛитРес | `…/litres-reader/webengine/` | `%LOCALAPPDATA%\litres-reader\webengine\` |
-| Настройки | `~/.config/litres-reader/` | `%APPDATA%\litres-reader\` |
+## Security
 
-«Выйти из ЛитРес» стирает сессию. Скачанные книги и прогресс остаются, в том числе
-при удалении приложения.
+- Scripts inside books are not executed (page CSP); external images and fonts from books are not
+  loaded.
+- Links from books open in the system only for `http`, `https` and `mailto`.
+- LitRes API calls run in an isolated JavaScript world of the litres.ru page; responses carry a
+  random session token so site scripts can't forge them.
+- PDFs are rendered by pdf.js with `eval` disabled; book files are served only by a one-time token
+  of the open book.
+- Data files (library, progress, settings, tokens, backups) are created with 0600 permissions.
 
-## Безопасность
+## Limitations
 
-- Скрипты внутри книг не выполняются (политика безопасности страницы читалки), внешние
-  картинки и шрифты из книг не загружаются.
-- Ссылки из книг открываются в системе только для `http`, `https` и `mailto`; остальные
-  схемы (`file:`, `smb:`, `\\сервер\…`, `ms-msdt:`, `search-ms:` и т. п.) отклоняются.
-- Запросы к API ЛитРес выполняются в изолированном мире JavaScript страницы litres.ru,
-  ответы помечены случайной меткой сессии — скрипты сайта не могут их подделать.
-- PDF открывает pdf.js с отключённым `eval`; файлы книг читалка отдаёт только по
-  одноразовому токену открытой книги.
-- Файлы данных (библиотека, прогресс, настройки, токены) создаются с правами 0600.
+- LitRes has no public API; the app uses the same endpoints as the website (some were found by the
+  [bookvault](https://github.com/mavrovde/bookvault) project). If LitRes changes them, the book
+  list or downloads will break.
+- DRM-protected and online-only books don't open.
+- Only the "read" mark is written back to LitRes, not the exact position.
+- No automatic hyphenation: QtWebEngine ships without hyphenation dictionaries.
 
-## Ограничения
+## License
 
-- У ЛитРес нет открытого API. Приложение использует те же адреса, что и сайт
-  (часть выяснил проект [bookvault](https://github.com/mavrovde/bookvault)).
-  Если ЛитРес их поменяет, список книг или скачивание перестанут работать.
-- Книги с DRM, а также доступные только для онлайн-чтения на сайте, не откроются.
-- Точное место чтения на ЛитРес не записывается (только отметка «Прочитано»).
-- Автоматических переносов слов нет: встроенный Chromium (QtWebEngine) не содержит
-  словарей переносов.
-- PDF читается прямо в приложении (pdf.js из комплекта foliate-js); перенос текста
-  по размеру шрифта для PDF невозможен — страницы показываются как есть.
-- Отладка: `LITREADER_DEBUG=1 litres-reader` выводит запросы к ЛитРес.
-
-## Состав
-
-- `litres_reader/` — приложение (Python, Qt 6 / PySide6):
-  `app.py` — окно и логика, `litres.py` — сессия и API ЛитРес во встроенном Chromium,
-  `reader.py` — читалка, `player.py` — плеер аудиокниг (QtMultimedia),
-  `widgets.py` и `style.py` — элементы интерфейса и оформление в стиле libadwaita,
-  `core.py` — пути, настройки, библиотека.
-- `litres_reader/web/` — страница читалки и `litres-hook.js`, который встраивается
-  в сайт ЛитРес и передаёт приложению служебные заголовки API (пароль и формы не трогает).
-- `litres_reader/web/foliate/` — движок отображения книг
-  [foliate-js](https://github.com/johnfactotum/foliate-js) (MIT).
-- `litres_reader/web/vendor/` — d3-force, d3-quadtree, d3-dispatch, d3-timer (ISC) для графа книг.
-- `litres_reader/data/sym/` — символьные значки Adwaita (CC-BY-SA 3.0 / LGPLv3).
-- `install.sh`, `install.cmd`, `windows/` — установщики; `vpn-bypass/` — обход VPN (Linux).
+MIT.

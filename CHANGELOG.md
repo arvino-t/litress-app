@@ -1,188 +1,195 @@
-# История изменений
+# Changelog
 
-Все заметные изменения Читалки ЛитРес. Формат — по мотивам
-[Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии — [SemVer](https://semver.org/lang/ru/).
+All notable changes to LitRes Reader. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
+[Semantic Versioning](https://semver.org/).
 
-## [Не выпущено]
+## [Unreleased]
+
+### Added
+- User guide in Russian and English in `docs/ru/` and `docs/en/`.
+
+### Changed
+- Project documentation (README, CHANGELOG, TODO) is now in English.
 
 ## [0.14.0] — 2026-10-09
 
-### Добавлено
-- Разделы для своих папок: при добавлении папки задаётся название раздела («Статьи», «Лекции»…).
-  Раздел виден на карточках вместо имени папки и отдельным пунктом в фильтре библиотеки
-  («— Статьи»); в настройках раздел можно переименовать. Папки по умолчанию — «Другие книги»,
-  «Статьи», «Тренинги и презентации»; у папок, добавленных раньше, раздел — имя папки.
+### Added
+- Sections for your own folders: when adding a folder you give it a section name ("Articles",
+  "Lectures"…). The section is shown on cards instead of the folder name and as its own item in
+  the library filter ("— Articles"); you can rename it in Settings. Default folders are "Other
+  books", "Articles" and "Trainings and presentations"; folders added earlier use the folder name.
 
-### Изменено
-- Фильтр библиотеки сгруппирован по источнику: «ЛитРес» (под ним «Книги» и «Аудиокниги»)
-  и «Мои книги и статьи» (под ним разделы своих папок). Пункт «ЛитРес» показывает
-  книги и аудиокниги вместе.
-- Фильтры библиотеки: статус, «Источник», «Подкаталог», «Сортировка» — с подписями над списками.
-  «Подкаталог» зависит от источника: для ЛитРес — ваши папки на ЛитРес, для своих книг —
-  папки на диске внутри раздела (вложенные тоже; выбор папки показывает и её подпапки).
-  Выбор подкаталога запоминается отдельно для ЛитРес и для своих книг.
-- Счётчики на кнопках статуса («Все · N», «Читаю · N»…) считают книги выбранного источника
-  и подкаталога (и «Только скачанные»), а не всю библиотеку.
+### Changed
+- The library filter is grouped by source: "LitRes" (with "Books" and "Audiobooks" under it) and
+  "My books and articles" (with the sections of your folders under it). The "LitRes" item shows
+  books and audiobooks together.
+- Library filters — status, Source, Subfolder, Sort by — have captions above them. Subfolder
+  depends on the source: your LitRes folders for LitRes, folders on disk inside the section for
+  your own books (nested ones too; choosing a folder also shows its subfolders). The subfolder
+  choice is remembered separately for LitRes and for your own books.
+- The counters on the status buttons ("All · N", "Reading · N"…) count the books of the selected
+  source and subfolder (and "Downloaded only") instead of the whole library.
 
 ## [0.13.0] — 2026-10-09
 
-### Добавлено
-- Скачивание всех книг разом: меню → «Скачать все книги…». Можно выбрать только книги
-  или книги вместе с аудиокнигами. Книги скачиваются по одной, ход виден в заголовке,
-  остановка — тем же пунктом меню; в конце — итог, а книги, которые не скачались, — в журнале.
-- Настройки разделены на вкладки «Общие», «Чтение», «Интеграции», «Резервные копии» и «Дополнительно»;
-  открывается вкладка, на которой остановились.
-- Значки сторонних сервисов (ЛитРес, Singularity) во вкладке «Интеграции»: из темы системы,
-  если приложение установлено, иначе favicon сайта (скачивается один раз и хранится в кэше).
-- Вкладка «Дополнительно»: обновление с ЛитРес и «Обновить сейчас», скорость чтения для оценки
-  чтения на телефоне, подробный журнал без перезапуска (как `LITREADER_DEBUG=1`), папки данных,
-  настроек и кэша, сброс настроек (папки, вход и библиотека не меняются).
-- Вкладка «Резервные копии»: копия по кнопке и автоматически (раз в день или неделю,
-  по умолчанию — раз в неделю), сколько хранить, папка для копий (по умолчанию
-  `Документы/Backups/litres-reader`), восстановление из списка последних копий или из файла.
-  Перед восстановлением текущие данные сохраняются в отдельную копию, приложение перезапускается
-  и переносит файлы до чтения данных. В копии — настройки, библиотека, место чтения, статистика
-  и настройки Singularity; токен Singularity — только если включено. Копии доступны только владельцу (0600).
-- Английский язык интерфейса: «Настройки → Общие → Язык интерфейса» (как в системе, русский,
-  English), применяется после перезапуска — кнопка «Перезапустить» прямо в уведомлении.
-  Переведены приложение, читалка, плеер, граф, статистика и настройки; тексты, которые уходят
-  в Singularity (названия проектов, привычки, заметки), остаются на русском, чтобы при смене
-  языка там не появлялись дубли. Для разработки — переменная `LITREADER_LANG=en|ru`.
+### Added
+- Download all books at once: menu → "Download all books…". Choose books only or books together
+  with audiobooks. Books are downloaded one at a time with progress in the header; stop with the
+  same menu item; a summary at the end, and books that failed go to the log.
+- Settings are split into tabs: General, Reading, Integrations, Backups and Advanced; the last
+  opened tab is remembered.
+- Third-party service icons (LitRes, Singularity) on the Integrations tab: from the system icon
+  theme if the app is installed, otherwise the site's favicon (downloaded once and cached).
+- Advanced tab: LitRes refresh interval and "Refresh now", reading speed for estimating phone
+  reading, verbose log without a restart (same as `LITREADER_DEBUG=1`), data, settings and cache
+  folders, reset settings (folders, sign-in and library are kept).
+- Backups tab: back up on demand and automatically (daily or weekly, weekly by default), how many
+  to keep, backup folder (`Documents/Backups/litres-reader` by default), restore from the list of
+  recent backups or from a file. Before restoring, the current data is backed up separately; the
+  app restarts and moves the files in place before reading its data. A backup contains settings,
+  the library, reading positions, statistics and Singularity settings; the Singularity token only
+  if enabled. Backups are owner-only (0600).
+- English interface: Settings → General → Interface language (system default, Russian, English),
+  applied after a restart — with a Restart button right in the notification. The app, reader,
+  player, graph, statistics and settings are translated; texts sent to Singularity (project names,
+  habits, notes) stay in Russian so that switching the language doesn't create duplicates there.
+  For development: `LITREADER_LANG=en|ru`.
 
-### Изменено
-- Выбранная кнопка в сегментированных переключателях теперь выделяется.
+### Changed
+- The selected button in segmented toggles is now highlighted.
 
 ## [0.12.0] — 2026-10-09
 
-### Добавлено
-- Статистика учитывает чтение на телефоне и сайте ЛитРес: прирост процента прочитанного
-  переводится во время (текст — по объёму книги, около 1300 знаков в минуту; аудио —
-  по длительности) и записывается на день чтения, не больше 4 часов за одну синхронизацию.
-  Книги, дочитанные на телефоне, попадают в счётчик дочитанных; в окне статистики —
-  «из них на телефоне», на графике телефонная часть столбика светлее.
-- Страница «Настройки» (меню, Ctrl+,): запуск и библиотека, папки, вид текста, чтение вслух
-  и автолистание, аудио, статистика, аккаунт и Singularity, о приложении. Изменения
-  применяются сразу; меню приложения сокращено.
-- Новые настройки: как часто обновлять библиотеку с ЛитРес (0 — выключено) и скорость
-  чтения для оценки чтения на телефоне.
-- Граф: индикатор «Строю граф… / Раскладка — N%» и «Загружаю жанры с ЛитРес: N из M»
-  на странице и под заголовком окна.
+### Added
+- Statistics include reading on the phone and the LitRes website: on sync, the progress gained is
+  converted into time (text by book length, about 1300 characters per minute; audio by duration)
+  and recorded for the day of reading, at most 4 hours per sync. Books finished on the phone count
+  as finished; the statistics window shows "of them on the phone", and that part of a chart bar is
+  lighter.
+- Settings page (menu, Ctrl+,): startup and library, folders, text appearance, read aloud and auto
+  page turn, audio, statistics, account and Singularity, about. Changes apply immediately; the app
+  menu is shorter.
+- New settings: how often to refresh the library from LitRes (0 — off) and the reading speed for
+  estimating phone reading.
+- Graph: "Building the graph… / Layout — N%" and "Loading genres from LitRes: N of M" indicators on
+  the page and under the window title.
 
-### Изменено
-- Граф строится за 2–3 секунды вместо 15 с лишним (около 530 узлов): несколько шагов
-  раскладки за кадр и одна отрисовка на кадр.
-- Ошибки JavaScript в читалке и графе всегда пишутся в журнал, не только в режиме отладки.
+### Changed
+- The graph builds in 2–3 seconds instead of 15+ (about 530 nodes): several layout steps per frame
+  and one redraw per frame.
+- JavaScript errors in the reader and graph are always logged, not only in debug mode.
 
-### Исправлено
-- В установленной версии 0.11.0 граф строился бесконечно («d3 is not defined»), а PDF
-  не открывались: в пакет не попадали папки `web/vendor` и `web/foliate/vendor/pdfjs`.
+### Fixed
+- In the installed 0.11.0 the graph kept "building" forever ("d3 is not defined") and PDFs didn't
+  open: the `web/vendor` and `web/foliate/vendor/pdfjs` folders were missing from the package.
 
 ## [0.11.0] — 2026-10-08
 
-### Добавлено
-- Папка для скачанных книг: выбор каталога, уже скачанные книги переносятся туда.
-- Свои книги и статьи из папок (по умолчанию `Документы/Books/others`, `articles`,
-  `trainings`): файлы открываются на месте, фильтр «Мои книги и статьи», подпись —
-  папка-тема, обложки PDF по первой странице.
-- Чтение PDF в приложении (pdf.js из комплекта foliate-js), место восстанавливается.
-- «Продолжить чтение» учитывает чтение на ЛитРес (телефон, сайт): время последнего чтения
-  и глава берутся оттуда, где читали позже; дочитанные и только открытые книги не показываются.
-- Пока окно открыто, библиотека тихо обновляется с ЛитРес раз в 15 минут.
-- При запуске открывается последняя текстовая книга (начатая, не дочитанная, скачанная);
-  аудиокниги сами не открываются.
-- Граф книг по тегам, как в Obsidian (меню, Ctrl+G): жанры и теги ЛитРес, папки, серии,
-  авторы, темы своих книг; масштаб, перетаскивание, подсветка связей, поиск, фильтры.
+### Added
+- Folder for downloaded books: choose a directory; already downloaded books are moved there.
+- Your own books and articles from folders (`Documents/Books/others`, `articles`, `trainings` by
+  default): files open in place, a "My books and articles" filter, the folder topic as the caption,
+  PDF covers from the first page.
+- PDF reading in the app (pdf.js from foliate-js); the position is restored.
+- "Continue reading" takes reading on LitRes (phone, website) into account: the last read time and
+  chapter come from wherever you read later; finished and merely opened books are not shown.
+- While the window is open, the library quietly refreshes from LitRes every 15 minutes.
+- On startup the app opens the last text book (started, not finished, downloaded); audiobooks
+  don't start by themselves.
+- Book graph by tags, like in Obsidian (menu, Ctrl+G): LitRes genres and tags, folders, series,
+  authors, topics of your own books; zoom, drag, link highlighting, search, filters.
 
-### Безопасность
-- Ссылки из книг открываются в системе только для `http`, `https` и `mailto`.
-- Запросы к API ЛитРес выполняются в изолированном мире JavaScript со случайной меткой
-  сессии: скрипты сайта не могут подделать ответы.
-- Номер книги ЛитРес принимается только из цифр (он входит в пути файлов).
-- Названия, авторы и имена файлов выводятся как обычный текст, не HTML.
-- Файлы данных пишутся с правами 0600.
-- PySide6 ограничен диапазоном `>=6.10,<6.12`.
+### Security
+- Links from books open in the system only for `http`, `https` and `mailto`.
+- LitRes API requests run in an isolated JavaScript world with a random session token: site
+  scripts can't forge responses.
+- A LitRes book ID is accepted only as digits (it is part of file paths).
+- Titles, authors and file names are shown as plain text, not HTML.
+- Data files are written with 0600 permissions.
+- PySide6 is pinned to `>=6.10,<6.12`.
 
-### Исправлено
-- Singularity: свои статьи не попадают в «Хочу прочитать».
-- «Скачать» и «Открыть на сайте» в меню книги показывались только при наличии следующей
-  книги в серии.
+### Fixed
+- Singularity: your own articles don't go to "Want to read".
+- "Download" and "Open on the website" in the book menu were shown only when there was a next book
+  in the series.
 
-### Известные проблемы
-- В установленном пакете не работают граф и чтение PDF — исправлено в 0.12.0.
+### Known issues
+- The graph and PDF reading don't work in the installed package — fixed in 0.12.0.
 
 ## [0.10.0] — 2026-09-30
 
-### Добавлено
-- Сортировка библиотеки: недавние, как на ЛитРес, название, автор, серии, прогресс,
-  дата покупки (запоминается).
-- Серия и номер книги на карточке; «Следующая в серии» в меню книги и в уведомлении
-  о дочитанной книге.
-- Статистика чтения: минуты по дням за две недели, серия дней подряд, дочитанные книги,
-  книги с наибольшим временем.
-- Жесты в читалке: щипок и Ctrl+колесо меняют размер шрифта, свайп вверх открывает оглавление.
-- Автолистание с настраиваемым интервалом.
-- Чтение вслух с подсветкой предложения и перелистыванием.
+### Added
+- Library sorting: recent, as on LitRes, title, author, series, progress, purchase date
+  (remembered).
+- Series and number on the card; "Next in the series" in the book menu and in the "book finished"
+  notification.
+- Reading statistics: minutes per day for two weeks, day streak, finished books, books with the
+  most time.
+- Reader gestures: pinch and Ctrl+wheel change the font size, swipe up opens the contents.
+- Auto page turn with an adjustable interval.
+- Read aloud with sentence highlighting and page turning.
 
 ## [0.9.0] — 2026-09-30
 
-### Добавлено
-- Панель «Продолжить чтение» справа в библиотеке: две последние читаемые книги с главой,
-  прогрессом и кнопкой «Читать»/«Слушать»; на узком окне прячется.
-- Цвет акцента берётся из системы и обновляется на лету.
+### Added
+- "Continue reading" panel on the right of the library: the two latest books being read, with
+  chapter, progress and a Read/Listen button; hidden in a narrow window.
+- The accent colour comes from the system and updates on the fly.
 
-### Изменено
-- Справка по обходу VPN не привязана к папке проекта.
+### Changed
+- The VPN bypass help no longer depends on the project folder.
 
 ## [0.8.0] — 2026-09-29
 
-### Добавлено
-- Синхронизация с Singularity: задачи «Читаю» в проекте «Книги» с процентом и главой,
-  список «Хочу прочитать», привычка «Чтение N минут» отмечается сама.
-- Аудиокнига при открытии и при запуске сразу продолжает играть с места остановки.
-- Если на ЛитРес книга прочитана дальше, приложение само переходит туда (с кнопкой «Вернуть»).
-- Тихая синхронизация с ЛитРес при запуске.
+### Added
+- Singularity sync: "Reading" tasks in the "Книги" project with percent and chapter, a "Want to
+  read" list, the "Чтение N минут" habit checked automatically.
+- An audiobook resumes playing right away when opened and on startup.
+- If a book was read further on LitRes, the app jumps there by itself (with an Undo button).
+- Quiet LitRes sync on startup.
 
-### Исправлено
-- Ошибка создания «Хочу прочитать» в Singularity видна в окне настроек.
+### Fixed
+- Errors creating "Want to read" in Singularity are shown in the settings window.
 
 ## [0.7.0] — 2026-09-29
 
-### Добавлено
-- Главы аудиокниг из разметки M4B; для папки MP3 глава — файл. Список глав, переходы,
-  ползунок внутри главы, таймер сна «В конце главы».
-- При запуске открывается последняя книга на месте остановки.
-- Для аудиокниг — предложение перейти к месту, прослушанному на ЛитРес.
+### Added
+- Audiobook chapters from M4B markers; for an MP3 folder, one chapter per file. Chapter list,
+  navigation, slider within the chapter, "At the end of the chapter" sleep timer.
+- On startup the last book opens at the place where you stopped.
+- For audiobooks — an offer to jump to the position listened to on LitRes.
 
-### Изменено
-- Ползунки переносят в точку щелчка, время при перетаскивании меняется на лету.
-- Установщики всегда ставят свежий код, даже без смены версии.
+### Changed
+- Sliders jump to the clicked point; the time updates live while dragging.
+- Installers always install the latest code, even without a version change.
 
-### Исправлено
-- Панели читалки больше не пропадают под страницей и не прячутся сами через 3 секунды.
+### Fixed
+- Reader bars no longer disappear under the page or hide by themselves after 3 seconds.
 
 ## [0.6.0] — 2026-09-29
 
-### Изменено
-- Приложение переписано на Qt 6 (PySide6) и работает на Linux и Windows: вход и API
-  ЛитРес — во встроенном Chromium, плеер — на QtMultimedia, оформление в стиле libadwaita.
+### Changed
+- The app was rewritten in Qt 6 (PySide6) and runs on Linux and Windows: LitRes sign-in and API in
+  the built-in Chromium, the player on QtMultimedia, a libadwaita-style look.
 
-### Добавлено
-- Один экземпляр приложения, открытие файлов из системы.
-- Пакет Python с командой `litres-reader`.
-- `install.sh` — установка на Linux; `windows/install.ps1` и `install.cmd` — установка на Windows.
+### Added
+- Single app instance, opening files from the system.
+- Python package with the `litres-reader` command.
+- `install.sh` for Linux; `windows/install.ps1` and `install.cmd` for Windows.
 
 ## [0.5.0] — 2026-09-29
 
-### Добавлено
-- Первая версия (GTK 4, libadwaita, WebKitGTK 6): вход на сайте ЛитРес без хранения
-  пароля, список купленных книг, скачивание EPUB/FB2/MOBI, читалка на foliate-js.
-- Фильтры «Читаю / Не читал / Прочитано», по папкам ЛитРес и «Без папки».
-- Синхронизация отметки «Прочитано» и папок с ЛитРес.
-- Аудиокниги: скачивание M4B или архива MP3, плеер с главами, скоростью без искажения
-  голоса и таймером сна.
-- Обход VPN для ЛитРес (`vpn-bypass/`).
+### Added
+- First version (GTK 4, libadwaita, WebKitGTK 6): LitRes sign-in on the website without storing
+  the password, list of purchased books, EPUB/FB2/MOBI download, a reader based on foliate-js.
+- "Reading / Unread / Read" filters, by LitRes folder and "No folder".
+- Sync of the "read" mark and folders with LitRes.
+- Audiobooks: M4B or MP3 archive download, a player with chapters, speed without changing the voice
+  pitch and a sleep timer.
+- VPN bypass for LitRes (`vpn-bypass/`).
 
-[Не выпущено]: https://github.com/arvino-t/litress-app/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/arvino-t/litress-app/compare/v0.14.0...HEAD
 [0.14.0]: https://github.com/arvino-t/litress-app/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/arvino-t/litress-app/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/arvino-t/litress-app/compare/v0.11.0...v0.12.0

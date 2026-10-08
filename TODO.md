@@ -1,70 +1,70 @@
 # TODO
 
-Идеи для следующих версий, по убыванию пользы. Сделанное переносится в [CHANGELOG.md](CHANGELOG.md).
+Ideas for the next versions, most useful first. Finished items move to [CHANGELOG.md](CHANGELOG.md).
 
-## Рефакторинг — до крупных пунктов ниже
-Поведение не меняется; после каждого шага — проверка на установленной версии.
-- [ ] **Тесты** (до разбиения кода): `Library` (объединение с ЛитРес, статусы, проценты),
-  резервные копии (создание, восстановление, токен Singularity), полнота перевода
-  (все `tr()` есть в `i18n_en.py`, подстановки совпадают), все файлы `web/` и `data/`
-  попадают в установленный пакет (из-за этого в 0.11.0 не работали граф и PDF).
-- [ ] **Разбить класс `App`** (`app.py`, ~1560 строк, 83 метода):
-  - `library.py` — страница библиотеки: фильтры, сетка, «Продолжить чтение»;
-  - `downloads.py` — скачивание книг и очередь «Скачать все»;
-  - `sync.py` — синхронизация с ЛитРес, место чтения с телефона;
-  - диалог Singularity — в `singularity.py`, диалог папок — отдельным модулем;
-  - в `App` остаются окно, навигация и связи между частями.
-- [ ] **Убрать повторы:** списки тем и шрифтов (`reader.py` и `settings.py`); заготовка окна
-  без рамки (статистика, папки, Singularity) — общий виджет в `widgets.py`.
-- [ ] **Публичные методы вместо внутренних:** `app._add_local_folder`, `_remove_local_folder`,
-  `_account_action`, `_download_all_action` вызываются из настроек.
-- [ ] **Мелочи:** строки длиннее 120 символов после перевода, обёртка `_books_word` над `plural`,
-  два `except Exception` — сузить.
+## Refactoring — before the bigger items below
+Behaviour doesn't change; after each step, check the installed version.
+- [ ] **Tests** (before splitting the code): `Library` (merging with LitRes, statuses, percentages),
+  backups (create, restore, Singularity token), translation coverage (every `tr()` key is in
+  `i18n_en.py`, placeholders match), all `web/` and `data/` files end up in the installed package
+  (that is why the graph and PDF were broken in 0.11.0).
+- [ ] **Split the `App` class** (`app.py`, ~1600 lines, ~90 methods):
+  - `library.py` — the library page: filters, grid, "Continue reading";
+  - `downloads.py` — book downloads and the "Download all" queue;
+  - `sync.py` — LitRes sync, reading position from the phone;
+  - the Singularity dialog → `singularity.py`, the folders dialog → its own module;
+  - `App` keeps the window, navigation and the wiring between parts.
+- [ ] **Remove duplication:** theme and font lists (`reader.py` and `settings.py`); the frameless
+  dialog boilerplate (statistics, folders, Singularity) → a shared widget in `widgets.py`.
+- [ ] **Public methods instead of private ones:** `app._account_action` and `_download_all_action`
+  are called from settings (`add/rename/remove_local_folder` are already public).
+- [ ] **Small things:** lines longer than 120 characters after the translation wrap, the
+  `_books_word` wrapper around `plural`, two `except Exception` blocks to narrow down.
 
-## Читалка — в первую очередь
-- [ ] **Выделения и заметки с выгрузкой в Obsidian.** Выделить цитату, добавить комментарий;
-  цитаты собираются на страницу книги в вики со ссылками на место в книге.
-  foliate-js уже умеет рисовать выделения (overlayer).
-  - **настройка «Хранилище Obsidian»**: выбор папки хранилища (по умолчанию `~/Documents`),
-    проверка, что в ней есть `CLAUDE.md` / `wiki/` по схеме LLM Wiki Карпаты;
-  - заметки — в слой вики, источники (`Books/`, `articles/`, `trainings/`) не трогать;
-  - отдельный файл на книгу `wiki/highlights/<Книга>.md` (не в карточке `wiki/sources/…`:
-    карточки со `status: indexed` пересобирает `build_index.py`); frontmatter по схеме:
-    `type: highlights`, `title`, `sources: [[sources/<Книга>]]`, `created`, `updated`;
-  - в карточке источника — ссылка на страницу цитат; запись в `wiki/log.md`
-    в формате `## [ГГГГ-ММ-ДД] highlights | <Книга>` (только дописывать);
-  - каждая цитата: текст, комментарий, глава, ссылка на место в книге
-    (`litreader://` с CFI — открывает книгу в читалке на этом месте);
-  - выгрузка сразу при добавлении или по кнопке «В Obsidian»; правки цитат в Obsidian не затирать.
-- [ ] **Поиск по тексту книги** с переходом к найденному — в foliate-js он уже есть, нужен интерфейс.
-- [ ] **Закладки** — несколько отмеченных мест в книге, а не только последнее.
-- [ ] **Словарь и перевод по выделенному слову** — для книг и статей на английском.
+## Reader — first priority
+- [ ] **Highlights and notes exported to Obsidian.** Select a quote, add a comment; quotes are
+  collected on the book's page in the wiki with links back to the place in the book.
+  foliate-js can already draw highlights (overlayer).
+  - **"Obsidian vault" setting**: choose the vault folder (`~/Documents` by default), check that it
+    has `CLAUDE.md` / `wiki/` following Karpathy's LLM Wiki layout;
+  - notes go to the wiki layer; sources (`Books/`, `articles/`, `trainings/`) are never touched;
+  - a separate file per book, `wiki/highlights/<Book>.md` (not the `wiki/sources/…` card: cards
+    with `status: indexed` are rebuilt by `build_index.py`); frontmatter per the schema:
+    `type: highlights`, `title`, `sources: [[sources/<Book>]]`, `created`, `updated`;
+  - a link to the highlights page in the source card; an entry in `wiki/log.md` in the
+    `## [YYYY-MM-DD] highlights | <Book>` format (append only);
+  - each quote: text, comment, chapter, link to the place in the book (`litreader://` with a CFI —
+    opens the book in the reader at that place);
+  - export right away or with an "To Obsidian" button; edits made in Obsidian are not overwritten.
+- [ ] **Full-text search in a book** with jumping to results — foliate-js has it, needs a UI.
+- [ ] **Bookmarks** — several marked places in a book, not only the last one.
+- [ ] **Dictionary and translation of the selected word** — for books and articles in English.
 
-## Библиотека и синхронизация
-- [ ] **Переработать логику резервных копий** (вкладка «Резервные копии», `backup.py`).
-  Что пересмотреть: состав копии и формат, расписание и хранение (сколько копий, какие
-  удалять), восстановление без перезапуска, связь с будущей синхронизацией через облако
-  (чтобы копии и синхронизация не дублировали друг друга).
-- [ ] **Синхронизация данных приложения напрямую с облаком** — Google Диск или Яндекс Диск,
-  выбор и вход в настройках приложения (не через папку `~/Documents`). Что синхронизировать:
-  выделения, заметки, закладки, место чтения своих книг и PDF, статистику и настройки,
-  чтобы всё переезжало между компьютерами (Linux и Windows). Сейчас хранится только локально.
-  - вход через OAuth в браузере, токен хранить с правами 0600 (или в системном хранилище ключей);
-  - Google Диск — скрытая папка приложения (`appDataFolder`), Яндекс Диск — `app:/` (папка приложения);
-  - слияние при конфликтах: место чтения — самое свежее, выделения и закладки — объединение,
-    статистика — по дням с максимумом;
-  - синхронизация при запуске, при закрытии книги и раз в N минут; работа без сети не ломается.
-- [ ] **Новинки любимых авторов и серий**: «вышла следующая книга серии» со ссылкой на покупку на ЛитРес.
-- [ ] **Автоматическое скачивание новых покупок**; сколько места занимают скачанные книги;
-  удаление скачанных дочитанных.
+## Library and sync
+- [ ] **Rework the backup logic** (Backups tab, `backup.py`). To revisit: backup contents and
+  format, schedule and retention (how many to keep, which to delete), restoring without a restart,
+  how it relates to the future cloud sync (so that backups and sync don't duplicate each other).
+- [ ] **Sync app data directly with the cloud** — Google Drive or Yandex Disk, chosen and signed in
+  to in the app settings (not via the `~/Documents` folder). What to sync: highlights, notes,
+  bookmarks, reading positions of your own books and PDFs, statistics and settings, so everything
+  moves between computers (Linux and Windows). Today it is stored only locally.
+  - OAuth sign-in in the browser, the token stored with 0600 permissions (or in the system keyring);
+  - Google Drive — the hidden app folder (`appDataFolder`), Yandex Disk — `app:/` (app folder);
+  - conflict merging: reading position — the latest wins, highlights and bookmarks — union,
+    statistics — per day with the maximum;
+  - sync on startup, when closing a book and every N minutes; works fine offline.
+- [ ] **New books by favourite authors and series**: "the next book in the series is out" with a
+  link to buy it on LitRes.
+- [ ] **Download new purchases automatically**; how much space downloaded books take; removing
+  downloaded finished books.
 
-## Статистика и привычка
-- [ ] **Цели на неделю и год** («24 книги в год») в дополнение к дневной; итоги месяца и года;
-  оценка, когда дочитаете текущую книгу при вашей скорости.
-- [ ] **Напоминание почитать вечером**, если дневная цель не набрана.
+## Statistics and habit
+- [ ] **Weekly and yearly goals** ("24 books a year") in addition to the daily one; monthly and
+  yearly summaries; an estimate of when you'll finish the current book at your pace.
+- [ ] **Evening reminder to read** if the daily goal isn't reached.
 
-## Удобство
-- [ ] **Режим для планшета**: крупные зоны листания, кнопки громкости для перелистывания,
-  поворот экрана без потери места.
-- [ ] **Заметка о прочитанной книге** при отметке «Прочитано»: оценка и пара строк впечатлений,
-  которые попадают в карточку книги в вики.
+## Convenience
+- [ ] **Tablet mode**: large page-turn zones, volume keys to turn pages, rotation without losing
+  the place.
+- [ ] **A note on a finished book** when marking it as read: a rating and a couple of lines that go
+  to the book's card in the wiki.
