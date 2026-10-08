@@ -668,10 +668,20 @@ class App(QObject):
         self._apply_filter()
 
     def _visible(self, book) -> bool:
-        if self.only_downloaded and not self.library.file_path(book):
-            return False
         status = self.settings.get("libraryStatus", "all")
         if status != "all" and self.library.status(book) != status:
+            return False
+        if not self._in_scope(book):
+            return False
+        q = self.search.text().strip().lower()
+        if q:
+            hay = " ".join([book.get("title") or ""] + (book.get("authors") or [])).lower()
+            return q in hay
+        return True
+
+    def _in_scope(self, book) -> bool:
+        """Источник, подкаталог и «только скачанные» — то, к чему относятся счётчики статусов."""
+        if self.only_downloaded and not self.library.file_path(book):
             return False
         kind = self.settings.get("libraryType", "all")
         mine = book.get("source") == "folder"
@@ -695,13 +705,20 @@ class App(QObject):
                     return False
             elif folder and folder not in (book.get("folders") or []):
                 return False
-        q = self.search.text().strip().lower()
-        if q:
-            hay = " ".join([book.get("title") or ""] + (book.get("authors") or [])).lower()
-            return q in hay
         return True
 
+    def _update_status_counts(self):
+        """Счётчики на кнопках статуса — по выбранному источнику и подкаталогу."""
+        counts = {"all": 0, "reading": 0, "unread": 0, "finished": 0}
+        for b in self.library.ordered():
+            if self._in_scope(b):
+                counts["all"] += 1
+                counts[self.library.status(b)] += 1
+        for key, text in STATUS_FILTERS:
+            self.status_buttons[key].setText(f"{text} · {counts[key]}")
+
     def _apply_filter(self):
+        self._update_status_counts()
         for bid, card in self.cards.items():
             book = self.library.books.get(bid)
             card.setVisible(bool(book) and self._visible(book))
@@ -710,13 +727,8 @@ class App(QObject):
 
     def _update_filter_bar(self):
         books = self.library.ordered()
-        counts = {"all": len(books), "reading": 0, "unread": 0, "finished": 0}
-        for b in books:
-            counts[self.library.status(b)] += 1
-        for key, text in STATUS_FILTERS:
-            self.status_buttons[key].setText(f"{text} · {counts[key]}")
-
         self._fill_folder_combo()
+        self._update_status_counts()
         self.type_box.setVisible(any(b.get("is_audio") or b.get("source") == "folder" for b in books))
 
     # --- сетка книг
