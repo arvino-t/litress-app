@@ -1,17 +1,13 @@
 """Главное окно и логика приложения: библиотека, вход в ЛитРес, синхронизация, скачивание."""
 from __future__ import annotations
 
-import json
 import os
-import shutil
 import sys
-import threading
 import time
-import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, QRectF, QSize, QStandardPaths, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, QRectF, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket, QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QFrame,
@@ -19,16 +15,16 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import __version__, backup, core, libraries, style
-from .i18n import plural, tr
-from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, CONFIG_FILE,
-                   COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
-                   API, READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
-                   load_json, log, looks_like_book, save_json, set_books_dir)
+from .i18n import tr
+from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FORMATS, CONFIG_FILE, COVERS_DIR, DEFAULT_SETTINGS,
+                   NO_FOLDER, READABLE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
+                   load_json, log, save_json, set_books_dir)
 from .graph import GraphPage
 from .settings import SettingsPage
 from .litres import LitresSession
 from .player import AudioPlayer, PlayerPage, audio_tracks
 from .reader import ReaderPage
+from .litres_connector import LitresConnector
 from .singularity import SingularitySync
 from .widgets import (BookCard, FlowLayout, HeaderBar, IconButton, RecentPanel, Switch, Toast, cls,
                       label)
@@ -63,11 +59,6 @@ class Spinner(QWidget):
         r = QRectF(9, 9, 16, 16)
         p.drawArc(r, -self._angle * 16, 270 * 16)
         p.end()
-
-
-class _Bridge(QObject):
-    """Передаёт результат из рабочего потока в главный."""
-    done = Signal(object, object)
 
 
 class EdgeGrip(QWidget):
@@ -165,9 +156,7 @@ class App(QObject):
         self._backup_timer.start()
         QTimer.singleShot(60_000, self.auto_backup)
         self.cards: dict[str, BookCard] = {}
-        self.downloading: set[str] = set()
-        self.bulk = None        # скачивание всех книг разом: очередь и счётчики
-        self.syncing = False
+        self.litres_lib = LitresConnector(self)   # подключаемая библиотека ЛитРес
         self.only_downloaded = False
         self.reader: ReaderPage | None = None
         self.graph_page: GraphPage | None = None
@@ -198,7 +187,7 @@ class App(QObject):
         self._audio_timer.start()
 
         self.litres = LitresSession(self)
-        self.litres.state_changed.connect(self.on_login_state)
+        self.litres.state_changed.connect(self.litres_lib.on_login_state)
 
         # Singularity: задачи книг, прогресс, «Хочу прочитать», привычка «Чтение N минут»
         self.singularity = SingularitySync(self)
@@ -218,7 +207,7 @@ class App(QObject):
         self.login_page = self._build_login_page()
         self.push(self.library_page)
 
-        for keys, slot in (("F11", self.toggle_fullscreen), ("F5", self.sync), ("Ctrl+R", self.sync),
+        for keys, slot in (("F11", self.toggle_fullscreen), ("F5", self.litres_lib.sync), ("Ctrl+R", self.litres_lib.sync),
                            ("Ctrl+O", self.on_open_file), ("Ctrl+F", self._toggle_search),
                            ("Ctrl+G", self.show_graph), ("Ctrl+,", self.show_settings),
                            ("Alt+Left", self.go_back)):
@@ -230,24 +219,13 @@ class App(QObject):
         QTimer.singleShot(1500, self._make_pdf_covers)
         # Пока окно открыто — тихо подтягиваем с ЛитРес прочитанное на других устройствах
         self._remote_timer = QTimer(self)
-        self._remote_timer.timeout.connect(self._periodic_sync)
-        self.apply_remote_sync()
-
-    def apply_remote_sync(self):
-        minutes = int(self.settings.get("remoteSyncMin") or 0)
-        if minutes > 0:
-            self._remote_timer.start(minutes * 60 * 1000)
-        else:
-            self._remote_timer.stop()
+        self._remote_timer.timeout.connect(self.litres_lib._periodic_sync)
+        self.litres_lib.apply_remote_sync()
 
     def show_settings(self):
         if self.settings_page is None:
             self.settings_page = SettingsPage(self)
         self.push(self.settings_page)
-
-    def _periodic_sync(self):
-        if self.litres.logged_in and not self.syncing and self.window.isVisible():
-            self.sync(quiet=True)
 
     def _open_last_book(self):
         """Автопереход: открыть последнюю текстовую книгу на месте, где остановились.
@@ -328,7 +306,7 @@ class App(QObject):
 
         self.lib_header = HeaderBar(self.window, tr("Библиотека"), tr("Вход в ЛитРес не выполнен"))
         self.sync_btn = IconButton("view-refresh", tr("Обновить список книг с ЛитРес (F5)"))
-        self.sync_btn.clicked.connect(self.sync)
+        self.sync_btn.clicked.connect(self.litres_lib.sync)
         self.lib_header.pack_start(self.sync_btn)
         self.sync_spinner = Spinner()
         self.sync_spinner.setVisible(False)
@@ -343,7 +321,7 @@ class App(QObject):
         menu_btn = IconButton("open-menu", tr("Меню"))
         self.menu = QMenu(menu_btn)
         self.menu.addAction(tr("Открыть файл…"), self.on_open_file)
-        self.download_all_action = self.menu.addAction(tr("Скачать все книги…"), self._download_all_action)
+        self.download_all_action = self.menu.addAction(tr("Скачать все книги…"), self.litres_lib.download_all)
         self.only_action = QAction(tr("Только скачанные"), self.menu, checkable=True)
         self.only_action.toggled.connect(self._on_only_downloaded)
         self.menu.addAction(self.only_action)
@@ -352,7 +330,7 @@ class App(QObject):
         self.last_action.toggled.connect(lambda on: (self.settings.__setitem__("openLastBook", on),
                                                      self.save_settings()))
         self.menu.addSeparator()
-        self.account_action = self.menu.addAction(tr("Войти в ЛитРес"), self._account_action)
+        self.account_action = self.menu.addAction(tr("Войти в ЛитРес"), self.litres_lib.toggle_account)
         self.menu.addAction(tr("Настройки… (Ctrl+,)"), self.show_settings)
         self.menu.addAction(tr("Статистика чтения"), self.show_stats_dialog)
         self.menu.addAction(tr("Граф книг (Ctrl+G)"), self.show_graph)
@@ -425,7 +403,7 @@ class App(QObject):
         v.addWidget(label(tr("Войдите в аккаунт ЛитРес, чтобы увидеть купленные книги,\n"
                           "или откройте файл EPUB/FB2."), align=Qt.AlignmentFlag.AlignCenter))
         v.addSpacing(18)
-        for text, slot, suggested in ((tr("Войти в ЛитРес"), self.show_login, True),
+        for text, slot, suggested in ((tr("Войти в ЛитРес"), self.litres_lib.show_login, True),
                                       (tr("Открыть файл с компьютера"), self.on_open_file, False)):
             b = QPushButton(text)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -811,21 +789,9 @@ class App(QObject):
 
     # --- аккаунт
 
-    def on_login_state(self):
-        self._update_account_ui()
-        if self.litres.logged_in:
-            if self.current() is self.login_page:
-                self.go_back()
-                self.toast(tr("Вы вошли в ЛитРес"))
-                self.sync()
-            elif not getattr(self, "_startup_synced", False):
-                # При запуске тихо забираем свежие данные (в том числе место чтения на ЛитРес)
-                self._startup_synced = True
-                self.sync(quiet=bool(self.library.books))
-
     def _update_account_ui(self):
-        if self.bulk:
-            b = self.bulk
+        if self.litres_lib.bulk:
+            b = self.litres_lib.bulk
             self.lib_header.set_title(tr("Библиотека"), tr('Скачиваю книги: {0} из {1}', b['done'] + b['failed'], b['total']))
         elif self.litres.logged_in:
             self.account_action.setText(tr("Выйти из ЛитРес"))
@@ -835,138 +801,12 @@ class App(QObject):
             self.account_action.setText(tr("Войти в ЛитРес"))
             self.lib_header.set_title(tr("Библиотека"), tr("Вход в ЛитРес не выполнен"))
 
-    def _account_action(self):
-        self.on_logout() if self.litres.logged_in else self.show_login()
-
-    def show_login(self):
-        self.push(self.login_page)
-        if not self.litres.logged_in:
-            self.litres.page.load(QUrl(LOGIN_URL))
-
-    def on_logout(self):
-        box = QMessageBox(self.window)
-        box.setWindowTitle(tr("Выйти из ЛитРес?"))
-        box.setText(tr("<b>Выйти из ЛитРес?</b>"))
-        box.setInformativeText(tr("Скачанные книги и закладки останутся на этом компьютере."))
-        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
-        out = box.addButton(tr("Выйти"), QMessageBox.ButtonRole.DestructiveRole)
-        cls(out, "destructive")
-        box.setDefaultButton(cancel)
-        box.exec()
-        if box.clickedButton() is out:
-            self.litres.logout(lambda: (self._update_account_ui(), self.toast(tr("Вы вышли из ЛитРес"))))
-
     # --- синхронизация
 
-    def flush_folder_ops(self, then=None):
-        """Отправляет накопленные изменения папок на ЛитРес по одному."""
-        ops = self.library.folder_ops
-        if not ops or not self.litres.logged_in:
-            if then:
-                then()
-            return
-        op = ops[0]
-
-        def done(ok):
-            if ok:
-                if op in self.library.folder_ops:
-                    self.library.folder_ops.remove(op)
-                self.library.save()
-                self.flush_folder_ops(then)
-            else:
-                self.toast(tr("Не удалось изменить папку на ЛитРес — повторю при синхронизации"))
-                if then:
-                    then()
-        self.litres.folder_change(op["folder"], [op["art"]], op["op"] == "add", done)
-
     def _set_syncing(self, on):
-        self.syncing = on
+        self.litres_lib.syncing = on
         self.sync_btn.setVisible(not on)
         self.sync_spinner.setVisible(on)
-
-    def sync(self, quiet=False):
-        if self.syncing:
-            return
-        self.rescan_local()
-        if not self.litres.logged_in:
-            self.show_login()
-            return
-        self._set_syncing(True)
-        problems = []
-        state = {}
-
-        def finish(text):
-            self._set_syncing(False)
-            self.refresh_library()
-            self._fetch_details()
-            # Открытая книга могла уйти дальше на ЛитРес — подтягиваем место
-            for bid in {self.reader.book["id"] if self.reader else None, self.player.book_id} - {None}:
-                if bid in self.library.books:
-                    self.apply_remote_position(self.library.books[bid])
-            if problems:
-                text += tr(". Не получено: ") + ", ".join(problems)
-            if not quiet or problems:
-                self.toast(text)
-            self.singularity.schedule(soon=True)
-
-        def got_arts(arts, status):
-            if arts is None:
-                self._set_syncing(False)
-                if status in (401, 403):
-                    self.litres.logged_in = False
-                    self._update_account_ui()
-                    self.toast(tr("Сессия ЛитРес истекла — войдите снова"))
-                else:
-                    self.toast(tr('Не удалось получить список книг (код {0})', status))
-                return
-            # Отметки «прочитано», которые не успели уйти на ЛитРес, важнее ответа сервера
-            pending = {bid: b["finished_pending"] for bid, b in self.library.books.items()
-                       if "finished_pending" in b}
-            self.library.merge_litres(arts)
-            for bid, value in pending.items():
-                if bid in self.library.books:
-                    self.set_finished(self.library.books[bid], value)
-            state["count"] = len(arts)
-            state["has_folders_field"] = any("in_folders" in a for a in arts)
-            self.litres.fetch_list("/users/me/arts/in-progress", got_progress)
-
-        def got_progress(arts, _status):
-            if arts is None:
-                problems.append(tr("«Читаю сейчас»"))
-            else:
-                self.library.set_in_progress(a.get("id") for a in arts)
-            self.litres.fetch_folders(got_folders)
-
-        def got_folders(folders, _status):
-            if folders is None:
-                problems.append(tr("папки"))
-                finish(tr('Книг в аккаунте: {0}', state['count']))
-                return
-            if state["has_folders_field"] or not folders:
-                self.library.set_folders(folders, None)
-                finish(tr('Книг в аккаунте: {0}', state['count']))
-                return
-            members: dict[str, list[str]] = {}
-            queue = list(folders)
-
-            def next_folder():
-                if not queue:
-                    self.library.set_folders(folders, members)
-                    finish(tr('Книг в аккаунте: {0}', state['count']))
-                    return
-                fid = queue.pop(0)
-
-                def got(arts, _st):
-                    if arts is None:
-                        problems.append(tr('папка «{0}»', folders[fid]))
-                    else:
-                        members[fid] = [str(a.get("id")) for a in arts]
-                    next_folder()
-                self.litres.fetch_list(f"/folders/{fid}/arts", got)
-            next_folder()
-
-        # Сначала отправляем свои изменения папок, потом забираем состояние с сервера
-        self.flush_folder_ops(lambda: self.litres.fetch_library(got_arts))
 
     def set_finished(self, book, finished: bool, auto=False):
         """Отметка «прочитано»: локально и на ЛитРес (сразу или при следующей синхронизации)."""
@@ -1010,7 +850,7 @@ class App(QObject):
         if path:
             self.open_book(book, path)
         elif book.get("source") == "litres":
-            self.download_book(book, open_after=True)
+            self.litres_lib.download_book(book, open_after=True)
 
     def open_book(self, book, path: Path):
         fmt = book.get("format") or ""
@@ -1028,190 +868,7 @@ class App(QObject):
         self.reader = ReaderPage(self, book, path)
         self.push(self.reader)
 
-    def download_book(self, book, open_after=False, on_finished=None):
-        """on_finished(ok, текст ошибки) — для скачивания всех книг: тогда ошибки не всплывают по одной."""
-        bid = book["id"]
-        if bid in self.downloading:
-            return
-        if not self.litres.logged_in:
-            self.toast(tr("Сначала войдите в ЛитРес"))
-            self.show_login()
-            return
-        self.downloading.add(bid)
-        card = self.cards.get(bid)
-        if card:
-            card.set_download_progress(0)
-
-        def fail(text):
-            self.downloading.discard(bid)
-            if card:
-                card.set_download_progress(None)
-            if on_finished:
-                on_finished(False, text)
-            else:
-                self.toast(text)
-
-        def got_files(files, status):
-            if files is None:
-                fail(tr('Не удалось получить файлы книги (код {0})', status))
-                return
-            main = [f for f in files if not f.get("is_additional")] or files
-            if book.get("is_audio"):
-                by_type = {f.get("file_type"): f for f in main if f.get("file_type")}
-                choice = next(((t, ext) for t, ext in AUDIO_FILE_TYPES if t in by_type), None)
-                if not choice:
-                    fail(tr("Для этой аудиокниги доступны только отдельные главы — пока не поддерживается"))
-                    return
-                ftype, local = choice
-                f = by_type[ftype]
-                remote_ext = f.get("extension") or local
-                dest = books_dir() / f"{bid}.{local}"
-                try_next([f"{SITE}/download_book/{bid}/{f['id']}/{bid}.{remote_ext}",
-                          f"{SITE}/download_book_subscr/{bid}/{f['id']}/{bid}.{remote_ext}"], dest, local, local)
-                return
-            by_ext = {f.get("extension"): f for f in main if f.get("extension")}
-            fmt = next((e for e in FORMAT_ORDER if e in by_ext), None)
-            if not fmt:
-                fail(tr("У этой книги нет формата для чтения (возможно, только онлайн-чтение)"))
-                return
-            file_id = by_ext[fmt]["id"]
-            local_ext = LOCAL_SUFFIX.get(fmt, fmt)
-            dest = books_dir() / f"{bid}.{local_ext}"
-            try_next([f"{SITE}/download_book/{bid}/{file_id}/{bid}.{fmt}",
-                      f"{SITE}/download_book_subscr/{bid}/{file_id}/{bid}.{fmt}"], dest, fmt, local_ext)
-
-        def finished_ok(file_name, fmt_saved, path):
-            self.downloading.discard(bid)
-            if card:
-                card.set_download_progress(None)
-            book.update(file=file_name, format=fmt_saved)
-            self.library.save()
-            self.refresh_card(bid)
-            if on_finished:
-                on_finished(True, None)
-                return
-            if book.get("is_drm"):
-                self.toast(tr("Книга защищена DRM — она может не открыться"))
-            if open_after:
-                self.open_book(book, path)
-
-        def try_next(attempts, dest, fmt, local_ext):
-            url = attempts.pop(0)
-
-            def done(ok, err):
-                if ok and looks_like_book(dest, fmt) and book.get("is_audio") and fmt == "zip":
-                    folder = books_dir() / bid   # MP3-архив распаковываем в папку книги
-
-                    def extracted(error):
-                        if error:
-                            fail(tr('Не удалось распаковать аудиокнигу: {0}', error))
-                        else:
-                            finished_ok(folder.name, "mp3dir", folder)
-                    self._extract_zip(dest, folder, extracted)
-                    return
-                if ok and looks_like_book(dest, fmt):
-                    finished_ok(dest.name, local_ext if local_ext in READABLE | AUDIO_FORMATS else fmt, dest)
-                    return
-                dest.unlink(missing_ok=True)
-                if attempts:
-                    try_next(attempts, dest, fmt, local_ext)
-                else:
-                    fail(tr('ЛитРес не отдал файл книги ({0})', err or tr('неверный ответ')))
-
-            self.litres.download(url, dest, lambda f: card and card.set_download_progress(f), done)
-
-        self.litres.fetch_files(bid, got_files)
-
     # --- скачивание всех книг разом
-
-    @staticmethod
-    def _books_word(n, one, few, many):
-        return plural(n, one, few, many)
-
-    def _download_all_action(self):
-        if self.bulk:
-            self.bulk["queue"].clear()      # текущая книга докачается, остальные — нет
-            self.download_all_action.setText(tr("Скачивание останавливается…"))
-            return
-        if not self.litres.logged_in:
-            self.toast(tr("Сначала войдите в ЛитРес"))
-            self.show_login()
-            return
-        missing = [b for b in self.library.ordered()
-                   if b.get("source") == "litres" and b["id"] not in self.downloading
-                   and not self.library.file_path(b)]
-        texts = [b for b in missing if not b.get("is_audio")]
-        audio = [b for b in missing if b.get("is_audio")]
-        if not missing:
-            self.toast(tr("Все книги ЛитРес уже скачаны"))
-            return
-        box = QMessageBox(self.window)
-        box.setWindowTitle(tr("Скачать все книги?"))
-        box.setText(tr("<b>Скачать все книги на компьютер?</b>"))
-        box.setInformativeText(
-            tr('Не скачано: {0} {1}', len(texts), self._books_word(len(texts), 'книга', 'книги', 'книг'))
-            + (tr(' и {0} {1} (аудиокниги большие — сотни мегабайт каждая)', len(audio), self._books_word(len(audio), 'аудиокнига', 'аудиокниги', 'аудиокниг')) if audio else "")
-            + tr('.\nПапка: {0}\nКниги скачиваются по одной; остановить можно в меню.', books_dir()))
-        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
-        only_text = box.addButton(tr('Книги ({0})', len(texts)), QMessageBox.ButtonRole.AcceptRole) if texts else None
-        everything = box.addButton(tr('Всё, с аудио ({0})', len(missing)), QMessageBox.ButtonRole.AcceptRole) if audio else None
-        box.setDefaultButton(only_text or everything)
-        box.exec()
-        clicked = box.clickedButton()
-        if clicked is cancel or clicked is None:
-            return
-        queue = missing if clicked is everything else texts
-        self.bulk = {"queue": list(queue), "total": len(queue), "done": 0, "failed": 0, "errors": []}
-        self.download_all_action.setText(tr("Остановить скачивание книг"))
-        self._bulk_next()
-
-    def _bulk_next(self):
-        b = self.bulk
-        self._update_account_ui()
-        if not b["queue"]:
-            self.bulk = None
-            self.download_all_action.setText(tr("Скачать все книги…"))
-            self._update_account_ui()
-            stopped = b["done"] + b["failed"] < b["total"]
-            text = tr('Скачано {0} из {1}', b['done'], b['total']) + (tr(" — остановлено") if stopped else "")
-            if b["failed"]:
-                text += tr(', не удалось: {0} (список — в журнале)', b['failed'])
-                for title, err in b["errors"]:
-                    print(f"litres-reader: не скачалась «{title}»: {err}", file=sys.stderr, flush=True)
-            self.toast(text, timeout=8000)
-            return
-        book = b["queue"].pop(0)
-
-        def finished(ok, err):
-            if ok:
-                b["done"] += 1
-            else:
-                b["failed"] += 1
-                b["errors"].append((book.get("title") or book["id"], err))
-            # небольшая пауза между книгами — не дёргаем ЛитРес слишком часто
-            QTimer.singleShot(500, self._bulk_next)
-
-        if not self.litres.logged_in:
-            b["queue"].clear()
-            finished(False, tr("вход в ЛитРес не выполнен"))
-            return
-        self.download_book(book, on_finished=finished)
-
-    def _extract_zip(self, zip_path: Path, dest_dir: Path, on_done):
-        """Распаковка MP3-архива в отдельном потоке (архивы бывают большими)."""
-        bridge = _Bridge(self)
-        bridge.done.connect(lambda err, _x: (on_done(err), bridge.deleteLater()))
-
-        def work():
-            try:
-                with zipfile.ZipFile(zip_path) as z:
-                    z.extractall(dest_dir)
-                zip_path.unlink(missing_ok=True)
-                bridge.done.emit(None, None)
-            except (OSError, zipfile.BadZipFile) as e:
-                shutil.rmtree(dest_dir, ignore_errors=True)
-                bridge.done.emit(str(e), None)
-        threading.Thread(target=work, daemon=True).start()
 
     def show_book_menu(self, bid, pos):
         book = self.library.books.get(bid)
@@ -1227,8 +884,8 @@ class App(QObject):
         else:
             menu.addAction(tr("Отметить прочитанной"), lambda: self.set_finished(book, True))
         if book.get("source") == "litres":
-            menu.addAction(tr("Папки…"), lambda: self.show_folders_dialog(book))
-            menu.addAction(tr("Скачать заново") if downloaded else tr("Скачать"), lambda: self.download_book(book))
+            menu.addAction(tr("Папки…"), lambda: self.litres_lib.show_folders_dialog(book))
+            menu.addAction(tr("Скачать заново") if downloaded else tr("Скачать"), lambda: self.litres_lib.download_book(book))
             if book.get("url"):
                 menu.addAction(tr("Открыть на сайте ЛитРес"), lambda: QDesktopServices.openUrl(QUrl(book["url"])))
         nxt = self.library.next_in_series(book)
@@ -1260,97 +917,6 @@ class App(QObject):
 
     # --- папки
 
-    def show_folders_dialog(self, book):
-        """Окно выбора папок ЛитРес для книги: переключатель у каждой папки и новая папка."""
-        dlg = QDialog(self.window, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
-        dlg.setMinimumWidth(400)
-        v = QVBoxLayout(dlg)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-        header = HeaderBar(dlg, tr("Папки"), show_controls=False)
-        close = IconButton("window-close", tr("Закрыть"), flat=False)
-        cls(close, "wincontrol")
-        close.clicked.connect(dlg.accept)
-        header.pack_end(close)
-        v.addWidget(header)
-
-        body = QWidget()
-        b = QVBoxLayout(body)
-        b.setContentsMargins(18, 18, 18, 18)
-        b.setSpacing(6)
-        b.addWidget(label(book.get("title") or "", "heading", wrap=True))
-        desc = label(tr("Изменения сразу отправляются на ЛитРес"), "dim", wrap=True)
-        b.addWidget(desc)
-        b.addSpacing(6)
-        boxed = QFrame()
-        cls(boxed, "boxed")
-        rows = QVBoxLayout(boxed)
-        rows.setContentsMargins(0, 0, 0, 0)
-        rows.setSpacing(0)
-        b.addWidget(boxed)
-        switches = []
-
-        def add_row(fid, name):
-            row = QWidget()
-            h = QHBoxLayout(row)
-            h.setContentsMargins(14, 10, 14, 10)
-            h.addWidget(label(name), 1)
-            sw = Switch(fid in (book.get("folders") or []))
-            sw.toggled.connect(lambda on: self.set_book_folder(book, fid, on))
-            h.addWidget(sw)
-            rows.addWidget(row)
-            switches.append(sw)
-            boxed.setVisible(True)
-
-        for fid, name in self.library.folders.items():
-            add_row(fid, name)
-        if not self.library.folders:
-            boxed.setVisible(False)
-            desc.setText(tr("Папок пока нет — создайте первую ниже"))
-
-        b.addSpacing(12)
-        entry = QLineEdit()
-        entry.setPlaceholderText(tr("Новая папка — введите название и нажмите Enter"))
-        b.addWidget(entry)
-
-        def create():
-            title = entry.text().strip()
-            if not title:
-                return
-            if not self.litres.logged_in:
-                self.toast(tr("Чтобы создать папку, войдите в ЛитРес"))
-                return
-            entry.setEnabled(False)
-
-            def done(folders, new_id):
-                entry.setEnabled(True)
-                if folders is None or new_id is None:
-                    self.toast(tr("Не удалось создать папку на ЛитРес"))
-                    return
-                entry.clear()
-                self.library.set_folders(folders, None)
-                add_row(new_id, folders[new_id])
-                desc.setText(tr("Изменения сразу отправляются на ЛитРес"))
-                switches[-1].setChecked(True)   # сразу кладём книгу в новую папку
-                self._update_filter_bar()
-            self.litres.create_folder(title, done)
-        entry.returnPressed.connect(create)
-        v.addWidget(body)
-
-        frame = QFrame(dlg)
-        frame.setObjectName("popover")
-        frame.lower()
-        dlg.resizeEvent = lambda e: frame.setGeometry(dlg.rect())
-        dlg.exec()
-
-    def set_book_folder(self, book, fid, inside: bool):
-        if inside == (fid in (book.get("folders") or [])):
-            return
-        self.library.set_in_folder(book["id"], fid, inside)
-        self._update_filter_bar()
-        self._apply_filter()
-        self.flush_folder_ops()
-
     # --- аудиокниги
 
     def open_player(self, book, path: Path, autoplay=True):
@@ -1372,56 +938,10 @@ class App(QObject):
                 self.stack.removeWidget(self.player_page)
                 self.player_page.deleteLater()
             self.player_page = PlayerPage(self, book)
-            QTimer.singleShot(1500, lambda: self.apply_remote_position(book))
+            QTimer.singleShot(1500, lambda: self.litres_lib.apply_remote_position(book))
         elif not self.player.playing and autoplay:
             self.player.play()
         self.show_player()
-
-    def apply_remote_position(self, book, _attempt=0):
-        """Синхронизация места: если на ЛитРес ушли дальше — переходим туда сами.
-
-        В уведомлении есть «Вернуть»; после него это место с ЛитРес больше не применяется.
-        """
-        remote = book.get("remote_percent") or 0
-        if remote < 1 or book.get("remote_ignored") == remote:
-            return
-        bid = book["id"]
-        target = min(remote, 99.9) / 100
-
-        def ignore():
-            book["remote_ignored"] = remote
-            self.library.save()
-
-        if self.reader and self.reader.book["id"] == bid:
-            local = (self.library.progress.get(bid, {}).get("fraction") or 0) * 100
-            if remote - local < 1:
-                return
-            back_cfi = self.library.progress.get(bid, {}).get("cfi")
-            self.reader.js(f"window.reader.goToFraction({target})")
-
-            def undo():
-                ignore()
-                if back_cfi and self.reader and self.reader.book["id"] == bid:
-                    self.reader.js(f"window.reader.goTo({json.dumps(back_cfi)})")
-            self.toast(tr('Продолжаю с места на ЛитРес — {0}%', round(remote)), button=tr("Вернуть"),
-                       on_button=undo, timeout=8000)
-        elif self.player.book_id == bid:
-            if not self.player.duration():
-                # Файл ещё загружается — попробуем чуть позже
-                if _attempt < 10:
-                    QTimer.singleShot(1000, lambda: self.apply_remote_position(book, _attempt + 1))
-                return
-            if remote - self.player.fraction() * 100 < 1:
-                return
-            index, pos = self.player.index, self.player.position()
-            self.player.go_to_fraction(target)
-
-            def undo():
-                ignore()
-                if self.player.book_id == bid:
-                    self.player.go_to(index, pos)
-            self.toast(tr('Продолжаю с места на ЛитРес — {0}%', round(remote)), button=tr("Вернуть"),
-                       on_button=undo, timeout=8000)
 
     def show_player(self):
         if not self.player_page:
@@ -1499,43 +1019,7 @@ class App(QObject):
         if self.graph_page is None:
             self.graph_page = GraphPage(self)
         self.push(self.graph_page)
-        self._fetch_details()
-
-    def _fetch_details(self):
-        """Жанры и теги книг ЛитРес — их нет в списке книг, только в карточке каждой.
-        Подгружаем в фоне по одной (раз на книгу), потом обновляем граф."""
-        if self._details_running or not self.litres.logged_in:
-            return
-        todo = [b for b in self.library.books.values() if b.get("source") == "litres" and "genres" not in b]
-        if not todo:
-            return
-        self._details_running = True
-
-        def step(i):
-            if self.graph_page:
-                self.graph_page.set_fetch_progress(i, len(todo))
-            if i >= len(todo) or not self.litres.logged_in:
-                self._details_running = False
-                self.library.save()
-                if self.graph_page:
-                    self.graph_page.refresh()
-                return
-            book = todo[i]
-
-            def done(status, data):
-                if status == 200 and data:
-                    d = (data.get("payload") or {}).get("data") or {}
-                    book["genres"] = [g["name"] for g in d.get("genres") or [] if g.get("name")]
-                    book["tags"] = [t["name"] for t in d.get("tags") or [] if t.get("name")][:8]
-                elif status == 404:
-                    book["genres"], book["tags"] = [], []
-                if i % 20 == 19:
-                    self.library.save()
-                    if self.graph_page:
-                        self.graph_page.refresh()
-                QTimer.singleShot(250, lambda: step(i + 1))
-            self.litres.api_get(f"{API}/arts/{book['id']}", done)
-        step(0)
+        self.litres_lib._fetch_details()
 
     # --- свои книги и статьи
 
@@ -1765,6 +1249,29 @@ class App(QObject):
         s.status.disconnect(status.setText)
 
     # --- прочее
+
+    # --- ЛитРес: подключаемая библиотека (litres_connector.py); делегаты для других модулей
+
+    def sync(self, *args, **kwargs):
+        return self.litres_lib.sync(*args, **kwargs)
+
+    def download_book(self, *args, **kwargs):
+        return self.litres_lib.download_book(*args, **kwargs)
+
+    def show_login(self, *args, **kwargs):
+        return self.litres_lib.show_login(*args, **kwargs)
+
+    def apply_remote_position(self, *args, **kwargs):
+        return self.litres_lib.apply_remote_position(*args, **kwargs)
+
+    def apply_remote_sync(self, *args, **kwargs):
+        return self.litres_lib.apply_remote_sync(*args, **kwargs)
+
+    def download_all(self, *args, **kwargs):
+        return self.litres_lib.download_all(*args, **kwargs)
+
+    def toggle_account(self, *args, **kwargs):
+        return self.litres_lib.toggle_account(*args, **kwargs)
 
     def save_settings(self):
         if self.reader:

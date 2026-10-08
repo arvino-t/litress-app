@@ -485,7 +485,6 @@ class Library:
             self.flush()
         downloads = books_dir().resolve()
         seen: set[str] = set()
-        changed = False
         self.folder_libs = {}
         for folder in folders:
             root = Path(folder["path"]).expanduser()
@@ -529,7 +528,6 @@ class Library:
                         book = self.books[bid]
                         if any(book.get(k) != v for k, v in derived.items()):
                             book.update(derived)                   # раздел переименовали / новая версия
-                            changed = True
                         if not migrate and saved_books.get(file_rel):
                             book.update(saved_books[file_rel])
                         continue
@@ -539,13 +537,11 @@ class Library:
                         "authors": [], **derived, **saved_books.get(file_rel, {}),
                     }
                     self.order.append(bid)
-                    changed = True
         for bid in [b for b, v in self.books.items() if v.get("source") == "folder" and b not in seen]:
             del self.books[bid]              # файл удалён или папку убрали из списка
             self.progress.pop(bid, None)     # место чтения осталось в хранилище библиотеки
             if bid in self.order:
                 self.order.remove(bid)
-            changed = True
         # сохраняем всегда: при первом запуске так создаются хранилища (миграция), дальше — только изменения
         self.save()
         self.flush()

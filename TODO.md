@@ -8,16 +8,15 @@ Behaviour doesn't change; after each step, check the installed version.
   backups (create, restore, Singularity token), translation coverage (every `tr()` key is in
   `i18n_en.py`, placeholders match), all `web/` and `data/` files end up in the installed package
   (that is why the graph and PDF were broken in 0.11.0).
-- [ ] **Split the `App` class** (`app.py`, ~1600 lines, ~90 methods):
+- [ ] **Split the `App` class** (`app.py`, ~1300 lines after moving LitRes out; LitRes sync, downloads,
+  folders dialog and remote position already live in `litres_connector.py`):
   - `library.py` — the library page: filters, grid, "Continue reading";
-  - `downloads.py` — book downloads and the "Download all" queue;
-  - `sync.py` — LitRes sync, reading position from the phone;
   - the Singularity dialog → `singularity.py`, the folders dialog → its own module;
   - `App` keeps the window, navigation and the wiring between parts.
 - [ ] **Remove duplication:** theme and font lists (`reader.py` and `settings.py`); the frameless
   dialog boilerplate (statistics, folders, Singularity) → a shared widget in `widgets.py`.
-- [ ] **Public methods instead of private ones:** `app._account_action` and `_download_all_action`
-  are called from settings (`add/rename/remove_local_folder` are already public).
+- [x] **Public methods instead of private ones:** settings call `toggle_account`, `download_all`,
+  `add/rename/remove_local_folder`.
 - [ ] **Small things:** lines longer than 120 characters after the translation wrap, the
   `_books_word` wrapper around `plural`, two `except Exception` blocks to narrow down.
 

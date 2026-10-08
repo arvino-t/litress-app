@@ -325,7 +325,7 @@ class SettingsPage(QWidget):
         only = Switch(app.only_downloaded)
         only.toggled.connect(app.only_action.setChecked)
         self.row(g, tr("Показывать только скачанные книги"), only)
-        self.button(g, tr("Скачать все книги"), tr("Скачать…"), app._download_all_action,
+        self.button(g, tr("Скачать все книги"), tr("Скачать…"), app.download_all,
                     tr("Все купленные книги ЛитРес — в папку для скачанных книг"))
 
         g = self.group(tr("Папки"), tr("Где хранятся скачанные книги и где искать свои книги и статьи. "
@@ -631,7 +631,7 @@ class SettingsPage(QWidget):
         self.build()
 
     def _account(self):
-        self.app._account_action()
+        self.app.toggle_account()
 
     def _sync_account(self):
         if not hasattr(self, "account_btn"):
