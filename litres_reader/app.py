@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import __version__, backup, core, style
+from .i18n import plural, tr
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, CONFIG_FILE,
                    COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
                    API, READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
@@ -187,7 +188,7 @@ class App(QObject):
 
         self.player = AudioPlayer(self)
         self.player.finished.connect(self._on_audio_finished)
-        self.player.error.connect(lambda msg: self.toast(f"Ошибка воспроизведения: {msg}"))
+        self.player.error.connect(lambda msg: self.toast(tr('Ошибка воспроизведения: {0}', msg)))
         self.player.state_changed.connect(self._on_player_state)
         # Место прослушивания сохраняем раз в 5 секунд
         self._audio_timer = QTimer(self, interval=5000)
@@ -323,8 +324,8 @@ class App(QObject):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        self.lib_header = HeaderBar(self.window, "Библиотека", "Вход в ЛитРес не выполнен")
-        self.sync_btn = IconButton("view-refresh", "Обновить список книг с ЛитРес (F5)")
+        self.lib_header = HeaderBar(self.window, tr("Библиотека"), tr("Вход в ЛитРес не выполнен"))
+        self.sync_btn = IconButton("view-refresh", tr("Обновить список книг с ЛитРес (F5)"))
         self.sync_btn.clicked.connect(self.sync)
         self.lib_header.pack_start(self.sync_btn)
         self.sync_spinner = Spinner()
@@ -332,32 +333,32 @@ class App(QObject):
         self.lib_header.pack_start(self.sync_spinner)
         self.now_playing_btn = QPushButton()
         cls(self.now_playing_btn, "flat")
-        self.now_playing_btn.setToolTip("Вернуться к плееру")
+        self.now_playing_btn.setToolTip(tr("Вернуться к плееру"))
         self.now_playing_btn.setVisible(False)
         self.now_playing_btn.clicked.connect(self.show_player)
         self.lib_header.pack_start(self.now_playing_btn)
 
-        menu_btn = IconButton("open-menu", "Меню")
+        menu_btn = IconButton("open-menu", tr("Меню"))
         self.menu = QMenu(menu_btn)
-        self.menu.addAction("Открыть файл…", self.on_open_file)
-        self.download_all_action = self.menu.addAction("Скачать все книги…", self._download_all_action)
-        self.only_action = QAction("Только скачанные", self.menu, checkable=True)
+        self.menu.addAction(tr("Открыть файл…"), self.on_open_file)
+        self.download_all_action = self.menu.addAction(tr("Скачать все книги…"), self._download_all_action)
+        self.only_action = QAction(tr("Только скачанные"), self.menu, checkable=True)
         self.only_action.toggled.connect(self._on_only_downloaded)
         self.menu.addAction(self.only_action)
-        self.last_action = QAction("Открывать последнюю текстовую книгу при запуске", self.menu, checkable=True)
+        self.last_action = QAction(tr("Открывать последнюю текстовую книгу при запуске"), self.menu, checkable=True)
         self.last_action.setChecked(bool(self.settings.get("openLastBook", True)))
         self.last_action.toggled.connect(lambda on: (self.settings.__setitem__("openLastBook", on),
                                                      self.save_settings()))
         self.menu.addSeparator()
-        self.account_action = self.menu.addAction("Войти в ЛитРес", self._account_action)
-        self.menu.addAction("Настройки… (Ctrl+,)", self.show_settings)
-        self.menu.addAction("Статистика чтения", self.show_stats_dialog)
-        self.menu.addAction("Граф книг (Ctrl+G)", self.show_graph)
+        self.account_action = self.menu.addAction(tr("Войти в ЛитРес"), self._account_action)
+        self.menu.addAction(tr("Настройки… (Ctrl+,)"), self.show_settings)
+        self.menu.addAction(tr("Статистика чтения"), self.show_stats_dialog)
+        self.menu.addAction(tr("Граф книг (Ctrl+G)"), self.show_graph)
         self.menu.addSeparator()
-        self.menu.addAction("О приложении", self.on_about)
+        self.menu.addAction(tr("О приложении"), self.on_about)
         menu_btn.clicked.connect(lambda: self.menu.popup(menu_btn.mapToGlobal(QPoint(0, menu_btn.height() + 4))))
         self.lib_header.pack_end(menu_btn)
-        self.search_btn = IconButton("system-search", "Поиск (Ctrl+F)")
+        self.search_btn = IconButton("system-search", tr("Поиск (Ctrl+F)"))
         self.search_btn.setCheckable(True)
         self.search_btn.toggled.connect(self._on_search_toggled)
         self.lib_header.pack_end(self.search_btn)
@@ -369,7 +370,7 @@ class App(QObject):
         sl = QHBoxLayout(self.search_bar)
         sl.setContentsMargins(12, 6, 12, 6)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Название или автор")
+        self.search.setPlaceholderText(tr("Название или автор"))
         self.search.setMaximumWidth(480)
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(lambda _t: self._apply_filter())
@@ -418,12 +419,12 @@ class App(QObject):
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         v.addWidget(icon)
         v.addSpacing(12)
-        v.addWidget(label("Книг пока нет", "title1", align=Qt.AlignmentFlag.AlignCenter))
-        v.addWidget(label("Войдите в аккаунт ЛитРес, чтобы увидеть купленные книги,\n"
-                          "или откройте файл EPUB/FB2.", align=Qt.AlignmentFlag.AlignCenter))
+        v.addWidget(label(tr("Книг пока нет"), "title1", align=Qt.AlignmentFlag.AlignCenter))
+        v.addWidget(label(tr("Войдите в аккаунт ЛитРес, чтобы увидеть купленные книги,\n"
+                          "или откройте файл EPUB/FB2."), align=Qt.AlignmentFlag.AlignCenter))
         v.addSpacing(18)
-        for text, slot, suggested in (("Войти в ЛитРес", self.show_login, True),
-                                      ("Открыть файл с компьютера", self.on_open_file, False)):
+        for text, slot, suggested in ((tr("Войти в ЛитРес"), self.show_login, True),
+                                      (tr("Открыть файл с компьютера"), self.on_open_file, False)):
             b = QPushButton(text)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             cls(b, "pill", *(("suggested",) if suggested else ()))
@@ -464,7 +465,7 @@ class App(QObject):
 
         self._folder_ids: list = [None]
         self.folder_combo = QComboBox()
-        self.folder_combo.setToolTip("Папка на ЛитРес")
+        self.folder_combo.setToolTip(tr("Папка на ЛитРес"))
         self.folder_combo.currentIndexChanged.connect(self._on_folder_selected)
         h.addWidget(self.folder_combo)
 
@@ -477,7 +478,7 @@ class App(QObject):
         h.addWidget(self.type_combo)
 
         self.sort_combo = QComboBox()
-        self.sort_combo.setToolTip("Сортировка")
+        self.sort_combo.setToolTip(tr("Сортировка"))
         self.sort_combo.addItems([text for _k, text in SORT_MODES])
         keys = [k for k, _t in SORT_MODES]
         cur = self.settings.get("librarySort", "recent")
@@ -493,11 +494,11 @@ class App(QObject):
         lay = QVBoxLayout(page)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
-        self.login_header = HeaderBar(self.window, "Вход в ЛитРес", "Пароль вводится на сайте ЛитРес")
-        back = IconButton("go-previous", "Назад")
+        self.login_header = HeaderBar(self.window, tr("Вход в ЛитРес"), tr("Пароль вводится на сайте ЛитРес"))
+        back = IconButton("go-previous", tr("Назад"))
         back.clicked.connect(self.go_back)
         self.login_header.pack_start(back)
-        reload_btn = IconButton("view-refresh", "Обновить страницу")
+        reload_btn = IconButton("view-refresh", tr("Обновить страницу"))
         reload_btn.clicked.connect(lambda: self.litres.view.reload())
         self.login_header.pack_end(reload_btn)
         lay.addWidget(self.login_header)
@@ -612,7 +613,7 @@ class App(QObject):
         self._filling_folders = True
         self._folder_ids = [None, NO_FOLDER] + list(folders)
         self.folder_combo.clear()
-        self.folder_combo.addItems(["Все папки", "Без папки"] + [folders[f] for f in folders])
+        self.folder_combo.addItems([tr("Все папки"), tr("Без папки")] + [folders[f] for f in folders])
         current = self.settings.get("libraryFolder")
         self.folder_combo.setCurrentIndex(self._folder_ids.index(current) if current in self._folder_ids else 0)
         self._filling_folders = False
@@ -704,7 +705,7 @@ class App(QObject):
         if self.litres.logged_in:
             if self.current() is self.login_page:
                 self.go_back()
-                self.toast("Вы вошли в ЛитРес")
+                self.toast(tr("Вы вошли в ЛитРес"))
                 self.sync()
             elif not getattr(self, "_startup_synced", False):
                 # При запуске тихо забираем свежие данные (в том числе место чтения на ЛитРес)
@@ -714,14 +715,14 @@ class App(QObject):
     def _update_account_ui(self):
         if self.bulk:
             b = self.bulk
-            self.lib_header.set_title("Библиотека", f"Скачиваю книги: {b['done'] + b['failed']} из {b['total']}")
+            self.lib_header.set_title(tr("Библиотека"), tr('Скачиваю книги: {0} из {1}', b['done'] + b['failed'], b['total']))
         elif self.litres.logged_in:
-            self.account_action.setText("Выйти из ЛитРес")
-            self.lib_header.set_title("Библиотека", f"ЛитРес: {self.litres.user_name}"
-                                      if self.litres.user_name else "ЛитРес: вход выполнен")
+            self.account_action.setText(tr("Выйти из ЛитРес"))
+            self.lib_header.set_title(tr("Библиотека"), tr('ЛитРес: {0}', self.litres.user_name)
+                                      if self.litres.user_name else tr("ЛитРес: вход выполнен"))
         else:
-            self.account_action.setText("Войти в ЛитРес")
-            self.lib_header.set_title("Библиотека", "Вход в ЛитРес не выполнен")
+            self.account_action.setText(tr("Войти в ЛитРес"))
+            self.lib_header.set_title(tr("Библиотека"), tr("Вход в ЛитРес не выполнен"))
 
     def _account_action(self):
         self.on_logout() if self.litres.logged_in else self.show_login()
@@ -733,16 +734,16 @@ class App(QObject):
 
     def on_logout(self):
         box = QMessageBox(self.window)
-        box.setWindowTitle("Выйти из ЛитРес?")
-        box.setText("<b>Выйти из ЛитРес?</b>")
-        box.setInformativeText("Скачанные книги и закладки останутся на этом компьютере.")
-        cancel = box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
-        out = box.addButton("Выйти", QMessageBox.ButtonRole.DestructiveRole)
+        box.setWindowTitle(tr("Выйти из ЛитРес?"))
+        box.setText(tr("<b>Выйти из ЛитРес?</b>"))
+        box.setInformativeText(tr("Скачанные книги и закладки останутся на этом компьютере."))
+        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
+        out = box.addButton(tr("Выйти"), QMessageBox.ButtonRole.DestructiveRole)
         cls(out, "destructive")
         box.setDefaultButton(cancel)
         box.exec()
         if box.clickedButton() is out:
-            self.litres.logout(lambda: (self._update_account_ui(), self.toast("Вы вышли из ЛитРес")))
+            self.litres.logout(lambda: (self._update_account_ui(), self.toast(tr("Вы вышли из ЛитРес"))))
 
     # --- синхронизация
 
@@ -762,7 +763,7 @@ class App(QObject):
                 self.library.save()
                 self.flush_folder_ops(then)
             else:
-                self.toast("Не удалось изменить папку на ЛитРес — повторю при синхронизации")
+                self.toast(tr("Не удалось изменить папку на ЛитРес — повторю при синхронизации"))
                 if then:
                     then()
         self.litres.folder_change(op["folder"], [op["art"]], op["op"] == "add", done)
@@ -792,7 +793,7 @@ class App(QObject):
                 if bid in self.library.books:
                     self.apply_remote_position(self.library.books[bid])
             if problems:
-                text += ". Не получено: " + ", ".join(problems)
+                text += tr(". Не получено: ") + ", ".join(problems)
             if not quiet or problems:
                 self.toast(text)
             self.singularity.schedule(soon=True)
@@ -803,9 +804,9 @@ class App(QObject):
                 if status in (401, 403):
                     self.litres.logged_in = False
                     self._update_account_ui()
-                    self.toast("Сессия ЛитРес истекла — войдите снова")
+                    self.toast(tr("Сессия ЛитРес истекла — войдите снова"))
                 else:
-                    self.toast(f"Не удалось получить список книг (код {status})")
+                    self.toast(tr('Не удалось получить список книг (код {0})', status))
                 return
             # Отметки «прочитано», которые не успели уйти на ЛитРес, важнее ответа сервера
             pending = {bid: b["finished_pending"] for bid, b in self.library.books.items()
@@ -820,19 +821,19 @@ class App(QObject):
 
         def got_progress(arts, _status):
             if arts is None:
-                problems.append("«Читаю сейчас»")
+                problems.append(tr("«Читаю сейчас»"))
             else:
                 self.library.set_in_progress(a.get("id") for a in arts)
             self.litres.fetch_folders(got_folders)
 
         def got_folders(folders, _status):
             if folders is None:
-                problems.append("папки")
-                finish(f"Книг в аккаунте: {state['count']}")
+                problems.append(tr("папки"))
+                finish(tr('Книг в аккаунте: {0}', state['count']))
                 return
             if state["has_folders_field"] or not folders:
                 self.library.set_folders(folders, None)
-                finish(f"Книг в аккаунте: {state['count']}")
+                finish(tr('Книг в аккаунте: {0}', state['count']))
                 return
             members: dict[str, list[str]] = {}
             queue = list(folders)
@@ -840,13 +841,13 @@ class App(QObject):
             def next_folder():
                 if not queue:
                     self.library.set_folders(folders, members)
-                    finish(f"Книг в аккаунте: {state['count']}")
+                    finish(tr('Книг в аккаунте: {0}', state['count']))
                     return
                 fid = queue.pop(0)
 
                 def got(arts, _st):
                     if arts is None:
-                        problems.append(f"папка «{folders[fid]}»")
+                        problems.append(tr('папка «{0}»', folders[fid]))
                     else:
                         members[fid] = [str(a.get("id")) for a in arts]
                     next_folder()
@@ -867,7 +868,7 @@ class App(QObject):
         if finished:
             self.library.mark_finished_stat(book["id"])
         if auto:
-            self._toast_finished(book, "Книга дочитана — отмечена прочитанной")
+            self._toast_finished(book, tr("Книга дочитана — отмечена прочитанной"))
         if book.get("source") != "litres" or not self.litres.logged_in:
             return
 
@@ -876,14 +877,14 @@ class App(QObject):
                 book.pop("finished_pending", None)
                 self.library.save()
             else:
-                self.toast("Не удалось обновить отметку на ЛитРес — повторю при синхронизации")
+                self.toast(tr("Не удалось обновить отметку на ЛитРес — повторю при синхронизации"))
         self.litres.set_finished(book["id"], finished, done)
 
     def _toast_finished(self, book, text):
         """Уведомление о дочитанной книге; если есть следующая в серии — кнопка «Дальше»."""
         nxt = self.library.next_in_series(book)
         if nxt:
-            self.toast(f"{text}. Следующая в серии: «{nxt.get('title')}»", button="Открыть",
+            self.toast(tr('{0}. Следующая в серии: «{1}»', text, nxt.get('title')), button=tr("Открыть"),
                        on_button=lambda: self.on_book_activated(nxt["id"]), timeout=10000)
         else:
             self.toast(text)
@@ -922,7 +923,7 @@ class App(QObject):
         if bid in self.downloading:
             return
         if not self.litres.logged_in:
-            self.toast("Сначала войдите в ЛитРес")
+            self.toast(tr("Сначала войдите в ЛитРес"))
             self.show_login()
             return
         self.downloading.add(bid)
@@ -941,14 +942,14 @@ class App(QObject):
 
         def got_files(files, status):
             if files is None:
-                fail(f"Не удалось получить файлы книги (код {status})")
+                fail(tr('Не удалось получить файлы книги (код {0})', status))
                 return
             main = [f for f in files if not f.get("is_additional")] or files
             if book.get("is_audio"):
                 by_type = {f.get("file_type"): f for f in main if f.get("file_type")}
                 choice = next(((t, ext) for t, ext in AUDIO_FILE_TYPES if t in by_type), None)
                 if not choice:
-                    fail("Для этой аудиокниги доступны только отдельные главы — пока не поддерживается")
+                    fail(tr("Для этой аудиокниги доступны только отдельные главы — пока не поддерживается"))
                     return
                 ftype, local = choice
                 f = by_type[ftype]
@@ -960,7 +961,7 @@ class App(QObject):
             by_ext = {f.get("extension"): f for f in main if f.get("extension")}
             fmt = next((e for e in FORMAT_ORDER if e in by_ext), None)
             if not fmt:
-                fail("У этой книги нет формата для чтения (возможно, только онлайн-чтение)")
+                fail(tr("У этой книги нет формата для чтения (возможно, только онлайн-чтение)"))
                 return
             file_id = by_ext[fmt]["id"]
             local_ext = LOCAL_SUFFIX.get(fmt, fmt)
@@ -979,7 +980,7 @@ class App(QObject):
                 on_finished(True, None)
                 return
             if book.get("is_drm"):
-                self.toast("Книга защищена DRM — она может не открыться")
+                self.toast(tr("Книга защищена DRM — она может не открыться"))
             if open_after:
                 self.open_book(book, path)
 
@@ -992,7 +993,7 @@ class App(QObject):
 
                     def extracted(error):
                         if error:
-                            fail(f"Не удалось распаковать аудиокнигу: {error}")
+                            fail(tr('Не удалось распаковать аудиокнигу: {0}', error))
                         else:
                             finished_ok(folder.name, "mp3dir", folder)
                     self._extract_zip(dest, folder, extracted)
@@ -1004,7 +1005,7 @@ class App(QObject):
                 if attempts:
                     try_next(attempts, dest, fmt, local_ext)
                 else:
-                    fail(f"ЛитРес не отдал файл книги ({err or 'неверный ответ'})")
+                    fail(tr('ЛитРес не отдал файл книги ({0})', err or tr('неверный ответ')))
 
             self.litres.download(url, dest, lambda f: card and card.set_download_progress(f), done)
 
@@ -1014,17 +1015,15 @@ class App(QObject):
 
     @staticmethod
     def _books_word(n, one, few, many):
-        if n % 10 == 1 and n % 100 != 11:
-            return one
-        return few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+        return plural(n, one, few, many)
 
     def _download_all_action(self):
         if self.bulk:
             self.bulk["queue"].clear()      # текущая книга докачается, остальные — нет
-            self.download_all_action.setText("Скачивание останавливается…")
+            self.download_all_action.setText(tr("Скачивание останавливается…"))
             return
         if not self.litres.logged_in:
-            self.toast("Сначала войдите в ЛитРес")
+            self.toast(tr("Сначала войдите в ЛитРес"))
             self.show_login()
             return
         missing = [b for b in self.library.ordered()
@@ -1033,19 +1032,18 @@ class App(QObject):
         texts = [b for b in missing if not b.get("is_audio")]
         audio = [b for b in missing if b.get("is_audio")]
         if not missing:
-            self.toast("Все книги ЛитРес уже скачаны")
+            self.toast(tr("Все книги ЛитРес уже скачаны"))
             return
         box = QMessageBox(self.window)
-        box.setWindowTitle("Скачать все книги?")
-        box.setText("<b>Скачать все книги на компьютер?</b>")
+        box.setWindowTitle(tr("Скачать все книги?"))
+        box.setText(tr("<b>Скачать все книги на компьютер?</b>"))
         box.setInformativeText(
-            f"Не скачано: {len(texts)} {self._books_word(len(texts), 'книга', 'книги', 'книг')}"
-            + (f" и {len(audio)} {self._books_word(len(audio), 'аудиокнига', 'аудиокниги', 'аудиокниг')}"
-               " (аудиокниги большие — сотни мегабайт каждая)" if audio else "")
-            + f".\nПапка: {books_dir()}\nКниги скачиваются по одной; остановить можно в меню.")
-        cancel = box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
-        only_text = box.addButton(f"Книги ({len(texts)})", QMessageBox.ButtonRole.AcceptRole) if texts else None
-        everything = box.addButton(f"Всё, с аудио ({len(missing)})", QMessageBox.ButtonRole.AcceptRole) if audio else None
+            tr('Не скачано: {0} {1}', len(texts), self._books_word(len(texts), 'книга', 'книги', 'книг'))
+            + (tr(' и {0} {1} (аудиокниги большие — сотни мегабайт каждая)', len(audio), self._books_word(len(audio), 'аудиокнига', 'аудиокниги', 'аудиокниг')) if audio else "")
+            + tr('.\nПапка: {0}\nКниги скачиваются по одной; остановить можно в меню.', books_dir()))
+        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
+        only_text = box.addButton(tr('Книги ({0})', len(texts)), QMessageBox.ButtonRole.AcceptRole) if texts else None
+        everything = box.addButton(tr('Всё, с аудио ({0})', len(missing)), QMessageBox.ButtonRole.AcceptRole) if audio else None
         box.setDefaultButton(only_text or everything)
         box.exec()
         clicked = box.clickedButton()
@@ -1053,7 +1051,7 @@ class App(QObject):
             return
         queue = missing if clicked is everything else texts
         self.bulk = {"queue": list(queue), "total": len(queue), "done": 0, "failed": 0, "errors": []}
-        self.download_all_action.setText("Остановить скачивание книг")
+        self.download_all_action.setText(tr("Остановить скачивание книг"))
         self._bulk_next()
 
     def _bulk_next(self):
@@ -1061,12 +1059,12 @@ class App(QObject):
         self._update_account_ui()
         if not b["queue"]:
             self.bulk = None
-            self.download_all_action.setText("Скачать все книги…")
+            self.download_all_action.setText(tr("Скачать все книги…"))
             self._update_account_ui()
             stopped = b["done"] + b["failed"] < b["total"]
-            text = f"Скачано {b['done']} из {b['total']}" + (" — остановлено" if stopped else "")
+            text = tr('Скачано {0} из {1}', b['done'], b['total']) + (tr(" — остановлено") if stopped else "")
             if b["failed"]:
-                text += f", не удалось: {b['failed']} (список — в журнале)"
+                text += tr(', не удалось: {0} (список — в журнале)', b['failed'])
                 for title, err in b["errors"]:
                     print(f"litres-reader: не скачалась «{title}»: {err}", file=sys.stderr, flush=True)
             self.toast(text, timeout=8000)
@@ -1084,7 +1082,7 @@ class App(QObject):
 
         if not self.litres.logged_in:
             b["queue"].clear()
-            finished(False, "вход в ЛитРес не выполнен")
+            finished(False, tr("вход в ЛитРес не выполнен"))
             return
         self.download_book(book, on_finished=finished)
 
@@ -1111,27 +1109,27 @@ class App(QObject):
         menu = QMenu(self.window)
         downloaded = self.library.file_path(book) is not None
         if downloaded:
-            menu.addAction("Слушать" if book.get("is_audio") else "Читать",
+            menu.addAction(tr("Слушать") if book.get("is_audio") else tr("Читать"),
                            lambda: self.on_book_activated(bid))
         if book.get("finished"):
-            menu.addAction("Снять отметку «Прочитано»", lambda: self.set_finished(book, False))
+            menu.addAction(tr("Снять отметку «Прочитано»"), lambda: self.set_finished(book, False))
         else:
-            menu.addAction("Отметить прочитанной", lambda: self.set_finished(book, True))
+            menu.addAction(tr("Отметить прочитанной"), lambda: self.set_finished(book, True))
         if book.get("source") == "litres":
-            menu.addAction("Папки…", lambda: self.show_folders_dialog(book))
-            menu.addAction("Скачать заново" if downloaded else "Скачать", lambda: self.download_book(book))
+            menu.addAction(tr("Папки…"), lambda: self.show_folders_dialog(book))
+            menu.addAction(tr("Скачать заново") if downloaded else tr("Скачать"), lambda: self.download_book(book))
             if book.get("url"):
-                menu.addAction("Открыть на сайте ЛитРес", lambda: QDesktopServices.openUrl(QUrl(book["url"])))
+                menu.addAction(tr("Открыть на сайте ЛитРес"), lambda: QDesktopServices.openUrl(QUrl(book["url"])))
         nxt = self.library.next_in_series(book)
         if nxt:
-            menu.addAction(f"Следующая в серии: {nxt.get('title')}", lambda: self.on_book_activated(nxt["id"]))
+            menu.addAction(tr('Следующая в серии: {0}', nxt.get('title')), lambda: self.on_book_activated(nxt["id"]))
         if book.get("source") == "folder":
             # своя книга: файл остаётся на месте, удалять его из читалки не даём
-            menu.addAction("Показать файл в папке", lambda: QDesktopServices.openUrl(
+            menu.addAction(tr("Показать файл в папке"), lambda: QDesktopServices.openUrl(
                 QUrl.fromLocalFile(str(Path(book["path"]).parent))))
         elif downloaded or book.get("source") == "local":
             menu.addSeparator()
-            menu.addAction("Удалить с устройства", lambda: self.remove_book_file(bid))
+            menu.addAction(tr("Удалить с устройства"), lambda: self.remove_book_file(bid))
         menu.popup(pos)
 
     def remove_book_file(self, bid):
@@ -1158,8 +1156,8 @@ class App(QObject):
         v = QVBoxLayout(dlg)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
-        header = HeaderBar(dlg, "Папки", show_controls=False)
-        close = IconButton("window-close", "Закрыть", flat=False)
+        header = HeaderBar(dlg, tr("Папки"), show_controls=False)
+        close = IconButton("window-close", tr("Закрыть"), flat=False)
         cls(close, "wincontrol")
         close.clicked.connect(dlg.accept)
         header.pack_end(close)
@@ -1170,7 +1168,7 @@ class App(QObject):
         b.setContentsMargins(18, 18, 18, 18)
         b.setSpacing(6)
         b.addWidget(label(book.get("title") or "", "heading", wrap=True))
-        desc = label("Изменения сразу отправляются на ЛитРес", "dim", wrap=True)
+        desc = label(tr("Изменения сразу отправляются на ЛитРес"), "dim", wrap=True)
         b.addWidget(desc)
         b.addSpacing(6)
         boxed = QFrame()
@@ -1197,11 +1195,11 @@ class App(QObject):
             add_row(fid, name)
         if not self.library.folders:
             boxed.setVisible(False)
-            desc.setText("Папок пока нет — создайте первую ниже")
+            desc.setText(tr("Папок пока нет — создайте первую ниже"))
 
         b.addSpacing(12)
         entry = QLineEdit()
-        entry.setPlaceholderText("Новая папка — введите название и нажмите Enter")
+        entry.setPlaceholderText(tr("Новая папка — введите название и нажмите Enter"))
         b.addWidget(entry)
 
         def create():
@@ -1209,19 +1207,19 @@ class App(QObject):
             if not title:
                 return
             if not self.litres.logged_in:
-                self.toast("Чтобы создать папку, войдите в ЛитРес")
+                self.toast(tr("Чтобы создать папку, войдите в ЛитРес"))
                 return
             entry.setEnabled(False)
 
             def done(folders, new_id):
                 entry.setEnabled(True)
                 if folders is None or new_id is None:
-                    self.toast("Не удалось создать папку на ЛитРес")
+                    self.toast(tr("Не удалось создать папку на ЛитРес"))
                     return
                 entry.clear()
                 self.library.set_folders(folders, None)
                 add_row(new_id, folders[new_id])
-                desc.setText("Изменения сразу отправляются на ЛитРес")
+                desc.setText(tr("Изменения сразу отправляются на ЛитРес"))
                 switches[-1].setChecked(True)   # сразу кладём книгу в новую папку
                 self._update_filter_bar()
             self.litres.create_folder(title, done)
@@ -1250,7 +1248,7 @@ class App(QObject):
         if self.player.book_id != book["id"]:
             tracks = audio_tracks(path)
             if not tracks:
-                self.toast("В аудиокниге не найдено звуковых файлов")
+                self.toast(tr("В аудиокниге не найдено звуковых файлов"))
                 return
             self.save_audio_progress()
             saved = self.library.progress.get(book["id"], {})
@@ -1294,7 +1292,7 @@ class App(QObject):
                 ignore()
                 if back_cfi and self.reader and self.reader.book["id"] == bid:
                     self.reader.js(f"window.reader.goTo({json.dumps(back_cfi)})")
-            self.toast(f"Продолжаю с места на ЛитРес — {round(remote)}%", button="Вернуть",
+            self.toast(tr('Продолжаю с места на ЛитРес — {0}%', round(remote)), button=tr("Вернуть"),
                        on_button=undo, timeout=8000)
         elif self.player.book_id == bid:
             if not self.player.duration():
@@ -1311,7 +1309,7 @@ class App(QObject):
                 ignore()
                 if self.player.book_id == bid:
                     self.player.go_to(index, pos)
-            self.toast(f"Продолжаю с места на ЛитРес — {round(remote)}%", button="Вернуть",
+            self.toast(tr('Продолжаю с места на ЛитРес — {0}%', round(remote)), button=tr("Вернуть"),
                        on_button=undo, timeout=8000)
 
     def show_player(self):
@@ -1350,7 +1348,7 @@ class App(QObject):
         self.library.set_audio_progress(book["id"], len(self.player.tracks) - 1, 0.0, 1.0)
         if not book.get("finished"):
             self.set_finished(book, True)
-            self._toast_finished(book, "Аудиокнига прослушана — отмечена прочитанной")
+            self._toast_finished(book, tr("Аудиокнига прослушана — отмечена прочитанной"))
 
     # --- открытие своих файлов
 
@@ -1358,7 +1356,7 @@ class App(QObject):
         try:
             bid = self.library.add_local(path)
         except OSError as e:
-            self.toast(f"Не удалось открыть файл: {e.strerror}")
+            self.toast(tr('Не удалось открыть файл: {0}', e.strerror))
             return
         self.refresh_library()
         book = self.library.books[bid]
@@ -1367,7 +1365,7 @@ class App(QObject):
     def choose_books_dir(self):
         """Выбор папки для скачанных книг; уже скачанные переносятся туда же."""
         current = books_dir()
-        path = QFileDialog.getExistingDirectory(self.window, f"Папка для книг (сейчас: {current})", str(current))
+        path = QFileDialog.getExistingDirectory(self.window, tr('Папка для книг (сейчас: {0})', current), str(current))
         if not path:
             return
         new_dir = Path(path)
@@ -1379,10 +1377,10 @@ class App(QObject):
         self.save_settings()
         self.refresh_library()
         if errors:
-            self.toast(f"Книги теперь в {new_dir}. Перенесено: {moved}, не удалось: {len(errors)} — "
+            self.toast(tr('Книги теперь в {0}. Перенесено: {1}, не удалось: {2} — ', new_dir, moved, len(errors))
                        + errors[0], timeout=10000)
         else:
-            self.toast(f"Книги теперь в {new_dir}" + (f" — перенесено файлов: {moved}" if moved else ""))
+            self.toast(tr('Книги теперь в {0}', new_dir) + (tr(' — перенесено файлов: {0}', moved) if moved else ""))
 
     # --- граф книг
 
@@ -1443,7 +1441,7 @@ class App(QObject):
         self.refresh_library()
         QTimer.singleShot(500, self._make_pdf_covers)
         if report:
-            self.toast(f"Своих книг и статей: {n}")
+            self.toast(tr('Своих книг и статей: {0}', n))
 
     def _set_type_filter(self, key):
         keys = [k for k, _t in TYPE_FILTERS]
@@ -1451,7 +1449,7 @@ class App(QObject):
 
     def _add_local_folder(self):
         start = self.local_folders()[0] if self.local_folders() else str(Path.home())
-        path = QFileDialog.getExistingDirectory(self.window, "Папка со своими книгами и статьями", start)
+        path = QFileDialog.getExistingDirectory(self.window, tr("Папка со своими книгами и статьями"), start)
         if path and path not in self.local_folders():
             self.settings["localFolders"] = self.local_folders() + [path]
             self.save_settings()
@@ -1496,8 +1494,8 @@ class App(QObject):
         QTimer.singleShot(30, self._make_pdf_covers)
 
     def on_open_file(self):
-        path, _ = QFileDialog.getOpenFileName(self.window, "Открыть книгу", str(Path.home()),
-                                              f"Электронные книги ({EBOOK_PATTERNS})")
+        path, _ = QFileDialog.getOpenFileName(self.window, tr("Открыть книгу"), str(Path.home()),
+                                              tr('Электронные книги ({0})', EBOOK_PATTERNS))
         if path:
             self.import_and_open(Path(path))
 
@@ -1531,7 +1529,7 @@ class App(QObject):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
         header = HeaderBar(dlg, "Singularity", show_controls=False)
-        close = IconButton("window-close", "Закрыть", flat=False)
+        close = IconButton("window-close", tr("Закрыть"), flat=False)
         cls(close, "wincontrol")
         close.clicked.connect(dlg.accept)
         header.pack_end(close)
@@ -1541,14 +1539,14 @@ class App(QObject):
         b = QVBoxLayout(body)
         b.setContentsMargins(18, 18, 18, 18)
         b.setSpacing(8)
-        intro = label("Книги, прогресс и ежедневное чтение — в планировщике SingularityApp.<br>"
+        intro = label(tr("Книги, прогресс и ежедневное чтение — в планировщике SingularityApp.<br>"
                       "Токен создаётся в <a href='https://me.singularity-app.com'>личном кабинете</a> → "
-                      "«Доступ к API» (нужен доступ к задачам, проектам и привычкам).", wrap=True, rich=True)
+                      "«Доступ к API» (нужен доступ к задачам, проектам и привычкам)."), wrap=True, rich=True)
         intro.setOpenExternalLinks(True)
         b.addWidget(intro)
         token = QLineEdit(s.state.get("token", ""))
         token.setEchoMode(QLineEdit.EchoMode.Password)
-        token.setPlaceholderText("API-токен Singularity")
+        token.setPlaceholderText(tr("API-токен Singularity"))
         b.addWidget(token)
         b.addSpacing(6)
 
@@ -1559,10 +1557,10 @@ class App(QObject):
         rows.setSpacing(0)
         switches = {}
         for key, title, hint in (
-                ("reading", "Задачи «Читаю»", "Начатые книги — задачи в проекте «Книги», дочитанные закрываются"),
-                ("progress", "Прогресс в задаче", "Процент и текущая глава в заметке задачи"),
-                ("wishlist", "«Хочу прочитать»", "Непрочитанные книги — задачи в отдельном проекте"),
-                ("daily", "Ежедневное чтение", "Привычка отмечается сама, когда за день набралось N минут")):
+                ("reading", tr("Задачи «Читаю»"), tr("Начатые книги — задачи в проекте «Книги», дочитанные закрываются")),
+                ("progress", tr("Прогресс в задаче"), tr("Процент и текущая глава в заметке задачи")),
+                ("wishlist", tr("«Хочу прочитать»"), tr("Непрочитанные книги — задачи в отдельном проекте")),
+                ("daily", tr("Ежедневное чтение"), tr("Привычка отмечается сама, когда за день набралось N минут"))):
             row = QWidget()
             h = QHBoxLayout(row)
             h.setContentsMargins(14, 8, 14, 8)
@@ -1578,21 +1576,21 @@ class App(QObject):
         b.addWidget(boxed)
 
         goal_row = QHBoxLayout()
-        goal_row.addWidget(label("Цель чтения в день, минут"), 1)
+        goal_row.addWidget(label(tr("Цель чтения в день, минут")), 1)
         goal = QSpinBox()
         goal.setRange(5, 240)
         goal.setSingleStep(5)
         goal.setValue(int(s.state.get("dailyMinutes") or 20))
         goal_row.addWidget(goal)
         b.addLayout(goal_row)
-        b.addWidget(label(f"Сегодня прочитано и прослушано: {s.today_minutes()} мин", "dim", "caption"))
+        b.addWidget(label(tr('Сегодня прочитано и прослушано: {0} мин', s.today_minutes()), "dim", "caption"))
 
         status = label("", "dim", wrap=True)
         b.addWidget(status)
         s.status.connect(status.setText)
         buttons = QHBoxLayout()
-        disconnect = QPushButton("Отключить")
-        run = QPushButton("Проверить и синхронизировать")
+        disconnect = QPushButton(tr("Отключить"))
+        run = QPushButton(tr("Проверить и синхронизировать"))
         cls(run, "suggested")
         buttons.addWidget(disconnect)
         buttons.addStretch()
@@ -1608,14 +1606,14 @@ class App(QObject):
         def check_and_sync():
             apply()
             if not s.enabled:
-                status.setText("Вставьте токен")
+                status.setText(tr("Вставьте токен"))
                 return
-            status.setText("Проверяю токен…")
+            status.setText(tr("Проверяю токен…"))
             run.setEnabled(False)
 
             def checked(ok, text):
                 run.setEnabled(True)
-                status.setText(text + ("; синхронизирую…" if ok else ""))
+                status.setText(text + (tr("; синхронизирую…") if ok else ""))
                 if ok:
                     s.sync()
             s.check_token(checked)
@@ -1623,7 +1621,7 @@ class App(QObject):
         def off():
             s.configure(token="")
             token.clear()
-            status.setText("Синхронизация с Singularity отключена")
+            status.setText(tr("Синхронизация с Singularity отключена"))
         run.clicked.connect(check_and_sync)
         disconnect.clicked.connect(off)
 
@@ -1665,12 +1663,12 @@ class App(QObject):
 
     def on_about(self):
         box = QMessageBox(self.window)
-        box.setWindowTitle("О приложении")
+        box.setWindowTitle(tr("О приложении"))
         box.setIconPixmap(QIcon(str(APP_ICON)).pixmap(96, 96))
-        box.setText(f"<h3>{APP_NAME}</h3><p>Версия {__version__}</p>")
-        box.setInformativeText("Чтение и прослушивание книг, купленных на ЛитРес.<br>"
+        box.setText(tr('<h3>{0}</h3><p>Версия {1}</p>', APP_NAME, __version__))
+        box.setInformativeText(tr("Чтение и прослушивание книг, купленных на ЛитРес.<br>"
                                "Вход выполняется на сайте ЛитРес; приложение не хранит пароль.<br><br>"
-                               "Лицензия MIT. Движок чтения — foliate-js (MIT).")
+                               "Лицензия MIT. Движок чтения — foliate-js (MIT)."))
         box.exec()
 
     # --- резервные копии
@@ -1750,7 +1748,7 @@ def main(argv=None):
     app = App(qapp)
     app.window.show()
     if restored:
-        QTimer.singleShot(800, lambda: app.toast("Данные восстановлены из резервной копии", timeout=6000))
+        QTimer.singleShot(800, lambda: app.toast(tr("Данные восстановлены из резервной копии"), timeout=6000))
 
     server = QLocalServer()
     QLocalServer.removeServer(_server_name())

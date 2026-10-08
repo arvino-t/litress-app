@@ -18,6 +18,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from .core import (API, CACHE_DIR, DROP_HEADERS, HEADERS_FILE, SESSION_DIR, SITE, WEB_DIR, load_json,
                    log, save_json)
+from .i18n import tr
 
 PREFIX = "⁣LITREADER:"   # метка наших сообщений в консоли страницы
 
@@ -233,7 +234,7 @@ class LitresSession(QObject):
             for f in (data.get("payload") or {}).get("data") or []:
                 fid = f.get("folder_id", f.get("id"))
                 if fid is not None:
-                    folders[str(fid)] = f.get("title") or f.get("name") or f"Папка {fid}"
+                    folders[str(fid)] = f.get("title") or f.get("name") or tr('Папка {0}', fid)
             callback(folders, status)
         self.api_get(f"{API}/users/me/folders", done)
 
@@ -324,7 +325,7 @@ class LitresSession(QObject):
                 job["done"](True, None)
             else:
                 part.unlink(missing_ok=True)
-                job["done"](False, req.interruptReasonString() or "прервано")
+                job["done"](False, req.interruptReasonString() or tr("прервано"))
 
         req.receivedBytesChanged.connect(progress)
         req.isFinishedChanged.connect(finished)

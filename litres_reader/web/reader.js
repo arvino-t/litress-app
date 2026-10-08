@@ -214,10 +214,16 @@ const onRelocate = ({ detail }) => {
         atEnd: !!view?.renderer?.atEnd })
 }
 
-const open = async ({ url, name, cfi, fraction, settings: s }) => {
+// Перевод строк: словарь {русский: перевод} приходит из Python вместе с параметрами книги
+let I18N = {}
+const T = (s, ...a) => (I18N[s] ?? s).replace(/\{(\d+)\}/g, (_, i) => a[i])
+
+const open = async ({ url, name, cfi, fraction, settings: s, i18n }) => {
+    I18N = i18n || {}
+    $('#loading').textContent = T('Открываю книгу…')
     try {
         const resp = await fetch(url)
-        if (!resp.ok) throw new Error(`Не удалось прочитать файл (${resp.status})`)
+        if (!resp.ok) throw new Error(T('Не удалось прочитать файл ({0})', resp.status))
         const file = new File([await resp.blob()], name)
 
         view = document.createElement('foliate-view')
@@ -248,7 +254,7 @@ const open = async ({ url, name, cfi, fraction, settings: s }) => {
         $('#loading').remove()
     } catch (err) {
         console.error(err)
-        $('#loading').textContent = `Не удалось открыть книгу: ${err.message ?? err}`
+        $('#loading').textContent = T('Не удалось открыть книгу: {0}', err.message ?? err)
         $('#loading').classList.add('error')
         post({ type: 'error', message: String(err.message ?? err) })
     }

@@ -8,23 +8,16 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
 
 from . import style
+from .i18n import plural, tr
 from .widgets import HeaderBar, IconButton, cls, label
 
 
 def minutes_word(n: int) -> str:
-    if n % 10 == 1 and n % 100 != 11:
-        return "минута"
-    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
-        return "минуты"
-    return "минут"
+    return plural(n, "минута", "минуты", "минут")
 
 
 def days_word(n: int) -> str:
-    if n % 10 == 1 and n % 100 != 11:
-        return "день"
-    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
-        return "дня"
-    return "дней"
+    return plural(n, "день", "дня", "дней")
 
 
 def streak(days: dict) -> int:
@@ -126,8 +119,8 @@ def show_stats(app):
     outer = QVBoxLayout(dlg)
     outer.setContentsMargins(0, 0, 0, 0)
     outer.setSpacing(0)
-    header = HeaderBar(dlg, "Статистика чтения", show_controls=False)
-    close = IconButton("window-close", "Закрыть", flat=False)
+    header = HeaderBar(dlg, tr("Статистика чтения"), show_controls=False)
+    close = IconButton("window-close", tr("Закрыть"), flat=False)
     cls(close, "wincontrol")
     close.clicked.connect(dlg.accept)
     header.pack_end(close)
@@ -139,24 +132,24 @@ def show_stats(app):
     b.setSpacing(14)
     tiles = QGridLayout()
     tiles.setSpacing(10)
-    phone = lambda m: f"\nиз них на телефоне ~{m}" if m else ""
-    tiles.addWidget(tile(f"{today_min}", f"{minutes_word(today_min)} сегодня{phone(today_remote)}"), 0, 0)
-    tiles.addWidget(tile(f"{week}", f"{minutes_word(week)} за неделю{phone(week_remote)}"), 0, 1)
-    tiles.addWidget(tile(f"{st}", f"{days_word(st)} подряд"), 0, 2)
-    tiles.addWidget(tile(f"{finished_month}", f"дочитано в этом месяце · всего {total_finished}"), 0, 3)
+    phone = lambda m: tr('\nиз них на телефоне ~{0}', m) if m else ""
+    tiles.addWidget(tile(f"{today_min}", tr('{0} сегодня{1}', minutes_word(today_min), phone(today_remote))), 0, 0)
+    tiles.addWidget(tile(f"{week}", tr('{0} за неделю{1}', minutes_word(week), phone(week_remote))), 0, 1)
+    tiles.addWidget(tile(f"{st}", tr('{0} подряд', days_word(st))), 0, 2)
+    tiles.addWidget(tile(f"{finished_month}", tr('дочитано в этом месяце · всего {0}', total_finished)), 0, 3)
     b.addLayout(tiles)
 
-    b.addWidget(label("Последние две недели, минут в день", "heading"))
+    b.addWidget(label(tr("Последние две недели, минут в день"), "heading"))
     b.addWidget(BarChart(days, remote))
     if any(remote.values()):
-        b.addWidget(label("Светлая часть столбика — чтение на телефоне или сайте ЛитРес. "
-                          "Оценка по приросту процента: текст — ~1300 знаков в минуту, аудио — по длительности.",
+        b.addWidget(label(tr("Светлая часть столбика — чтение на телефоне или сайте ЛитРес. "
+                          "Оценка по приросту процента: текст — ~1300 знаков в минуту, аудио — по длительности."),
                           "dim", "caption", wrap=True))
 
     top = sorted(lib.stats.get("books", {}).items(), key=lambda kv: -kv[1])[:5]
     top = [(lib.books[bid], sec) for bid, sec in top if bid in lib.books]
     if top:
-        b.addWidget(label("Больше всего времени", "heading"))
+        b.addWidget(label(tr("Больше всего времени"), "heading"))
         box = QFrame()
         cls(box, "boxed")
         rows = QVBoxLayout(box)
@@ -168,13 +161,13 @@ def show_stats(app):
             h.setContentsMargins(14, 8, 14, 8)
             h.addWidget(label(book.get("title") or "", wrap=True), 1)
             if book.get("is_audio"):
-                h.addWidget(label("аудио", "dim", "caption"))
+                h.addWidget(label(tr("аудио"), "dim", "caption"))
             hours, mins = divmod(int(sec) // 60, 60)
-            h.addWidget(label(f"{hours} ч {mins} мин" if hours else f"{mins} мин", "dim"))
+            h.addWidget(label(tr('{0} ч {1} мин', hours, mins) if hours else tr('{0} мин', mins), "dim"))
             rows.addWidget(row)
         b.addWidget(box)
     else:
-        b.addWidget(label("Пока пусто — статистика копится, пока вы читаете и слушаете.", "dim", wrap=True))
+        b.addWidget(label(tr("Пока пусто — статистика копится, пока вы читаете и слушаете."), "dim", wrap=True))
     outer.addWidget(body)
 
     frame = QFrame(dlg)

@@ -12,8 +12,10 @@ from pathlib import Path
 
 from PySide6.QtCore import QTimer
 
+from .i18n import tr
+
 APP_ID = "ru.local.LitresReader"
-APP_NAME = "Читалка ЛитРес"
+APP_NAME = tr("Читалка ЛитРес")
 SCHEME = "litreader"
 
 PKG_DIR = Path(__file__).resolve().parent
@@ -120,6 +122,8 @@ DEFAULT_SETTINGS = {
     "debugLog": False,
     # Последняя открытая вкладка настроек
     "settingsTab": "general",
+    # Язык интерфейса: auto (как в системе) / ru / en — применяется после перезапуска
+    "language": "auto",
     # Резервные копии: папка (None — Документы/Backups/litres-reader), off / daily / weekly,
     # сколько хранить, время последней копии, класть ли в копию токен Singularity
     "backupDir": None,
@@ -131,12 +135,12 @@ DEFAULT_SETTINGS = {
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
 NO_FOLDER = "__none__"
-STATUS_FILTERS = (("all", "Все"), ("reading", "Читаю"), ("unread", "Не читал"), ("finished", "Прочитано"))
-SORT_MODES = (("recent", "Недавние"), ("litres", "Как на ЛитРес"), ("title", "По названию"),
-              ("author", "По автору"), ("series", "По сериям"), ("progress", "По прогрессу"),
-              ("purchased", "По дате покупки"))
-TYPE_FILTERS = (("all", "Все"), ("text", "Книги ЛитРес"), ("audio", "Аудиокниги"),
-                ("mine", "Мои книги и статьи"))
+STATUS_FILTERS = (("all", tr("Все")), ("reading", tr("Читаю")), ("unread", tr("Не читал")), ("finished", tr("Прочитано")))
+SORT_MODES = (("recent", tr("Недавние")), ("litres", tr("Как на ЛитРес")), ("title", tr("По названию")),
+              ("author", tr("По автору")), ("series", tr("По сериям")), ("progress", tr("По прогрессу")),
+              ("purchased", tr("По дате покупки")))
+TYPE_FILTERS = (("all", tr("Все")), ("text", tr("Книги ЛитРес")), ("audio", tr("Аудиокниги")),
+                ("mine", tr("Мои книги и статьи")))
 
 
 # Какие ссылки из книг можно отдавать системе. Остальные схемы (file:, smb:, \\сервер\…,
@@ -274,7 +278,7 @@ class Library:
                 book.pop("remote_read_at", None)
             chapter = art.get("last_read_chapter_number")
             if chapter:
-                book["remote_chapter"] = f"Глава {chapter}"
+                book["remote_chapter"] = tr('Глава {0}', chapter)
             else:
                 book.pop("remote_chapter", None)
             if art.get("symbols_count"):
@@ -409,7 +413,7 @@ class Library:
                     continue
                 target = new_dir / name
                 if target.exists():
-                    errors.append(f"{name}: в новой папке уже есть файл с таким именем")
+                    errors.append(tr('{0}: в новой папке уже есть файл с таким именем', name))
                     continue
                 try:
                     shutil.move(str(old_dir / name), str(target))

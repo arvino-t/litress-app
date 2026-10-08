@@ -16,35 +16,35 @@
 <canvas id="graph"></canvas>
 
 <aside id="panel">
-  <input id="search" type="search" placeholder="Найти книгу или тег" autocomplete="off">
+  <input id="search" type="search" placeholder="Найти книгу или тег" data-i18n-placeholder autocomplete="off">
   <section>
-    <h3>Книги</h3>
+    <h3 data-i18n>Книги</h3>
     <div class="seg" id="source">
-      <button data-v="all" class="on">Все</button>
-      <button data-v="litres">ЛитРес</button>
-      <button data-v="mine">Мои</button>
+      <button data-v="all" class="on" data-i18n>Все</button>
+      <button data-v="litres" data-i18n>ЛитРес</button>
+      <button data-v="mine" data-i18n>Мои</button>
     </div>
   </section>
   <section>
-    <h3>Связи</h3>
+    <h3 data-i18n>Связи</h3>
     <div id="kinds"></div>
   </section>
   <section>
-    <label class="row" for="minDeg">Тег — от <b id="minDegVal">2</b> книг</label>
+    <label class="row" for="minDeg"><span data-i18n>Тег — от</span> <b id="minDegVal">2</b> <span data-i18n>книг</span></label>
     <input id="minDeg" type="range" min="1" max="6" value="2">
-    <label class="check"><input id="orphans" type="checkbox"> Книги без связей</label>
+    <label class="check"><input id="orphans" type="checkbox"> <span data-i18n>Книги без связей</span></label>
   </section>
   <section class="foot">
     <span id="stats"></span>
-    <button id="fit">Показать всё</button>
+    <button id="fit" data-i18n>Показать всё</button>
   </section>
 </aside>
 
 <div id="progress" role="status" aria-live="polite">
-  <div class="line" id="pLayout"><span id="pLayoutText">Строю граф…</span><span class="bar"><i id="pLayoutBar"></i></span></div>
+  <div class="line" id="pLayout"><span id="pLayoutText" data-i18n>Строю граф…</span><span class="bar"><i id="pLayoutBar"></i></span></div>
   <div class="line" id="pFetch" hidden><span id="pFetchText"></span><span class="bar"><i id="pFetchBar"></i></span></div>
 </div>
 <div id="tip" hidden></div>
-<div id="empty" hidden>Нет связей для выбранных фильтров</div>
+<div id="empty" hidden data-i18n>Нет связей для выбранных фильтров</div>
 </body>
 </html>

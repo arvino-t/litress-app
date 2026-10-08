@@ -17,27 +17,36 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequ
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton,
                                QScrollArea, QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, backup, core, style
+from . import __version__, backup, core, i18n, style
+from .i18n import tr
 from .core import CACHE_DIR, CONFIG_DIR, DATA_DIR, DEFAULT_SETTINGS, SITE, books_dir
 from .player import SPEEDS
 from .widgets import HeaderBar, IconButton, Switch, cls, label
 
-THEMES = (("auto", "Как в системе"), ("light", "Светлая"), ("sepia", "Сепия"),
-          ("dark", "Тёмная"), ("black", "Чёрная"))
-FONTS = (("book", "Как в книге"), ("serif", "С засечками"), ("sans", "Без засечек"))
+THEMES = (("auto", tr("Как в системе")), ("light", tr("Светлая")), ("sepia", tr("Сепия")),
+          ("dark", tr("Тёмная")), ("black", tr("Чёрная")))
+FONTS = (("book", tr("Как в книге")), ("serif", tr("С засечками")), ("sans", tr("Без засечек")))
 
-TABS = (("general", "Общие"), ("reading", "Чтение"), ("integrations", "Интеграции"),
-        ("backup", "Резервные копии"), ("advanced", "Дополнительно"))
-BACKUP_AUTO = (("off", "Выключено"), ("daily", "Раз в день"), ("weekly", "Раз в неделю"))
+TABS = (("general", tr("Общие")), ("reading", tr("Чтение")), ("integrations", tr("Интеграции")),
+        ("backup", tr("Резервные копии")), ("advanced", tr("Дополнительно")))
+BACKUP_AUTO = (("off", tr("Выключено")), ("daily", tr("Раз в день")), ("weekly", tr("Раз в неделю")))
 MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
           "сентября", "октября", "ноября", "декабря")
 SHOWN_BACKUPS = 5
 
 
+MONTHS_EN = ("January", "February", "March", "April", "May", "June", "July", "August",
+             "September", "October", "November", "December")
+
+
 def human_time(when: datetime) -> str:
     today = datetime.now().date()
-    day = ("сегодня" if when.date() == today else
-           f"{when.day} {MONTHS[when.month - 1]}" + ("" if when.year == today.year else f" {when.year}"))
+    if when.date() == today:
+        day = tr("сегодня")
+    elif i18n.LANG == "en":
+        day = f"{MONTHS_EN[when.month - 1]} {when.day}" + ("" if when.year == today.year else f", {when.year}")
+    else:
+        day = f"{when.day} {MONTHS[when.month - 1]}" + ("" if when.year == today.year else f" {when.year}")
     return f"{day}, {when:%H:%M}"
 
 # Значки сторонних сервисов: значок из темы системы (если приложение установлено),
@@ -52,7 +61,7 @@ ICON_SIZE = 32
 # Настройки, которые «Сбросить» не трогает: где лежат книги, что открыто, состояние графа
 KEEP_ON_RESET = {"booksDir", "localFolders", "lastBook", "graph", "settingsTab",
                  "libraryStatus", "libraryFolder", "libraryType", "librarySort",
-                 "backupDir", "backupAuto", "backupKeep", "backupLast", "backupToken"}
+                 "backupDir", "backupAuto", "backupKeep", "backupLast", "backupToken", "language"}
 
 _net = None
 
@@ -101,8 +110,8 @@ class SettingsPage(QWidget):
         self.setObjectName("page")
         self.app = app
 
-        header = HeaderBar(app.window, "Настройки")
-        back = IconButton("go-previous", "Назад")
+        header = HeaderBar(app.window, tr("Настройки"))
+        back = IconButton("go-previous", tr("Назад"))
         back.clicked.connect(app.go_back)
         header.pack_start(back)
 
@@ -306,47 +315,51 @@ class SettingsPage(QWidget):
 
         # --- Общие
         self.page("general")
-        g = self.group("Запуск и библиотека")
-        self.switch(g, "Открывать последнюю текстовую книгу при запуске", "openLastBook",
-                    "Самую свежую из начатых и скачанных — с учётом чтения на телефоне")
+        g = self.group(tr("Язык"))
+        self.combo(g, tr("Язык интерфейса"), "language",
+                   (("auto", tr("Как в системе")), ("ru", "Русский"), ("en", "English")),
+                   tr("Применяется после перезапуска"), on_change=self._language_changed)
+        g = self.group(tr("Запуск и библиотека"))
+        self.switch(g, tr("Открывать последнюю текстовую книгу при запуске"), "openLastBook",
+                    tr("Самую свежую из начатых и скачанных — с учётом чтения на телефоне"))
         only = Switch(app.only_downloaded)
         only.toggled.connect(app.only_action.setChecked)
-        self.row(g, "Показывать только скачанные книги", only)
-        self.button(g, "Скачать все книги", "Скачать…", app._download_all_action,
-                    "Все купленные книги ЛитРес — в папку для скачанных книг")
+        self.row(g, tr("Показывать только скачанные книги"), only)
+        self.button(g, tr("Скачать все книги"), tr("Скачать…"), app._download_all_action,
+                    tr("Все купленные книги ЛитРес — в папку для скачанных книг"))
 
-        g = self.group("Папки", "Где хранятся скачанные книги и где искать свои книги и статьи. "
-                                "Свои файлы открываются на месте, приложение их не копирует и не удаляет.")
-        self.books_row = self.button(g, "Скачанные книги ЛитРес", "Изменить…", self._choose_books_dir,
+        g = self.group(tr("Папки"), tr("Где хранятся скачанные книги и где искать свои книги и статьи. "
+                                "Свои файлы открываются на месте, приложение их не копирует и не удаляет."))
+        self.books_row = self.button(g, tr("Скачанные книги ЛитРес"), tr("Изменить…"), self._choose_books_dir,
                                      hint=str(books_dir()))
         self.folders_group = g
         self._folder_rows = []
         self._fill_folders()
 
-        g = self.group("Статистика")
-        self.button(g, "Статистика чтения", "Открыть", app.show_stats_dialog,
-                    "Минуты по дням, серия дней подряд, дочитанные книги")
+        g = self.group(tr("Статистика"))
+        self.button(g, tr("Статистика чтения"), tr("Открыть"), app.show_stats_dialog,
+                    tr("Минуты по дням, серия дней подряд, дочитанные книги"))
         self.col.addStretch()
 
         # --- Чтение
         self.page("reading")
-        g = self.group("Вид текста")
-        self.spin(g, "Размер шрифта", "fontSize", 12, 40)
-        self.combo(g, "Тема", "theme", THEMES)
-        self.combo(g, "Шрифт", "font", FONTS)
-        self.slider(g, "Межстрочный интервал", "lineHeight", 1.1, 2.2, 10)
-        self.slider(g, "Поля", "margin", 0, 20, fmt=lambda v: f"{v:g} %")
-        self.slider(g, "Ширина строки", "lineWidth", 400, 1400, fmt=lambda v: f"{v:g} px")
-        self.switch(g, "Две страницы в горизонтальном положении", "twoColumns")
-        self.switch(g, "Выравнивать по ширине", "justify")
-        self.switch(g, "Переносы слов", "hyphenate")
+        g = self.group(tr("Вид текста"))
+        self.spin(g, tr("Размер шрифта"), "fontSize", 12, 40)
+        self.combo(g, tr("Тема"), "theme", THEMES)
+        self.combo(g, tr("Шрифт"), "font", FONTS)
+        self.slider(g, tr("Межстрочный интервал"), "lineHeight", 1.1, 2.2, 10)
+        self.slider(g, tr("Поля"), "margin", 0, 20, fmt=lambda v: f"{v:g} %")
+        self.slider(g, tr("Ширина строки"), "lineWidth", 400, 1400, fmt=lambda v: f"{v:g} px")
+        self.switch(g, tr("Две страницы в горизонтальном положении"), "twoColumns")
+        self.switch(g, tr("Выравнивать по ширине"), "justify")
+        self.switch(g, tr("Переносы слов"), "hyphenate")
 
-        g = self.group("Чтение вслух и автолистание")
-        self.slider(g, "Скорость чтения вслух", "ttsRate", -0.5, 0.8, 10,
-                    fmt=lambda v: "обычная" if v == 0 else f"{v:+g}")
-        self.slider(g, "Автолистание — страница каждые", "autoFlipSec", 5, 120, fmt=lambda v: f"{v:g} с")
+        g = self.group(tr("Чтение вслух и автолистание"))
+        self.slider(g, tr("Скорость чтения вслух"), "ttsRate", -0.5, 0.8, 10,
+                    fmt=lambda v: tr("обычная") if v == 0 else f"{v:+g}")
+        self.slider(g, tr("Автолистание — страница каждые"), "autoFlipSec", 5, 120, fmt=lambda v: tr('{0:g} с', v))
 
-        g = self.group("Аудиокниги")
+        g = self.group(tr("Аудиокниги"))
         rate = QComboBox()
         rate.addItems([f"{s:g}×" for s in SPEEDS])
         cur = st.get("audioRate", 1.0)
@@ -357,77 +370,77 @@ class SettingsPage(QWidget):
             app.save_settings()
             app.player.set_rate(SPEEDS[i])
         rate.currentIndexChanged.connect(rate_changed)
-        self.row(g, "Скорость воспроизведения", rate, "Без изменения высоты голоса")
+        self.row(g, tr("Скорость воспроизведения"), rate, tr("Без изменения высоты голоса"))
         self.col.addStretch()
 
         # --- Интеграции
         self.page("integrations")
-        g = self.group("Сервисы", "Сторонние сервисы, с которыми работает приложение.")
-        self.account_btn = self.button(g, "ЛитРес", "", self._account, hint="", service="litres")
+        g = self.group(tr("Сервисы"), tr("Сторонние сервисы, с которыми работает приложение."))
+        self.account_btn = self.button(g, tr("ЛитРес"), "", self._account, hint="", service="litres")
         self._sync_account()
-        self.button(g, "Singularity", "Настроить…", app.show_singularity_dialog,
-                    "Задачи «Читаю», прогресс в заметках, привычка ежедневного чтения", service="singularity")
+        self.button(g, "Singularity", tr("Настроить…"), app.show_singularity_dialog,
+                    tr("Задачи «Читаю», прогресс в заметках, привычка ежедневного чтения"), service="singularity")
         self.col.addStretch()
 
         # --- Резервные копии
         self.page("backup")
-        g = self.group("Резервные копии", "Настройки, библиотека (папки, отметки, пути к скачанным книгам), "
+        g = self.group(tr("Резервные копии"), tr("Настройки, библиотека (папки, отметки, пути к скачанным книгам), "
                        "место чтения и закладки, статистика, настройки Singularity. Книги и обложки в копию "
-                       "не входят, вход в ЛитРес — тоже. Папку с копиями удобно держать в облаке.")
-        self.backup_now = self.button(g, "Создать копию сейчас", "Создать", self._backup_now)
-        self.combo(g, "Создавать автоматически", "backupAuto", BACKUP_AUTO,
-                   "При запуске и пока приложение открыто")
-        self.spin(g, "Хранить копий", "backupKeep", 1, 100, hint="Более старые удаляются",
+                       "не входят, вход в ЛитРес — тоже. Папку с копиями удобно держать в облаке."))
+        self.backup_now = self.button(g, tr("Создать копию сейчас"), tr("Создать"), self._backup_now)
+        self.combo(g, tr("Создавать автоматически"), "backupAuto", BACKUP_AUTO,
+                   tr("При запуске и пока приложение открыто"))
+        self.spin(g, tr("Хранить копий"), "backupKeep", 1, 100, hint=tr("Более старые удаляются"),
                   on_change=lambda v: backup.prune(backup.backup_dir(st), v))
         dir_box = QWidget()
         dh = QHBoxLayout(dir_box)
         dh.setContentsMargins(0, 0, 0, 0)
-        open_dir = QPushButton("Открыть")
+        open_dir = QPushButton(tr("Открыть"))
         open_dir.clicked.connect(self._open_backup_dir)
-        change_dir = QPushButton("Изменить…")
+        change_dir = QPushButton(tr("Изменить…"))
         change_dir.clicked.connect(self._choose_backup_dir)
         dh.addWidget(open_dir)
         dh.addWidget(change_dir)
-        self.backup_dir_row = self.row(g, "Папка для копий", dir_box, str(backup.backup_dir(st)))
-        self.switch(g, "Сохранять токен Singularity", "backupToken",
-                    "Без него после восстановления на другом компьютере Singularity придётся подключить "
-                    "заново. Токен даёт доступ к вашим задачам — храните такие копии бережно")
+        self.backup_dir_row = self.row(g, tr("Папка для копий"), dir_box, str(backup.backup_dir(st)))
+        self.switch(g, tr("Сохранять токен Singularity"), "backupToken",
+                    tr("Без него после восстановления на другом компьютере Singularity придётся подключить "
+                    "заново. Токен даёт доступ к вашим задачам — храните такие копии бережно"))
 
-        self.restore_group = self.group("Восстановление", "Перед восстановлением текущие данные тоже сохраняются "
+        self.restore_group = self.group(tr("Восстановление"), tr("Перед восстановлением текущие данные тоже сохраняются "
                                         "в копию. Папки книг и копий остаются как на этом компьютере. "
-                                        "Приложение перезапустится.")
+                                        "Приложение перезапустится."))
         self._restore_rows = []
         self._fill_backups()
         self.col.addStretch()
 
         # --- Дополнительно
         self.page("advanced")
-        g = self.group("Синхронизация с ЛитРес")
-        self.spin(g, "Обновлять библиотеку с ЛитРес каждые", "remoteSyncMin", 0, 120, 5, " мин",
-                  "Пока окно открыто; 0 — только при запуске и по F5", on_change=lambda v: app.apply_remote_sync())
-        self.button(g, "Обновить сейчас", "Обновить", app.sync, "То же, что F5")
-        self.spin(g, "Скорость чтения для оценки чтения на телефоне", "readingCharsPerMin", 500, 4000, 100,
-                  " зн/мин", "По ней прирост процента на ЛитРес переводится в минуты (аудио — по длительности)",
+        g = self.group(tr("Синхронизация с ЛитРес"))
+        self.spin(g, tr("Обновлять библиотеку с ЛитРес каждые"), "remoteSyncMin", 0, 120, 5, tr(" мин"),
+                  tr("Пока окно открыто; 0 — только при запуске и по F5"), on_change=lambda v: app.apply_remote_sync())
+        self.button(g, tr("Обновить сейчас"), tr("Обновить"), app.sync, tr("То же, что F5"))
+        self.spin(g, tr("Скорость чтения для оценки чтения на телефоне"), "readingCharsPerMin", 500, 4000, 100,
+                  tr(" зн/мин"), tr("По ней прирост процента на ЛитРес переводится в минуты (аудио — по длительности)"),
                   on_change=lambda v: setattr(app.library, "chars_per_min", v))
 
-        g = self.group("Журнал")
-        self.switch(g, "Подробный журнал", "debugLog",
-                    "Запросы к ЛитРес, скачивания, сообщения страниц — в поток ошибок (терминал, журнал системы). "
-                    "Инструменты разработчика в читалке — по правой кнопке мыши.",
+        g = self.group(tr("Журнал"))
+        self.switch(g, tr("Подробный журнал"), "debugLog",
+                    tr("Запросы к ЛитРес, скачивания, сообщения страниц — в поток ошибок (терминал, журнал системы). "
+                    "Инструменты разработчика в читалке — по правой кнопке мыши."),
                     on_change=core.set_debug)
 
-        g = self.group("Данные приложения")
-        for title, path, hint in (("Данные", DATA_DIR, "Библиотека, прогресс, статистика, обложки"),
-                                  ("Настройки", CONFIG_DIR, "settings.json"),
-                                  ("Кэш", CACHE_DIR, "Можно удалить — приложение создаст заново")):
-            self.button(g, title, "Открыть папку",
+        g = self.group(tr("Данные приложения"))
+        for title, path, hint in ((tr("Данные"), DATA_DIR, tr("Библиотека, прогресс, статистика, обложки")),
+                                  (tr("Настройки"), CONFIG_DIR, "settings.json"),
+                                  (tr("Кэш"), CACHE_DIR, tr("Можно удалить — приложение создаст заново"))):
+            self.button(g, title, tr("Открыть папку"),
                         lambda _=False, p=path: QDesktopServices.openUrl(QUrl.fromLocalFile(str(p))),
                         f"{hint}\n{path}")
-        self.button(g, "Сбросить настройки", "Сбросить…", self._reset, "Вид текста, чтение, обновление, журнал. "
-                    "Папки, вход и библиотека не меняются", style="destructive")
+        self.button(g, tr("Сбросить настройки"), tr("Сбросить…"), self._reset, tr("Вид текста, чтение, обновление, журнал. "
+                    "Папки, вход и библиотека не меняются"), style="destructive")
 
-        g = self.group("О приложении")
-        self.row(g, "Читалка ЛитРес", label(f"версия {__version__}", "dim"))
+        g = self.group(tr("О приложении"))
+        self.row(g, tr("Читалка ЛитРес"), label(tr('версия {0}', __version__), "dim"))
         self.col.addStretch()
 
         self.show_tab(st.get("settingsTab") or "general")
@@ -446,12 +459,12 @@ class SettingsPage(QWidget):
         self._folder_rows = []
         before = g.count()
         for folder in self.app.local_folders():
-            b = QPushButton("Убрать")
+            b = QPushButton(tr("Убрать"))
             b.clicked.connect(lambda _=False, f=folder: (self.app._remove_local_folder(f), self._fill_folders()))
-            self.row(g, "Мои книги и статьи", b, folder)
-        add = QPushButton("Добавить папку…")
+            self.row(g, tr("Мои книги и статьи"), b, folder)
+        add = QPushButton(tr("Добавить папку…"))
         add.clicked.connect(lambda: (self.app._add_local_folder(), self._fill_folders()))
-        rescan = QPushButton("Обновить список")
+        rescan = QPushButton(tr("Обновить список"))
         rescan.clicked.connect(lambda: self.app.rescan_local(report=True))
         box = QWidget()
         h = QHBoxLayout(box)
@@ -459,7 +472,7 @@ class SettingsPage(QWidget):
         h.addWidget(rescan)
         h.addWidget(add)
         mine = sum(1 for b in self.app.library.books.values() if b.get("source") == "folder")
-        self.row(g, "Найдено своих книг и статей", box, str(mine))
+        self.row(g, tr("Найдено своих книг и статей"), box, str(mine))
         self._folder_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
 
     # --- резервные копии
@@ -467,9 +480,9 @@ class SettingsPage(QWidget):
     def _sync_backup_hint(self):
         last = self.app.settings.get("backupLast")
         try:
-            text = "Последняя: " + human_time(datetime.fromisoformat(last))
+            text = tr("Последняя: ") + human_time(datetime.fromisoformat(last))
         except (TypeError, ValueError):
-            text = "Копий ещё не было"
+            text = tr("Копий ещё не было")
         self._set_hint(self.backup_now, text)
 
     def _fill_backups(self):
@@ -480,29 +493,29 @@ class SettingsPage(QWidget):
         before = g.count()
         items = backup.list_backups(backup.backup_dir(self.app.settings))
         for path, when in items[:SHOWN_BACKUPS]:
-            b = QPushButton("Восстановить")
+            b = QPushButton(tr("Восстановить"))
             b.clicked.connect(lambda _=False, p=path: self._restore(p))
             try:
-                size = f"{path.stat().st_size / 1024:.0f} КБ"
+                size = tr('{0:.0f} КБ', path.stat().st_size / 1024)
             except OSError:
                 size = ""
-            note = " · перед восстановлением" if "before-restore" in path.name else ""
+            note = tr(" · перед восстановлением") if "before-restore" in path.name else ""
             self.row(g, human_time(when).capitalize(), b, f"{size}{note}")
         if len(items) > SHOWN_BACKUPS:
-            self.row(g, f"И ещё {len(items) - SHOWN_BACKUPS} — в папке для копий")
+            self.row(g, tr('И ещё {0} — в папке для копий', len(items) - SHOWN_BACKUPS))
         elif not items:
-            self.row(g, "В папке пока нет копий")
-        self.button(g, "Восстановить из файла", "Выбрать…", self._restore_from_file,
-                    "Например, копия с другого компьютера")
+            self.row(g, tr("В папке пока нет копий"))
+        self.button(g, tr("Восстановить из файла"), tr("Выбрать…"), self._restore_from_file,
+                    tr("Например, копия с другого компьютера"))
         self._restore_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
         self._sync_backup_hint()
 
     def _backup_now(self):
         path = self.app.make_backup()
         if path:
-            self.app.toast(f"Копия создана: {path.name}")
+            self.app.toast(tr('Копия создана: {0}', path.name))
         else:
-            self.app.toast("Не удалось создать копию — подробности в журнале")
+            self.app.toast(tr("Не удалось создать копию — подробности в журнале"))
         self._fill_backups()
 
     def _open_backup_dir(self):
@@ -512,7 +525,7 @@ class SettingsPage(QWidget):
 
     def _choose_backup_dir(self):
         cur = backup.backup_dir(self.app.settings)
-        folder = QFileDialog.getExistingDirectory(self.app.window, "Папка для резервных копий",
+        folder = QFileDialog.getExistingDirectory(self.app.window, tr("Папка для резервных копий"),
                                                   str(cur if cur.exists() else Path.home()))
         if not folder:
             return
@@ -524,9 +537,9 @@ class SettingsPage(QWidget):
         self._fill_backups()
 
     def _restore_from_file(self):
-        path, _f = QFileDialog.getOpenFileName(self.app.window, "Резервная копия",
+        path, _f = QFileDialog.getOpenFileName(self.app.window, tr("Резервная копия"),
                                                str(backup.backup_dir(self.app.settings)),
-                                               "Резервные копии (*.zip)")
+                                               tr("Резервные копии (*.zip)"))
         if path:
             self._restore(Path(path))
 
@@ -534,21 +547,19 @@ class SettingsPage(QWidget):
         try:
             manifest = backup.read_manifest(path)
         except ValueError as e:
-            QMessageBox.warning(self.app.window, "Не удалось восстановить", str(e).capitalize())
+            QMessageBox.warning(self.app.window, tr("Не удалось восстановить"), str(e).capitalize())
             return
         try:
             when = human_time(datetime.fromisoformat(manifest.get("created", "")))
         except ValueError:
             when = path.name
         box = QMessageBox(self.app.window)
-        box.setWindowTitle("Восстановить из копии?")
-        box.setText(f"<b>Восстановить данные из копии ({when})?</b>")
+        box.setWindowTitle(tr("Восстановить из копии?"))
+        box.setText(tr('<b>Восстановить данные из копии ({0})?</b>', when))
         box.setInformativeText(
-            f"Копия версии {manifest.get('version', '?')}. Библиотека, место чтения, статистика и настройки "
-            "заменятся данными из копии; текущие сначала сохранятся в отдельную копию. "
-            "Приложение перезапустится.")
-        cancel = box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
-        ok = box.addButton("Восстановить и перезапустить", QMessageBox.ButtonRole.DestructiveRole)
+            tr('Копия версии {0}. Библиотека, место чтения, статистика и настройки заменятся данными из копии; текущие сначала сохранятся в отдельную копию. Приложение перезапустится.', manifest.get('version', '?')))
+        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
+        ok = box.addButton(tr("Восстановить и перезапустить"), QMessageBox.ButtonRole.DestructiveRole)
         cls(ok, "destructive")
         box.setDefaultButton(cancel)
         box.exec()
@@ -558,23 +569,33 @@ class SettingsPage(QWidget):
         try:
             backup.stage_restore(path)
         except (OSError, ValueError) as e:
-            QMessageBox.warning(self.app.window, "Не удалось восстановить", str(e).capitalize())
+            QMessageBox.warning(self.app.window, tr("Не удалось восстановить"), str(e).capitalize())
             return
         if not self.app.make_backup("before-restore"):
             backup.cancel_pending()
-            QMessageBox.warning(self.app.window, "Восстановление отменено",
-                                "Не удалось сохранить текущие данные в копию — подробности в журнале.")
+            QMessageBox.warning(self.app.window, tr("Восстановление отменено"),
+                                tr("Не удалось сохранить текущие данные в копию — подробности в журнале."))
             return
         self.app.restart()
 
+    def _language_changed(self, lang):
+        effective = lang if lang in ("ru", "en") else i18n.system_language()
+        if effective == i18n.LANG:
+            return
+        self.app.save_settings()
+        # Подпись — сразу на выбранном языке: человек может не читать текущий
+        text = "Language changes after restart" if effective == "en" else "Язык сменится после перезапуска"
+        button = "Restart" if effective == "en" else "Перезапустить"
+        self.app.toast(text, button=button, on_button=self.app.restart, timeout=10000)
+
     def _reset(self):
         box = QMessageBox(self.app.window)
-        box.setWindowTitle("Сбросить настройки?")
-        box.setText("<b>Сбросить настройки?</b>")
-        box.setInformativeText("Вид текста, чтение вслух, аудио, обновление с ЛитРес и журнал вернутся "
-                               "к исходным. Папки, вход в ЛитРес и библиотека не изменятся.")
-        cancel = box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
-        ok = box.addButton("Сбросить", QMessageBox.ButtonRole.DestructiveRole)
+        box.setWindowTitle(tr("Сбросить настройки?"))
+        box.setText(tr("<b>Сбросить настройки?</b>"))
+        box.setInformativeText(tr("Вид текста, чтение вслух, аудио, обновление с ЛитРес и журнал вернутся "
+                               "к исходным. Папки, вход в ЛитРес и библиотека не изменятся."))
+        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
+        ok = box.addButton(tr("Сбросить"), QMessageBox.ButtonRole.DestructiveRole)
         cls(ok, "destructive")
         box.setDefaultButton(cancel)
         box.exec()
@@ -590,7 +611,7 @@ class SettingsPage(QWidget):
         self.app.player.set_rate(st["audioRate"])
         self.app.save_settings()
         self._rebuild()
-        self.app.toast("Настройки сброшены")
+        self.app.toast(tr("Настройки сброшены"))
 
     def _rebuild(self):
         """Заново строит вкладки, чтобы переключатели показали новые значения."""
@@ -607,9 +628,9 @@ class SettingsPage(QWidget):
         if not hasattr(self, "account_btn"):
             return
         lit = self.app.litres
-        self.account_btn.setText("Выйти" if lit.logged_in else "Войти")
-        self._set_hint(self.account_btn, f"Вход выполнен: {lit.user_name}" if lit.logged_in and lit.user_name
-                       else "Вход выполнен" if lit.logged_in else "Вход не выполнен")
+        self.account_btn.setText(tr("Выйти") if lit.logged_in else tr("Войти"))
+        self._set_hint(self.account_btn, tr('Вход выполнен: {0}', lit.user_name) if lit.logged_in and lit.user_name
+                       else tr("Вход выполнен") if lit.logged_in else tr("Вход не выполнен"))
 
     @staticmethod
     def _set_hint(widget, text):

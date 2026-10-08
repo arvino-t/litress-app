@@ -19,6 +19,7 @@ from PySide6.QtCore import QByteArray, QObject, QTimer, QUrl, Signal
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 
 from .core import CONFIG_DIR, load_json, log, save_json
+from .i18n import tr
 
 API = "https://api.singularity-app.com/v2"
 STATE_FILE = CONFIG_DIR / "singularity.json"   # токен и служебные id — только для владельца
@@ -160,14 +161,13 @@ class SingularitySync(QObject):
         """Проверка токена одним лёгким запросом. done(ok, текст)."""
         def got(status, _payload, err):
             if status == 200:
-                done(True, "Токен работает")
+                done(True, tr("Токен работает"))
             elif status in (401, 403):
-                done(False, "Токен не подходит — создайте новый с доступом к задачам, проектам и привычкам")
+                done(False, tr("Токен не подходит — создайте новый с доступом к задачам, проектам и привычкам"))
             elif status == 0:
-                done(False, f"Сервер Singularity недоступен ({err or 'нет связи'}). "
-                            "Если включён VPN — нужен обход (см. vpn-bypass).")
+                done(False, tr('Сервер Singularity недоступен ({0}). Если включён VPN — нужен обход (см. vpn-bypass).', err or tr('нет связи')))
             else:
-                done(False, f"Ошибка Singularity: код {status}")
+                done(False, tr('Ошибка Singularity: код {0}', status))
         self._request("GET", "/project", query={"maxCount": 1}, done=got)
 
     def sync(self):
@@ -194,7 +194,7 @@ class SingularitySync(QObject):
             self.running = False
             self.save()
             self.status.emit("; ".join(errors) if errors else
-                             f"Синхронизировано с Singularity {dt.datetime.now():%H:%M}")
+                             tr('Синхронизировано с Singularity {0:%H:%M}', dt.datetime.now()))
             if self._again:
                 self.schedule(soon=True)
         next_step()
@@ -250,13 +250,13 @@ class SingularitySync(QObject):
 
         def with_books(books_pid):
             if not books_pid:
-                next_step("не удалось создать проект «Книги» в Singularity")
+                next_step(tr("не удалось создать проект «Книги» в Singularity"))
                 return
             if need_wishlist:
                 def with_wishlist(wish_pid):
                     if not wish_pid:
                         # Не молчим: без проекта «Хочу прочитать» пропускаем только его
-                        self._errors.append("не удалось создать проект «Хочу прочитать» в Singularity")
+                        self._errors.append(tr("не удалось создать проект «Хочу прочитать» в Singularity"))
                     with_projects(books_pid, wish_pid)
                 self._ensure_project(EXT_WISHLIST, "Хочу прочитать", "1f516", with_wishlist)
             else:
@@ -266,7 +266,7 @@ class SingularitySync(QObject):
             # Все наши задачи ищем во всех проектах сразу: книга могла переехать
             def listed(tasks, status, err):
                 if tasks is None:
-                    next_step(f"не удалось получить задачи Singularity ({status or err})")
+                    next_step(tr('не удалось получить задачи Singularity ({0})', status or err))
                     return
                 ours = {t["externalId"]: t for t in tasks
                         if (t.get("externalId") or "").startswith(TASK_EXT) and not t.get("removed")}
@@ -329,7 +329,7 @@ class SingularitySync(QObject):
         def run():
             if not ops:
                 if failed:
-                    next_step(f"не записано задач: {len(failed)}")
+                    next_step(tr('не записано задач: {0}', len(failed)))
                 else:
                     if done_count[0]:
                         log("singularity: изменено задач", done_count[0])
@@ -356,7 +356,7 @@ class SingularitySync(QObject):
 
         def with_habit(hid):
             if not hid:
-                next_step("не удалось создать привычку в Singularity")
+                next_step(tr("не удалось создать привычку в Singularity"))
                 return
             if self.state["minutes"].get(today, 0) < goal * 60 or today in self.state["habitDone"]:
                 next_step()
@@ -368,7 +368,7 @@ class SingularitySync(QObject):
                     self.app.toast(f"Singularity: привычка «{title}» отмечена")
                     next_step()
                 else:
-                    next_step(f"не удалось отметить привычку ({status or err})")
+                    next_step(tr('не удалось отметить привычку ({0})', status or err))
             self._request("POST", "/habit-progress",
                           body={"habit": hid, "date": today, "progress": 2,
                                 "externalId": f"{EXT_HABIT}-{today}"}, done=marked)
@@ -380,7 +380,7 @@ class SingularitySync(QObject):
 
         def listed(habits, status, err):
             if habits is None:
-                next_step(f"не удалось получить привычки ({status or err})")
+                next_step(tr('не удалось получить привычки ({0})', status or err))
                 return
             found = next((h for h in habits if h.get("externalId") == EXT_HABIT and not h.get("removed")), None)
 

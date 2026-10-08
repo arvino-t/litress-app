@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QAbstractButton, QFrame, QGraphicsOpacityEffect, 
                                QToolButton, QVBoxLayout, QWidget)
 
 from . import style
+from .i18n import tr
 
 
 def cls(widget, *names):
@@ -123,9 +124,9 @@ class HeaderBar(QFrame):
         self.controls = []
         if show_controls:
             self.end.addSpacing(6)
-            for name, tip, slot in (("window-minimize", "Свернуть", window.showMinimized),
-                                    ("window-maximize", "Развернуть", self._toggle_max),
-                                    ("window-close", "Закрыть", window.close)):
+            for name, tip, slot in (("window-minimize", tr("Свернуть"), window.showMinimized),
+                                    ("window-maximize", tr("Развернуть"), self._toggle_max),
+                                    ("window-close", tr("Закрыть"), window.close)):
                 b = IconButton(name, tip, flat=False)
                 cls(b, "wincontrol")
                 b.clicked.connect(slot)
@@ -421,9 +422,9 @@ class BookCard(QFrame):
         lay.addStretch()
 
         self.badge = Badge(self.cover)
-        self.cloud = IconBadge(self.cover, "folder-download", "Не скачана — нажмите, чтобы скачать")
+        self.cloud = IconBadge(self.cover, "folder-download", tr("Не скачана — нажмите, чтобы скачать"))
         self.cloud.move(6, 6)
-        self.audio = IconBadge(self.cover, "audio-headphones", "Аудиокнига")
+        self.audio = IconBadge(self.cover, "audio-headphones", tr("Аудиокнига"))
         self.audio.move(Cover.W - 32, Cover.H - 28)
 
         self._press_timer = QTimer(self, singleShot=True, interval=550)
@@ -464,13 +465,13 @@ class BookCard(QFrame):
         self.badge.setToolTip("")
         if status == "finished":
             self.badge.setText("✓")
-            self.badge.setToolTip("Прочитано")
+            self.badge.setToolTip(tr("Прочитано"))
             self.badge.set_bg(QColor(38, 162, 105, 230))
         elif status == "reading":
             pct = lib.percent(book)
-            self.badge.setText(f"{pct}%" if pct else "Читаю")
+            self.badge.setText(f"{pct}%" if pct else tr("Читаю"))
         else:
-            self.badge.setText("Новая")
+            self.badge.setText(tr("Новая"))
         self.badge.adjustSize()
         self.badge.move(Cover.W - self.badge.width() - 6, 6)
         self.badge.setVisible(downloaded or status != "unread")
@@ -591,8 +592,8 @@ class RecentCard(QFrame):
         self.chapter.setVisible(bool(chapter))
         pct = lib.percent(book) or 0
         self.bar.setValue(pct)
-        self.percent.setText(f"{'Прослушано' if book.get('is_audio') else 'Прочитано'} {pct}%")
-        self.button.setText("Слушать" if book.get("is_audio") else "Читать")
+        self.percent.setText(f"{tr('Прослушано') if book.get('is_audio') else tr('Прочитано')} {pct}%")
+        self.button.setText(tr("Слушать") if book.get("is_audio") else tr("Читать"))
         self.cover.set_cover(lib.cover_path(book), title)
 
     def mouseReleaseEvent(self, e):
@@ -612,7 +613,7 @@ class RecentPanel(QFrame):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(12)
-        lay.addWidget(label("Продолжить чтение", "title2"))
+        lay.addWidget(label(tr("Продолжить чтение"), "title2"))
         self.cards = []
         for _ in range(count):
             card = RecentCard()

@@ -21,6 +21,7 @@ from . import core, style
 from .core import SAFE_LINK_SCHEMES, SCHEME, WEB_DIR, books_dir, log
 from .litres import PREFIX
 from .widgets import HeaderBar, IconButton, Popover, SeekSlider, Switch, attach_popover, cls, label
+from .i18n import tr, web_strings
 
 
 def register_scheme():
@@ -135,16 +136,16 @@ class ReaderPage(QWidget):
 
         # Верхняя панель — заголовок окна
         self.header = HeaderBar(app.window, book.get("title") or "")
-        back = IconButton("go-previous", "Назад")
+        back = IconButton("go-previous", tr("Назад"))
         back.clicked.connect(app.go_back)
         self.header.pack_start(back)
-        full = IconButton("view-fullscreen", "Во весь экран (F11)")
+        full = IconButton("view-fullscreen", tr("Во весь экран (F11)"))
         full.clicked.connect(app.toggle_fullscreen)
         self.header.pack_end(full)
-        settings_btn = IconButton("font-select", "Вид текста")
+        settings_btn = IconButton("font-select", tr("Вид текста"))
         attach_popover(settings_btn, Popover(self._build_settings()))
         self.header.pack_end(settings_btn)
-        self.toc_btn = IconButton("view-list", "Оглавление")
+        self.toc_btn = IconButton("view-list", tr("Оглавление"))
         self.toc_list = QListWidget()
         self.toc_list.setMinimumWidth(320)
         self.toc_list.setMinimumHeight(360)
@@ -153,11 +154,11 @@ class ReaderPage(QWidget):
         self.toc_popover = Popover(self.toc_list)
         attach_popover(self.toc_btn, self.toc_popover)
         self.header.pack_end(self.toc_btn)
-        self.flip_btn = IconButton("media-playlist-repeat", "Автолистание")
+        self.flip_btn = IconButton("media-playlist-repeat", tr("Автолистание"))
         self.flip_btn.setCheckable(True)
         self.flip_btn.toggled.connect(self._toggle_autoflip)
         self.header.pack_end(self.flip_btn)
-        self.tts_btn = IconButton("audio-volume-high", "Читать вслух")
+        self.tts_btn = IconButton("audio-volume-high", tr("Читать вслух"))
         self.tts_btn.setCheckable(True)
         self.tts_btn.toggled.connect(self._toggle_tts)
         self.header.pack_end(self.tts_btn)
@@ -227,8 +228,8 @@ class ReaderPage(QWidget):
         sl = QHBoxLayout(size_box)
         sl.setContentsMargins(0, 0, 0, 0)
         sl.setSpacing(0)
-        minus = IconButton("zoom-out", "Меньше", flat=False)
-        plus = IconButton("zoom-in", "Больше", flat=False)
+        minus = IconButton("zoom-out", tr("Меньше"), flat=False)
+        plus = IconButton("zoom-in", tr("Больше"), flat=False)
         cls(minus, "linked-first")
         cls(plus, "linked-last")
         size_label = QLabel(str(st["fontSize"]))
@@ -245,17 +246,17 @@ class ReaderPage(QWidget):
         sl.addWidget(minus)
         sl.addWidget(size_label)
         sl.addWidget(plus)
-        add("Размер шрифта", size_box)
+        add(tr("Размер шрифта"), size_box)
 
-        grid.addWidget(label("Тема"), row, 0, 1, 2)
+        grid.addWidget(label(tr("Тема")), row, 0, 1, 2)
         row += 1
         themes = QWidget()
         tl = QHBoxLayout(themes)
         tl.setContentsMargins(0, 0, 0, 0)
         tl.setSpacing(0)
         group = QButtonGroup(themes)
-        options = (("auto", "Авто"), ("light", "Светлая"), ("sepia", "Сепия"),
-                   ("dark", "Тёмная"), ("black", "Чёрная"))
+        options = (("auto", tr("Авто")), ("light", tr("Светлая")), ("sepia", tr("Сепия")),
+                   ("dark", tr("Тёмная")), ("black", tr("Чёрная")))
         from PySide6.QtWidgets import QPushButton
         for i, (key, text) in enumerate(options):
             b = QPushButton(text)
@@ -271,10 +272,10 @@ class ReaderPage(QWidget):
 
         fonts = QComboBox()
         font_keys = ["book", "serif", "sans"]
-        fonts.addItems(["Как в книге", "С засечками", "Без засечек"])
+        fonts.addItems([tr("Как в книге"), tr("С засечками"), tr("Без засечек")])
         fonts.setCurrentIndex(font_keys.index(st["font"]) if st["font"] in font_keys else 0)
         fonts.currentIndexChanged.connect(lambda i: self._set("font", font_keys[i]))
-        add("Шрифт", fonts)
+        add(tr("Шрифт"), fonts)
 
         def slider(text, key, lo, hi, scale=1):
             s = QSlider(Qt.Orientation.Horizontal)
@@ -284,15 +285,15 @@ class ReaderPage(QWidget):
             s.valueChanged.connect(lambda v: self._set(key, round(v / scale, 2)))
             add(text, s)
 
-        slider("Межстрочный интервал", "lineHeight", 1.1, 2.2, 10)
-        slider("Поля, %", "margin", 0, 20)
-        slider("Ширина строки", "lineWidth", 400, 1400)
-        slider("Скорость чтения вслух", "ttsRate", -0.5, 0.8, 10)
-        slider("Автолистание, секунд", "autoFlipSec", 5, 120)
+        slider(tr("Межстрочный интервал"), "lineHeight", 1.1, 2.2, 10)
+        slider(tr("Поля, %"), "margin", 0, 20)
+        slider(tr("Ширина строки"), "lineWidth", 400, 1400)
+        slider(tr("Скорость чтения вслух"), "ttsRate", -0.5, 0.8, 10)
+        slider(tr("Автолистание, секунд"), "autoFlipSec", 5, 120)
 
-        for key, text in (("twoColumns", "Две страницы в горизонтальном положении"),
-                          ("justify", "Выравнивать по ширине"),
-                          ("hyphenate", "Переносы слов")):
+        for key, text in (("twoColumns", tr("Две страницы в горизонтальном положении")),
+                          ("justify", tr("Выравнивать по ширине")),
+                          ("hyphenate", tr("Переносы слов"))):
             sw = Switch(st[key])
             sw.toggled.connect(lambda on, k=key: self._set(k, on))
             add(text, sw)
@@ -335,6 +336,7 @@ class ReaderPage(QWidget):
                 # у PDF нет CFI — место восстанавливаем по доле прочитанного
                 "fraction": saved.get("fraction"),
                 "settings": self.resolved_settings(),
+                "i18n": web_strings(),
             }
             self.js(f"window.reader.open({json.dumps(params)})")
         elif t == "opened":
@@ -375,13 +377,13 @@ class ReaderPage(QWidget):
             st = self.app.settings
             st["fontSize"] = max(12, min(40, st["fontSize"] + step))
             self.app.save_settings()
-            self.app.toast(f"Размер шрифта: {st['fontSize']}", timeout=1200)
+            self.app.toast(tr('Размер шрифта: {0}', st['fontSize']), timeout=1200)
         elif t == "tts":
             self._tts_queue = [x for x in msg.get("segments") or [] if x.get("text")]
             self._tts_speak_next()
         elif t == "tts-end":
             self.tts_btn.setChecked(False)
-            self.app.toast("Чтение вслух: книга дочитана до конца")
+            self.app.toast(tr("Чтение вслух: книга дочитана до конца"))
         elif t == "escape":
             if self.app.window.isFullScreen():
                 self.app.toggle_fullscreen()
@@ -390,7 +392,7 @@ class ReaderPage(QWidget):
         elif t == "external-link":
             open_external(QUrl(msg.get("href") or ""))
         elif t == "error":
-            self.app.toast(f"Не удалось открыть книгу: {msg.get('message')}")
+            self.app.toast(tr('Не удалось открыть книгу: {0}', msg.get('message')))
         log("reader:", t)
 
     def _fill_toc(self, toc):
@@ -458,7 +460,7 @@ class ReaderPage(QWidget):
             self._tts_speak_next()
         elif state == QTextToSpeech.State.Error:
             self.tts_btn.setChecked(False)
-            self.app.toast(f"Чтение вслух недоступно: {self._tts.errorString()}")
+            self.app.toast(tr('Чтение вслух недоступно: {0}', self._tts.errorString()))
 
     # --- автолистание
 
@@ -468,7 +470,7 @@ class ReaderPage(QWidget):
                 self.tts_btn.setChecked(False)
             sec = int(self.app.settings.get("autoFlipSec", 30))
             self._flip_timer.start(sec * 1000)
-            self.app.toast(f"Автолистание: страница каждые {sec} с")
+            self.app.toast(tr('Автолистание: страница каждые {0} с', sec))
         else:
             self._flip_timer.stop()
 

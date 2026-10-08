@@ -22,6 +22,7 @@ from PySide6.QtCore import QStandardPaths
 
 from . import __version__
 from .core import CONFIG_DIR, CONFIG_FILE, DATA_DIR, LIBRARY_FILE, PROGRESS_FILE, STATS_FILE, load_json, save_json
+from .i18n import tr
 
 SINGULARITY_FILE = CONFIG_DIR / "singularity.json"
 FILES = {
@@ -123,9 +124,9 @@ def read_manifest(path: Path) -> dict:
         with zipfile.ZipFile(path) as z:
             manifest = json.loads(z.read("manifest.json"))
     except (OSError, KeyError, ValueError, zipfile.BadZipFile) as e:
-        raise ValueError(f"это не копия Читалки ЛитРес ({e})") from None
+        raise ValueError(tr('это не копия Читалки ЛитРес ({0})', e)) from None
     if manifest.get("app") != "litres-reader":
-        raise ValueError("это не копия Читалки ЛитРес")
+        raise ValueError(tr("это не копия Читалки ЛитРес"))
     return manifest
 
 
@@ -138,15 +139,15 @@ def stage_restore(path: Path) -> dict:
             if info.filename not in FILES:       # только известные имена — никаких путей из архива
                 continue
             if info.file_size > MAX_FILE:
-                raise ValueError(f"{info.filename}: слишком большой файл")
+                raise ValueError(tr('{0}: слишком большой файл', info.filename))
             data = z.read(info)
             try:
                 json.loads(data)
             except ValueError:
-                raise ValueError(f"{info.filename}: повреждён") from None
+                raise ValueError(tr('{0}: повреждён', info.filename)) from None
             staged[info.filename] = data
     if not staged:
-        raise ValueError("в копии нет данных")
+        raise ValueError(tr("в копии нет данных"))
     shutil.rmtree(PENDING_DIR, ignore_errors=True)
     PENDING_DIR.mkdir(parents=True)
     for name, data in staged.items():

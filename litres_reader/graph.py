@@ -14,15 +14,16 @@ from . import style
 from .core import SCHEME
 from .reader import _ReaderWebPage, reader_profile
 from .widgets import HeaderBar, IconButton
+from .i18n import tr, web_strings
 
 # (вид тега, название, цвет, включён по умолчанию)
 KINDS = (
-    ("genre", "Жанры", "#3584e4", True),
-    ("folder", "Мои папки на ЛитРес", "#e5a50a", True),
-    ("topic", "Темы своих книг и статей", "#c061cb", True),
-    ("series", "Серии", "#9141ac", False),
-    ("tag", "Теги ЛитРес", "#2ec27e", False),
-    ("author", "Авторы", "#e66100", False),
+    ("genre", tr("Жанры"), "#3584e4", True),
+    ("folder", tr("Мои папки на ЛитРес"), "#e5a50a", True),
+    ("topic", tr("Темы своих книг и статей"), "#c061cb", True),
+    ("series", tr("Серии"), "#9141ac", False),
+    ("tag", tr("Теги ЛитРес"), "#2ec27e", False),
+    ("author", tr("Авторы"), "#e66100", False),
 )
 
 
@@ -74,6 +75,7 @@ def build_graph(lib) -> dict:
         "nodes": nodes + list(tags.values()),
         "links": links,
         "kinds": [{"id": k, "label": label, "color": color, "on": on} for k, label, color, on in KINDS],
+        "i18n": web_strings(),
         "theme": {
             "dark": dark,
             "accent": style.ACCENT,
@@ -93,8 +95,8 @@ class GraphPage(QWidget):
         self._layout_done = False
         self._fetch = None      # (готово, всего) — подгрузка жанров с ЛитРес
 
-        self.header = HeaderBar(app.window, "Граф книг")
-        back = IconButton("go-previous", "Назад")
+        self.header = HeaderBar(app.window, tr("Граф книг"))
+        back = IconButton("go-previous", tr("Назад"))
         back.clicked.connect(app.go_back)
         self.header.pack_start(back)
 
@@ -136,7 +138,7 @@ class GraphPage(QWidget):
         self._fetch = (done, total) if done < total else None
         if self.ready:
             if self._fetch:
-                text = f"Загружаю жанры и теги с ЛитРес: {done} из {total}"
+                text = tr('Загружаю жанры и теги с ЛитРес: {0} из {1}', done, total)
                 self.page.runJavaScript(f"window.graph.status({json.dumps(text)}, {done / total:.3f})")
             else:
                 self.page.runJavaScript("window.graph.status(null)")
@@ -145,11 +147,11 @@ class GraphPage(QWidget):
     def _sync_subtitle(self):
         parts = []
         if not self._layout_done:
-            parts.append("строю граф…")
+            parts.append(tr("строю граф…"))
         if self._fetch:
-            parts.append(f"жанры с ЛитРес: {self._fetch[0]} из {self._fetch[1]}")
+            parts.append(tr('жанры с ЛитРес: {0} из {1}', self._fetch[0], self._fetch[1]))
         text = " · ".join(parts)
-        self.header.set_title("Граф книг", text[:1].upper() + text[1:])
+        self.header.set_title(tr("Граф книг"), text[:1].upper() + text[1:])
 
     def refresh(self):
         """Данные поменялись (подгрузились жанры, обновилась библиотека)."""

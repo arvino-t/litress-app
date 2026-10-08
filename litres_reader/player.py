@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QListWidget, QLis
 
 from . import style
 from .widgets import HeaderBar, IconButton, Popover, SeekSlider, attach_popover, cls, label
+from .i18n import tr
 
 SPEEDS = (0.75, 1.0, 1.25, 1.5, 1.75, 2.0)
 SLEEP_MINUTES = (0, -1, 15, 30, 45, 60)   # -1 — в конце текущей главы
@@ -147,7 +148,7 @@ def build_chapters(tracks: list[Path]) -> list[dict]:
         if len(inner) > 1:
             for j, (start, title) in enumerate(inner):
                 end = inner[j + 1][0] if j + 1 < len(inner) else None
-                chapters.append({"track": i, "start": start, "end": end, "title": title or f"Глава {j + 1}"})
+                chapters.append({"track": i, "start": start, "end": end, "title": title or tr('Глава {0}', j + 1)})
         else:
             chapters.append({"track": i, "start": 0.0, "end": None, "title": t.stem})
     return chapters
@@ -382,11 +383,11 @@ class PlayerPage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        self.header = HeaderBar(app.window, book.get("title") or "Аудиокнига")
-        back = IconButton("go-previous", "Назад")
+        self.header = HeaderBar(app.window, book.get("title") or tr("Аудиокнига"))
+        back = IconButton("go-previous", tr("Назад"))
         back.clicked.connect(app.go_back)
         self.header.pack_start(back)
-        self.tracks_btn = IconButton("view-list", "Главы")
+        self.tracks_btn = IconButton("view-list", tr("Главы"))
         self.track_list = QListWidget()
         self.track_list.setMinimumSize(420, 400)
         self.track_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -395,13 +396,13 @@ class PlayerPage(QWidget):
         self.tracks_popover = Popover(self.track_list)
         attach_popover(self.tracks_btn, self.tracks_popover)
         self.header.pack_end(self.tracks_btn)
-        self.sleep_btn = IconButton("alarm", "Таймер сна")
+        self.sleep_btn = IconButton("alarm", tr("Таймер сна"))
         sleep_box = QWidget()
         sl = QVBoxLayout(sleep_box)
         sl.setContentsMargins(0, 0, 0, 0)
         for minutes in SLEEP_MINUTES:
-            b = QPushButton("Выключить таймер" if minutes == 0 else "В конце главы" if minutes < 0
-                            else f"Через {minutes} мин")
+            b = QPushButton(tr("Выключить таймер") if minutes == 0 else tr("В конце главы") if minutes < 0
+                            else tr('Через {0} мин', minutes))
             cls(b, "flat")
             b.setStyleSheet("text-align: left; font-weight: normal;")
             b.clicked.connect(lambda _c=False, m=minutes: self._set_sleep(m))
@@ -461,20 +462,20 @@ class PlayerPage(QWidget):
             controls.addWidget(b)
             return b
 
-        ctl("media-skip-backward", "Предыдущая глава", self.player.prev_chapter)
-        ctl("media-seek-backward", "Назад на 15 секунд", lambda: self.player.skip(-15))
-        self.play_btn = IconButton("media-playback-start", "Слушать / пауза (пробел)", flat=False, size=28)
+        ctl("media-skip-backward", tr("Предыдущая глава"), self.player.prev_chapter)
+        ctl("media-seek-backward", tr("Назад на 15 секунд"), lambda: self.player.skip(-15))
+        self.play_btn = IconButton("media-playback-start", tr("Слушать / пауза (пробел)"), flat=False, size=28)
         cls(self.play_btn, "play")
         self.play_btn.set_icon_name("media-playback-start", "#ffffff")
         self.play_btn.clicked.connect(self.player.toggle)
         controls.addWidget(self.play_btn)
-        ctl("media-seek-forward", "Вперёд на 30 секунд", lambda: self.player.skip(30))
-        ctl("media-skip-forward", "Следующая глава", self.player.next_chapter)
+        ctl("media-seek-forward", tr("Вперёд на 30 секунд"), lambda: self.player.skip(30))
+        ctl("media-skip-forward", tr("Следующая глава"), self.player.next_chapter)
         controls.addStretch()
         box.addLayout(controls)
 
         self.speed = QComboBox()
-        self.speed.setToolTip("Скорость")
+        self.speed.setToolTip(tr("Скорость"))
         self.speed.addItems([f"{s:g}×" for s in SPEEDS])
         rate = app.settings.get("audioRate", 1.0)
         self.speed.setCurrentIndex(SPEEDS.index(rate) if rate in SPEEDS else SPEEDS.index(1.0))
@@ -566,7 +567,7 @@ class PlayerPage(QWidget):
             self.slider.setValue(int(pos))
         self.pos_label.setText(fmt_time(pos))
         self.left_label.setText(f"−{fmt_time(length - pos)}" if length else "")
-        percent = f"{round(p.fraction() * 100)}% книги"
+        percent = tr('{0}% книги', round(p.fraction() * 100))
         self.total_label.setText(f"{i + 1} / {len(p.chapters)} · {percent}"
                                  if len(p.chapters) > 1 else percent)
 
@@ -605,22 +606,22 @@ class PlayerPage(QWidget):
         self._sleep_at_chapter = None
         self.sleep_btn.set_icon_name("alarm")
         if not minutes:
-            self.app.toast("Таймер сна выключен")
+            self.app.toast(tr("Таймер сна выключен"))
             return
         if minutes < 0:
             self._sleep_at_chapter = self.player.current_chapter()
             self.sleep_btn.set_icon_name("alarm", style.ACCENT)
-            self.app.toast("Остановлю в конце главы")
+            self.app.toast(tr("Остановлю в конце главы"))
             return
         self._sleep_timer.start(minutes * 60 * 1000)
         self.sleep_btn.set_icon_name("alarm", style.ACCENT)
-        self.app.toast(f"Остановлю через {minutes} мин")
+        self.app.toast(tr('Остановлю через {0} мин', minutes))
 
     def _sleep_fire(self):
         self.sleep_btn.set_icon_name("alarm")
         self.player.pause()
         self.app.save_audio_progress()
-        self.app.toast("Таймер сна: воспроизведение остановлено")
+        self.app.toast(tr("Таймер сна: воспроизведение остановлено"))
 
     def keyPressEvent(self, e):
         if e.key() == Qt.Key.Key_Space:

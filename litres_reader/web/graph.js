@@ -5,6 +5,19 @@
 const PREFIX = '⁣LITREADER:'
 const post = msg => console.log(PREFIX + JSON.stringify(msg))
 const $ = id => document.getElementById(id)
+// Перевод строк: словарь {русский: перевод} приходит из Python вместе с данными графа
+let I18N = {}
+const T = (s, ...a) => (I18N[s] ?? s).replace(/\{(\d+)\}/g, (_, i) => a[i])
+const translatePage = () => {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        el.dataset.i18nSrc ??= el.textContent.trim()
+        el.textContent = T(el.dataset.i18nSrc)
+    })
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        el.dataset.i18nSrc ??= el.placeholder
+        el.placeholder = T(el.dataset.i18nSrc)
+    })
+}
 
 const canvas = $('graph')
 const ctx = canvas.getContext('2d')
@@ -95,7 +108,7 @@ function build(keepView) {
 
     $('empty').hidden = nodes.length > 0
     const books = nodes.filter(n => n.kind === 'book').length
-    $('stats').textContent = `${books} книг · ${nodes.length - books} тегов`
+    $('stats').textContent = T('{0} книг · {1} тегов', books, nodes.length - books)
     for (const k of data.kinds) {
         const el = document.querySelector(`.kind[data-k="${k.id}"] .n`)
         if (el) el.textContent = [...deg.entries()].filter(([id, d]) => kindOf(id) === k.id && d >= state.minDeg).length
@@ -248,8 +261,8 @@ function showTip(n, x, y) {
     const t = document.createElement('div')
     t.textContent = n.label
     tip.append(t)
-    const sub = n.kind === 'book' ? [n.sub, n.pct ? `прочитано ${n.pct}%` : ''].filter(Boolean).join(' · ')
-                                  : `${kind} · книг: ${n.deg}`
+    const sub = n.kind === 'book' ? [n.sub, n.pct ? T('прочитано {0}%', n.pct) : ''].filter(Boolean).join(' · ')
+                                  : T('{0} · книг: {1}', kind, n.deg)
     if (sub) {
         const s = document.createElement('div')
         s.className = 's'
@@ -429,6 +442,8 @@ document.addEventListener('keydown', e => {
 window.graph = {
     load(d, saved) {
         data = d
+        I18N = d.i18n || {}
+        translatePage()
         document.documentElement.dataset.theme = d.theme.dark ? 'dark' : 'light'
         document.documentElement.style.setProperty('--accent', d.theme.accent)
         Object.assign(state, saved || {})
@@ -462,7 +477,7 @@ function showProgress() {
     $('pLayout').hidden = !layoutOn
     if (layoutOn) {
         const pct = Math.round(progress.layout * 100)
-        $('pLayoutText').textContent = progress.layout > 0 ? `Раскладка графа — ${pct}%` : 'Строю граф…'
+        $('pLayoutText').textContent = progress.layout > 0 ? T('Раскладка графа — {0}%', pct) : T('Строю граф…')
         $('pLayoutBar').classList.toggle('busy', progress.layout === 0)
         $('pLayoutBar').style.width = `${pct}%`
     }
