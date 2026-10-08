@@ -18,4 +18,6 @@ litres-reader = "litres_reader.app:main"
 packages = ["litres_reader"]
 
 [tool.setuptools.package-data]
-litres_reader = ["web/*", "web/foliate/*", "web/foliate/vendor/*", "data/*", "data/sym/*"]
+litres_reader = ["web/*", "web/vendor/*", "web/foliate/*", "web/foliate/vendor/*",
+                 "web/foliate/vendor/pdfjs/*", "web/foliate/vendor/pdfjs/cmaps/*",
+                 "web/foliate/vendor/pdfjs/standard_fonts/*", "data/*", "data/sym/*"]
