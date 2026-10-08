@@ -102,6 +102,8 @@ DEFAULT_SETTINGS = {
     # фильтры библиотеки
     "libraryStatus": "all",
     "libraryFolder": None,
+    # Подкаталог своих книг (путь «Раздел / папка» из collection); None — все
+    "librarySubdir": None,
     "libraryType": "all",   # all / text / audio
     "librarySort": "recent",
     "ttsRate": 0.0,        # скорость чтения вслух, -0.5…0.8
@@ -454,7 +456,7 @@ class Library:
                     seen.add(bid)
                     rel = here.relative_to(root)
                     # подпись на карточке: раздел и вложенная папка
-                    collection = section + ("" if str(rel) == "." else f" / {rel}")
+                    collection = section + ("" if str(rel) == "." else f" / {rel.as_posix()}")
                     if bid in self.books:
                         book = self.books[bid]
                         if (book.get("section"), book.get("collection")) != (section, collection):

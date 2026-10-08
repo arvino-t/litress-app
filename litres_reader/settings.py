@@ -60,7 +60,7 @@ ICONS_DIR = CACHE_DIR / "service-icons"
 ICON_SIZE = 32
 # Настройки, которые «Сбросить» не трогает: где лежат книги, что открыто, состояние графа
 KEEP_ON_RESET = {"booksDir", "localFolders", "lastBook", "graph", "settingsTab",
-                 "libraryStatus", "libraryFolder", "libraryType", "librarySort",
+                 "libraryStatus", "libraryFolder", "librarySubdir", "libraryType", "librarySort",
                  "backupDir", "backupAuto", "backupKeep", "backupLast", "backupToken", "language"}
 
 _net = None

@@ -439,13 +439,25 @@ class App(QObject):
         return w
 
     @staticmethod
+    def _compact(combo, chars=11):
+        """Ширина списка не растёт от длинных пунктов; раскрытый список — по самому длинному."""
+        combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        combo.setMinimumContentsLength(chars)
+
+    @staticmethod
+    def _fit_popup(combo):
+        view = combo.view()
+        view.setMinimumWidth(max(combo.width(), view.sizeHintForColumn(0) + 40))
+
+    @staticmethod
     def _captioned(widget, caption):
         """Фильтр с подписью сверху — чтобы было ясно, что выбирается в списке."""
         box = QWidget()
         v = QVBoxLayout(box)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(2)
-        v.addWidget(label(caption, "dim", "caption"))
+        cap = label(caption or " ", "dim", "caption")
+        v.addWidget(cap)
         v.addWidget(widget)
         return box
 
@@ -472,22 +484,26 @@ class App(QObject):
             self.status_group.addButton(b)
             self.status_buttons[key] = b
             sl.addWidget(b)
-        h.addWidget(self._captioned(seg, tr("Статус")))
-
-        self._folder_ids: list = [None]
-        self.folder_combo = QComboBox()
-        self.folder_combo.setToolTip(tr("Папка на ЛитРес"))
-        self.folder_combo.currentIndexChanged.connect(self._on_folder_selected)
-        self.folder_box = self._captioned(self.folder_combo, tr("Папка на ЛитРес"))
-        h.addWidget(self.folder_box)
+        # статус — без подписи, но вровень с выпадающими списками
+        status_box = self._captioned(seg, "")
+        h.addWidget(status_box, 0, Qt.AlignmentFlag.AlignBottom)
 
         self.type_combo = QComboBox()
+        self._compact(self.type_combo)
         self.type_combo.setToolTip(tr("Источник"))
         self._type_keys: list[str] = []
-        self._fill_type_combo()
-        self.type_combo.currentIndexChanged.connect(self._on_type_selected)
         self.type_box = self._captioned(self.type_combo, tr("Источник"))
         h.addWidget(self.type_box)
+
+        # подкаталог: для ЛитРес — папки ЛитРес, для своих книг — папки на диске
+        self._folder_ids: list = [None]
+        self.folder_combo = QComboBox()
+        self._compact(self.folder_combo)
+        self.folder_combo.currentIndexChanged.connect(self._on_folder_selected)
+        self.folder_box = self._captioned(self.folder_combo, tr("Подкаталог"))
+        h.addWidget(self.folder_box)
+        self._fill_type_combo()
+        self.type_combo.currentIndexChanged.connect(self._on_type_selected)
 
         self.sort_combo = QComboBox()
         self.sort_combo.setToolTip(tr("Сортировка"))
@@ -534,12 +550,62 @@ class App(QObject):
         self.save_settings()
         self._apply_filter()
 
+    def _fs_mode(self) -> bool:
+        """Выбраны свои книги (все или раздел) — подкаталоги берутся с диска."""
+        kind = self.settings.get("libraryType", "all")
+        return kind == "mine" or kind.startswith("section:")
+
     def _on_folder_selected(self, idx):
         if getattr(self, "_filling_folders", False) or idx < 0:
             return
-        self.settings["libraryFolder"] = self._folder_ids[idx] if idx < len(self._folder_ids) else None
+        value = self._folder_ids[idx] if idx < len(self._folder_ids) else None
+        self.settings["librarySubdir" if self._fs_mode() else "libraryFolder"] = value
+        self._sync_folder_tip()
         self.save_settings()
         self._apply_filter()
+
+    def _fill_folder_combo(self):
+        """Список подкаталогов под выбранный источник."""
+        if self._fs_mode():
+            kind = self.settings.get("libraryType", "all")
+            section = kind[len("section:"):] if kind.startswith("section:") else None
+            paths = set()
+            for b in self.library.books.values():
+                if b.get("source") != "folder" or (section and b.get("section") != section):
+                    continue
+                coll = b.get("collection") or ""
+                sec, _sep, rel = coll.partition(" / ")
+                parts = rel.split("/") if rel else []
+                for i in range(1, len(parts) + 1):          # и родительские папки тоже
+                    paths.add(f"{sec} / {'/'.join(parts[:i])}")
+            paths = sorted(paths, key=str.lower)
+            prefix = f"{section} / " if section else ""
+            ids = [None] + paths
+            texts = [tr("Все подкаталоги")] + [p[len(prefix):] if prefix else p for p in paths]
+            key, tip, visible = "librarySubdir", tr("Папка на диске"), bool(paths)
+        else:
+            folders = self.library.folders
+            ids = [None, NO_FOLDER] + list(folders)
+            texts = [tr("Все папки"), tr("Без папки")] + [folders[f] for f in folders]
+            key, tip, visible = "libraryFolder", tr("Папка на ЛитРес"), bool(folders)
+        self._filling_folders = True
+        self._folder_ids = ids
+        self.folder_combo.clear()
+        self.folder_combo.addItems(texts)
+        current = self.settings.get(key)
+        if current not in ids:
+            current = None
+            self.settings[key] = None
+        self.folder_combo.setCurrentIndex(ids.index(current))
+        self._fit_popup(self.folder_combo)
+        self._filling_folders = False
+        self._folder_tip = tip
+        self._sync_folder_tip()
+        self.folder_box.setVisible(visible)
+
+    def _sync_folder_tip(self):
+        """Подсказка — с полным названием: в узком списке длинное обрезается."""
+        self.folder_combo.setToolTip(f"{self._folder_tip}: {self.folder_combo.currentText()}")
 
     def _on_sort_selected(self, idx):
         self.settings["librarySort"] = SORT_MODES[idx][0]
@@ -586,12 +652,15 @@ class App(QObject):
         self.type_combo.clear()
         self.type_combo.addItems([text for _k, text in options])
         self.type_combo.setCurrentIndex(self._type_keys.index(cur))
+        self._fit_popup(self.type_combo)
         self.type_combo.blockSignals(False)
+        self._fill_folder_combo()
 
     def _on_type_selected(self, idx):
         if 0 <= idx < len(self._type_keys):
             self.settings["libraryType"] = self._type_keys[idx]
             self.save_settings()
+            self._fill_folder_combo()
             self._apply_filter()
 
     def _on_only_downloaded(self, on):
@@ -614,12 +683,18 @@ class App(QObject):
             return False
         if kind in ("text", "audio") and (mine or bool(book.get("is_audio")) != (kind == "audio")):
             return False
-        folder = self.settings.get("libraryFolder")
-        if folder == NO_FOLDER:
-            if book.get("folders"):
+        if self._fs_mode():
+            sub = self.settings.get("librarySubdir")
+            coll = book.get("collection") or ""
+            if sub and not (coll == sub or coll.startswith(sub + "/")):
                 return False
-        elif folder and folder not in (book.get("folders") or []):
-            return False
+        else:
+            folder = self.settings.get("libraryFolder")
+            if folder == NO_FOLDER:
+                if book.get("folders"):
+                    return False
+            elif folder and folder not in (book.get("folders") or []):
+                return False
         q = self.search.text().strip().lower()
         if q:
             hay = " ".join([book.get("title") or ""] + (book.get("authors") or [])).lower()
@@ -641,17 +716,7 @@ class App(QObject):
         for key, text in STATUS_FILTERS:
             self.status_buttons[key].setText(f"{text} · {counts[key]}")
 
-        folders = self.library.folders
-        self._filling_folders = True
-        self._folder_ids = [None, NO_FOLDER] + list(folders)
-        self.folder_combo.clear()
-        self.folder_combo.addItems([tr("Все папки"), tr("Без папки")] + [folders[f] for f in folders])
-        current = self.settings.get("libraryFolder")
-        self.folder_combo.setCurrentIndex(self._folder_ids.index(current) if current in self._folder_ids else 0)
-        self._filling_folders = False
-        if current not in self._folder_ids:
-            self.settings["libraryFolder"] = None
-        self.folder_box.setVisible(bool(folders))
+        self._fill_folder_combo()
         self.type_box.setVisible(any(b.get("is_audio") or b.get("source") == "folder" for b in books))
 
     # --- сетка книг
