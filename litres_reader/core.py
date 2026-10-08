@@ -118,6 +118,11 @@ TYPE_FILTERS = (("all", "Все"), ("text", "Книги ЛитРес"), ("audio"
                 ("mine", "Мои книги и статьи"))
 
 
+# Какие ссылки из книг можно отдавать системе. Остальные схемы (file:, smb:, \\сервер\…,
+# ms-msdt:, search-ms: и т. п.) из книги не открываем — через них возможны атаки.
+SAFE_LINK_SCHEMES = {"http", "https", "mailto"}
+
+
 def parse_time(value) -> float | None:
     """Время из API ЛитРес («2026-10-04T15:28:01», без пояса — московское, как и у пользователя)."""
     if not value:
@@ -140,7 +145,9 @@ def load_json(path: Path, default):
         return default
 
 
-def save_json(path: Path, data, private=False):
+def save_json(path: Path, data, private=True):
+    """Атомарная запись JSON. Файлы данных (история чтения, пути к книгам, токены) —
+    только для владельца (0600)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -212,6 +219,9 @@ class Library:
         ids = []
         for art in arts:
             bid = str(art.get("id"))
+            if not bid.isdigit():
+                log("пропущена книга с некорректным id:", repr(bid)[:40])
+                continue
             authors = [p.get("full_name") for p in art.get("persons") or []
                        if p.get("role") == "author" and p.get("full_name")]
             book = self.books.setdefault(bid, {"id": bid, "source": "litres"})

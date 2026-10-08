@@ -7,6 +7,7 @@ API взяты из кода сайта и проекта bookvault — они �
 from __future__ import annotations
 
 import json
+import secrets
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
@@ -50,6 +51,9 @@ class LitresSession(QObject):
         self._callbacks: dict[int, callable] = {}
         self._next_id = 1
         self._downloads: list[dict] = []
+        # Метка ответов API: запросы выполняются в изолированном мире JavaScript, где скрипты
+        # сайта (реклама, счётчики) её не видят и не могут подделать ответ
+        self._token = secrets.token_hex(16)
 
         self.profile = QWebEngineProfile("litres", self)
         self.profile.setPersistentStoragePath(str(SESSION_DIR / "storage"))
@@ -103,6 +107,9 @@ class LitresSession(QObject):
                 if not self.logged_in:
                     self._schedule_check(800)
         elif t == "api":
+            if msg.get("token") != self._token:
+                log("отброшен ответ API без метки сессии (подделка со страницы?)")
+                return
             cb = self._callbacks.pop(msg.get("id"), None)
             if cb:
                 status = msg.get("status") or 0
@@ -146,20 +153,23 @@ class LitresSession(QObject):
         rid = self._next_id
         self._next_id += 1
         self._callbacks[rid] = lambda st, d: (log(method, url, "->", st), callback(st, d))
+        # Изолированный мир (ApplicationWorld): свои fetch и console, не подменённые сайтом;
+        # куки и адрес страницы — те же, что у litres.ru
         js = f"""(async () => {{
-            const post = window.__litreaderPost;
+            const prefix = {json.dumps(PREFIX)}, token = {json.dumps(self._token)};
+            const post = msg => console.log(prefix + JSON.stringify({{...msg, token}}));
             try {{
                 const h = {json.dumps(self.headers)};
                 const opts = {{method: {json.dumps(method)}, credentials: 'include', headers: h}};
                 const payload = {json.dumps(json.dumps(payload) if payload is not None else "")};
                 if (payload) {{ h['content-type'] = 'application/json'; opts.body = payload; }}
-                const r = await (window.__litreaderFetch || fetch)({json.dumps(url)}, opts);
+                const r = await fetch({json.dumps(url)}, opts);
                 post({{type: 'api', id: {rid}, status: r.status, body: await r.text()}});
             }} catch (e) {{
                 post({{type: 'api', id: {rid}, status: 0, error: String(e)}});
             }}
         }})();"""
-        self.page.runJavaScript(js)
+        self.page.runJavaScript(js, QWebEngineScript.ScriptWorldId.ApplicationWorld)
 
         # Страница могла перезагрузиться посреди запроса — не ждём вечно
         def timeout():

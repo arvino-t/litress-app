@@ -24,7 +24,6 @@
     }
 
     const origFetch = window.fetch
-    window.__litreaderFetch = origFetch.bind(window)
     window.fetch = function (input, init) {
         try {
             const url = typeof input === 'string' ? input

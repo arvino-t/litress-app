@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHB
                                QListWidget, QListWidgetItem, QSlider, QVBoxLayout, QWidget)
 
 from . import style
-from .core import DEBUG, SCHEME, WEB_DIR, books_dir, log
+from .core import DEBUG, SAFE_LINK_SCHEMES, SCHEME, WEB_DIR, books_dir, log
 from .litres import PREFIX
 from .widgets import HeaderBar, IconButton, Popover, SeekSlider, Switch, attach_popover, cls, label
 
@@ -82,6 +82,15 @@ def reader_profile():
     return _profile
 
 
+def open_external(url: QUrl) -> bool:
+    """Открыть ссылку из книги в системе — только http, https и mailto."""
+    if url.isValid() and url.scheme().lower() in SAFE_LINK_SCHEMES and not url.isLocalFile():
+        QDesktopServices.openUrl(url)
+        return True
+    log("ссылка из книги не открыта:", url.toString()[:200])
+    return False
+
+
 class _ReaderWebPage(QWebEnginePage):
     def __init__(self, profile, on_message, parent):
         super().__init__(profile, parent)
@@ -99,7 +108,7 @@ class _ReaderWebPage(QWebEnginePage):
     def acceptNavigationRequest(self, url, nav_type, is_main):
         if url.scheme() in (SCHEME, "blob", "data", "about"):
             return True
-        QDesktopServices.openUrl(url)   # внешние ссылки — в браузере
+        open_external(url)   # внешние ссылки — в браузере, только безопасные схемы
         return False
 
 
@@ -375,7 +384,7 @@ class ReaderPage(QWidget):
             else:
                 self.app.go_back()
         elif t == "external-link":
-            QDesktopServices.openUrl(QUrl(msg["href"]))
+            open_external(QUrl(msg.get("href") or ""))
         elif t == "error":
             self.app.toast(f"Не удалось открыть книгу: {msg.get('message')}")
         log("reader:", t)

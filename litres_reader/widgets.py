@@ -56,8 +56,11 @@ class IconButton(QToolButton):
         self.setIcon(style.icon(self._icon_name, self._color, self._size))
 
 
-def label(text="", *classes, wrap=False, align=None):
+def label(text="", *classes, wrap=False, align=None, rich=False):
     lbl = QLabel(text)
+    # Названия и авторы приходят извне (ЛитРес, имена файлов): не даём QLabel
+    # трактовать их как HTML. Разметка — только по явному rich=True.
+    lbl.setTextFormat(Qt.TextFormat.RichText if rich else Qt.TextFormat.PlainText)
     if classes:
         cls(lbl, *classes)
     lbl.setWordWrap(wrap)
@@ -186,6 +189,7 @@ class Toast(QFrame):
         lay.setContentsMargins(18, 8, 10 if button else 18, 8)
         lay.setSpacing(8)
         lbl = QLabel(text)
+        lbl.setTextFormat(Qt.TextFormat.PlainText)
         lbl.setWordWrap(True)
         lay.addWidget(lbl)
         if button:

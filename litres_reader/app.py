@@ -1440,7 +1440,7 @@ class App(QObject):
         b.setSpacing(8)
         intro = label("Книги, прогресс и ежедневное чтение — в планировщике SingularityApp.<br>"
                       "Токен создаётся в <a href='https://me.singularity-app.com'>личном кабинете</a> → "
-                      "«Доступ к API» (нужен доступ к задачам, проектам и привычкам).", wrap=True)
+                      "«Доступ к API» (нужен доступ к задачам, проектам и привычкам).", wrap=True, rich=True)
         intro.setOpenExternalLinks(True)
         b.addWidget(intro)
         token = QLineEdit(s.state.get("token", ""))
