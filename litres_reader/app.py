@@ -8,16 +8,17 @@ import sys
 import threading
 import time
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRectF, QSize, QStandardPaths, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, QRectF, QSize, QStandardPaths, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket, QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QFrame,
                                QHBoxLayout, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, core, style
+from . import __version__, backup, core, style
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, CONFIG_FILE,
                    COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
                    API, READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
@@ -155,6 +156,11 @@ class App(QObject):
         self.library.chars_per_min = int(self.settings.get("readingCharsPerMin") or 1300)
         self._settings_timer = QTimer(self, singleShot=True, interval=500)
         self._settings_timer.timeout.connect(lambda: save_json(CONFIG_FILE, self.settings))
+        # Автоматические резервные копии: проверка через минуту после запуска и раз в час
+        self._backup_timer = QTimer(self, interval=3600_000)
+        self._backup_timer.timeout.connect(self.auto_backup)
+        self._backup_timer.start()
+        QTimer.singleShot(60_000, self.auto_backup)
         self.cards: dict[str, BookCard] = {}
         self.downloading: set[str] = set()
         self.bulk = None        # скачивание всех книг разом: очередь и счётчики
@@ -1667,6 +1673,29 @@ class App(QObject):
                                "Лицензия MIT. Движок чтения — foliate-js (MIT).")
         box.exec()
 
+    # --- резервные копии
+
+    def make_backup(self, reason="") -> Path | None:
+        try:
+            path = backup.create(self.settings, reason)
+        except (OSError, ValueError) as e:
+            print(f"litres-reader: резервная копия не создана: {e}", file=sys.stderr, flush=True)
+            return None
+        self.settings["backupLast"] = datetime.now().isoformat(timespec="seconds")
+        self.save_settings()
+        log("backup", path)
+        return path
+
+    def auto_backup(self):
+        if backup.due(self.settings):
+            self.make_backup()
+
+    def restart(self):
+        """Перезапуск приложения (после восстановления из копии)."""
+        QProcess.startDetached(sys.executable, ["-m", "litres_reader", "--restarted"])
+        self.window.close()
+        self.qapp.quit()
+
     def on_close(self):
         self.save_audio_progress()
         self.player.unload()
@@ -1688,6 +1717,16 @@ def main(argv=None):
     argv = sys.argv if argv is None else argv
     files = [Path(a).resolve() for a in argv[1:] if not a.startswith("-") and Path(a).exists()]
 
+    if "--restarted" in argv:
+        # Перезапуск: ждём, пока прежний экземпляр закроется (до 15 с)
+        for _ in range(50):
+            probe = QLocalSocket()
+            probe.connectToServer(_server_name())
+            if not probe.waitForConnected(100):
+                break
+            probe.abort()
+            time.sleep(0.3)
+
     # Уже запущено — передаём файлы открытому окну и выходим
     sock = QLocalSocket()
     sock.connectToServer(_server_name())
@@ -1707,8 +1746,11 @@ def main(argv=None):
     qapp.setFont(style.app_font())
     qapp.setWindowIcon(QIcon(str(APP_ICON)))
 
+    restored = backup.apply_pending()     # восстановление из копии — до чтения данных
     app = App(qapp)
     app.window.show()
+    if restored:
+        QTimer.singleShot(800, lambda: app.toast("Данные восстановлены из резервной копии", timeout=6000))
 
     server = QLocalServer()
     QLocalServer.removeServer(_server_name())

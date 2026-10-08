@@ -1,21 +1,23 @@
 """Страница «Настройки» — в духе Adw.PreferencesWindow: вкладки, на них группы со строками.
 
 Вкладки: «Общие» (запуск, библиотека, папки, статистика), «Чтение» (вид текста, чтение
-вслух, автолистание, аудиокниги), «Интеграции» (ЛитРес, Singularity — со значками сервисов)
-и «Дополнительно» (обновление с ЛитРес, оценка чтения на телефоне, журнал, данные, сброс).
+вслух, автолистание, аудиокниги), «Интеграции» (ЛитРес, Singularity — со значками сервисов),
+«Резервные копии» (создание, расписание, восстановление) и «Дополнительно» (обновление
+с ЛитРес, оценка чтения на телефоне, журнал, данные, сброс).
 Изменения применяются сразу.
 """
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton,
                                QScrollArea, QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, core, style
+from . import __version__, backup, core, style
 from .core import CACHE_DIR, CONFIG_DIR, DATA_DIR, DEFAULT_SETTINGS, SITE, books_dir
 from .player import SPEEDS
 from .widgets import HeaderBar, IconButton, Switch, cls, label
@@ -25,7 +27,18 @@ THEMES = (("auto", "Как в системе"), ("light", "Светлая"), ("s
 FONTS = (("book", "Как в книге"), ("serif", "С засечками"), ("sans", "Без засечек"))
 
 TABS = (("general", "Общие"), ("reading", "Чтение"), ("integrations", "Интеграции"),
-        ("advanced", "Дополнительно"))
+        ("backup", "Резервные копии"), ("advanced", "Дополнительно"))
+BACKUP_AUTO = (("off", "Выключено"), ("daily", "Раз в день"), ("weekly", "Раз в неделю"))
+MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
+          "сентября", "октября", "ноября", "декабря")
+SHOWN_BACKUPS = 5
+
+
+def human_time(when: datetime) -> str:
+    today = datetime.now().date()
+    day = ("сегодня" if when.date() == today else
+           f"{when.day} {MONTHS[when.month - 1]}" + ("" if when.year == today.year else f" {when.year}"))
+    return f"{day}, {when:%H:%M}"
 
 # Значки сторонних сервисов: значок из темы системы (если приложение установлено),
 # иначе favicon сайта — один раз скачивается и хранится в данных приложения.
@@ -38,7 +51,8 @@ ICONS_DIR = CACHE_DIR / "service-icons"
 ICON_SIZE = 32
 # Настройки, которые «Сбросить» не трогает: где лежат книги, что открыто, состояние графа
 KEEP_ON_RESET = {"booksDir", "localFolders", "lastBook", "graph", "settingsTab",
-                 "libraryStatus", "libraryFolder", "libraryType", "librarySort"}
+                 "libraryStatus", "libraryFolder", "libraryType", "librarySort",
+                 "backupDir", "backupAuto", "backupKeep", "backupLast", "backupToken"}
 
 _net = None
 
@@ -132,6 +146,8 @@ class SettingsPage(QWidget):
         if key not in self.pages:
             key = TABS[0][0]
         self.stack.setCurrentWidget(self.pages[key])
+        if key == "backup":
+            self._fill_backups()      # копии могли появиться сами (автоматически)
         btn = self.tab_buttons[key]
         if not btn.isChecked():
             btn.setChecked(True)
@@ -353,6 +369,37 @@ class SettingsPage(QWidget):
                     "Задачи «Читаю», прогресс в заметках, привычка ежедневного чтения", service="singularity")
         self.col.addStretch()
 
+        # --- Резервные копии
+        self.page("backup")
+        g = self.group("Резервные копии", "Настройки, библиотека (папки, отметки, пути к скачанным книгам), "
+                       "место чтения и закладки, статистика, настройки Singularity. Книги и обложки в копию "
+                       "не входят, вход в ЛитРес — тоже. Папку с копиями удобно держать в облаке.")
+        self.backup_now = self.button(g, "Создать копию сейчас", "Создать", self._backup_now)
+        self.combo(g, "Создавать автоматически", "backupAuto", BACKUP_AUTO,
+                   "При запуске и пока приложение открыто")
+        self.spin(g, "Хранить копий", "backupKeep", 1, 100, hint="Более старые удаляются",
+                  on_change=lambda v: backup.prune(backup.backup_dir(st), v))
+        dir_box = QWidget()
+        dh = QHBoxLayout(dir_box)
+        dh.setContentsMargins(0, 0, 0, 0)
+        open_dir = QPushButton("Открыть")
+        open_dir.clicked.connect(self._open_backup_dir)
+        change_dir = QPushButton("Изменить…")
+        change_dir.clicked.connect(self._choose_backup_dir)
+        dh.addWidget(open_dir)
+        dh.addWidget(change_dir)
+        self.backup_dir_row = self.row(g, "Папка для копий", dir_box, str(backup.backup_dir(st)))
+        self.switch(g, "Сохранять токен Singularity", "backupToken",
+                    "Без него после восстановления на другом компьютере Singularity придётся подключить "
+                    "заново. Токен даёт доступ к вашим задачам — храните такие копии бережно")
+
+        self.restore_group = self.group("Восстановление", "Перед восстановлением текущие данные тоже сохраняются "
+                                        "в копию. Папки книг и копий остаются как на этом компьютере. "
+                                        "Приложение перезапустится.")
+        self._restore_rows = []
+        self._fill_backups()
+        self.col.addStretch()
+
         # --- Дополнительно
         self.page("advanced")
         g = self.group("Синхронизация с ЛитРес")
@@ -414,6 +461,111 @@ class SettingsPage(QWidget):
         mine = sum(1 for b in self.app.library.books.values() if b.get("source") == "folder")
         self.row(g, "Найдено своих книг и статей", box, str(mine))
         self._folder_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
+
+    # --- резервные копии
+
+    def _sync_backup_hint(self):
+        last = self.app.settings.get("backupLast")
+        try:
+            text = "Последняя: " + human_time(datetime.fromisoformat(last))
+        except (TypeError, ValueError):
+            text = "Копий ещё не было"
+        self._set_hint(self.backup_now, text)
+
+    def _fill_backups(self):
+        g = self.restore_group
+        for w in self._restore_rows:
+            g.removeWidget(w)
+            w.deleteLater()
+        before = g.count()
+        items = backup.list_backups(backup.backup_dir(self.app.settings))
+        for path, when in items[:SHOWN_BACKUPS]:
+            b = QPushButton("Восстановить")
+            b.clicked.connect(lambda _=False, p=path: self._restore(p))
+            try:
+                size = f"{path.stat().st_size / 1024:.0f} КБ"
+            except OSError:
+                size = ""
+            note = " · перед восстановлением" if "before-restore" in path.name else ""
+            self.row(g, human_time(when).capitalize(), b, f"{size}{note}")
+        if len(items) > SHOWN_BACKUPS:
+            self.row(g, f"И ещё {len(items) - SHOWN_BACKUPS} — в папке для копий")
+        elif not items:
+            self.row(g, "В папке пока нет копий")
+        self.button(g, "Восстановить из файла", "Выбрать…", self._restore_from_file,
+                    "Например, копия с другого компьютера")
+        self._restore_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
+        self._sync_backup_hint()
+
+    def _backup_now(self):
+        path = self.app.make_backup()
+        if path:
+            self.app.toast(f"Копия создана: {path.name}")
+        else:
+            self.app.toast("Не удалось создать копию — подробности в журнале")
+        self._fill_backups()
+
+    def _open_backup_dir(self):
+        folder = backup.backup_dir(self.app.settings)
+        folder.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+
+    def _choose_backup_dir(self):
+        cur = backup.backup_dir(self.app.settings)
+        folder = QFileDialog.getExistingDirectory(self.app.window, "Папка для резервных копий",
+                                                  str(cur if cur.exists() else Path.home()))
+        if not folder:
+            return
+        self.app.settings["backupDir"] = None if Path(folder) == backup.default_dir() else folder
+        self.app.save_settings()
+        hint = self.backup_dir_row.findChild(QLabel, "row-hint")
+        hint.setText(folder)
+        hint.setVisible(True)
+        self._fill_backups()
+
+    def _restore_from_file(self):
+        path, _f = QFileDialog.getOpenFileName(self.app.window, "Резервная копия",
+                                               str(backup.backup_dir(self.app.settings)),
+                                               "Резервные копии (*.zip)")
+        if path:
+            self._restore(Path(path))
+
+    def _restore(self, path: Path):
+        try:
+            manifest = backup.read_manifest(path)
+        except ValueError as e:
+            QMessageBox.warning(self.app.window, "Не удалось восстановить", str(e).capitalize())
+            return
+        try:
+            when = human_time(datetime.fromisoformat(manifest.get("created", "")))
+        except ValueError:
+            when = path.name
+        box = QMessageBox(self.app.window)
+        box.setWindowTitle("Восстановить из копии?")
+        box.setText(f"<b>Восстановить данные из копии ({when})?</b>")
+        box.setInformativeText(
+            f"Копия версии {manifest.get('version', '?')}. Библиотека, место чтения, статистика и настройки "
+            "заменятся данными из копии; текущие сначала сохранятся в отдельную копию. "
+            "Приложение перезапустится.")
+        cancel = box.addButton("Отмена", QMessageBox.ButtonRole.RejectRole)
+        ok = box.addButton("Восстановить и перезапустить", QMessageBox.ButtonRole.DestructiveRole)
+        cls(ok, "destructive")
+        box.setDefaultButton(cancel)
+        box.exec()
+        if box.clickedButton() is not ok:
+            return
+        # сначала читаем копию (старые копии может удалить очистка при новой копии), потом страхуемся
+        try:
+            backup.stage_restore(path)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self.app.window, "Не удалось восстановить", str(e).capitalize())
+            return
+        if not self.app.make_backup("before-restore"):
+            backup.cancel_pending()
+            QMessageBox.warning(self.app.window, "Восстановление отменено",
+                                "Не удалось сохранить текущие данные в копию — подробности в журнале.")
+            return
+        self.app.restart()
 
     def _reset(self):
         box = QMessageBox(self.app.window)

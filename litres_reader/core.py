@@ -120,6 +120,13 @@ DEFAULT_SETTINGS = {
     "debugLog": False,
     # Последняя открытая вкладка настроек
     "settingsTab": "general",
+    # Резервные копии: папка (None — Документы/Backups/litres-reader), off / daily / weekly,
+    # сколько хранить, время последней копии, класть ли в копию токен Singularity
+    "backupDir": None,
+    "backupAuto": "weekly",
+    "backupKeep": 10,
+    "backupLast": None,
+    "backupToken": False,
 }
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
