@@ -592,6 +592,8 @@ class App(QObject):
             return False
         kind = self.settings.get("libraryType", "all")
         mine = book.get("source") == "folder"
+        if kind == "litres" and book.get("source") != "litres":
+            return False
         if kind == "mine" and not mine:
             return False
         if kind.startswith("section:") and not (mine and book.get("section") == kind[len("section:"):]):
@@ -1450,7 +1452,7 @@ class App(QObject):
         raw = self.settings.get("localFolders")
         if raw is None:
             docs = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation))
-            defaults = (("Books/others", tr("Книги")), ("articles", tr("Статьи")),
+            defaults = (("Books/others", tr("Другие книги")), ("articles", tr("Статьи")),
                         ("trainings", tr("Тренинги и презентации")))
             return [{"path": str(docs / d), "name": name} for d, name in defaults if (docs / d).is_dir()]
         out = []
