@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 from . import __version__, style
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, CONFIG_FILE,
                    COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
-                   READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
+                   API, READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
                    load_json, log, looks_like_book, save_json, set_books_dir)
+from .graph import GraphPage
 from .litres import LitresSession
 from .player import AudioPlayer, PlayerPage, audio_tracks
 from .reader import ReaderPage
@@ -156,6 +157,8 @@ class App(QObject):
         self.syncing = False
         self.only_downloaded = False
         self.reader: ReaderPage | None = None
+        self.graph_page: GraphPage | None = None
+        self._details_running = False
         self.player_page: PlayerPage | None = None
         self.net = QNetworkAccessManager(self)
         self._covers_running = 0
@@ -203,6 +206,7 @@ class App(QObject):
 
         for keys, slot in (("F11", self.toggle_fullscreen), ("F5", self.sync), ("Ctrl+R", self.sync),
                            ("Ctrl+O", self.on_open_file), ("Ctrl+F", self._toggle_search),
+                           ("Ctrl+G", self.show_graph),
                            ("Alt+Left", self.go_back)):
             QShortcut(QKeySequence(keys), self.window, activated=slot)
 
@@ -267,6 +271,10 @@ class App(QObject):
             page.deleteLater()
             self.reader = None
             self.library.flush()
+        elif page is self.graph_page:
+            self.stack.removeWidget(page)
+            page.deleteLater()
+            self.graph_page = None
         elif page is self.login_page:
             pass
         self.refresh_library()
@@ -320,6 +328,7 @@ class App(QObject):
         self.account_action = self.menu.addAction("Войти в ЛитРес", self._account_action)
         self.menu.addAction("Singularity…", self.show_singularity_dialog)
         self.menu.addAction("Статистика чтения", self.show_stats_dialog)
+        self.menu.addAction("Граф книг (Ctrl+G)", self.show_graph)
         self.menu.addSeparator()
         self.menu.addAction("О приложении", self.on_about)
         menu_btn.clicked.connect(lambda: self.menu.popup(menu_btn.mapToGlobal(QPoint(0, menu_btn.height() + 4))))
@@ -750,6 +759,7 @@ class App(QObject):
         def finish(text):
             self._set_syncing(False)
             self.refresh_library()
+            self._fetch_details()
             # Открытая книга могла уйти дальше на ЛитРес — подтягиваем место
             for bid in {self.reader.book["id"] if self.reader else None, self.player.book_id} - {None}:
                 if bid in self.library.books:
@@ -1261,6 +1271,48 @@ class App(QObject):
                        + errors[0], timeout=10000)
         else:
             self.toast(f"Книги теперь в {new_dir}" + (f" — перенесено файлов: {moved}" if moved else ""))
+
+    # --- граф книг
+
+    def show_graph(self):
+        if self.graph_page is None:
+            self.graph_page = GraphPage(self)
+        self.push(self.graph_page)
+        self._fetch_details()
+
+    def _fetch_details(self):
+        """Жанры и теги книг ЛитРес — их нет в списке книг, только в карточке каждой.
+        Подгружаем в фоне по одной (раз на книгу), потом обновляем граф."""
+        if self._details_running or not self.litres.logged_in:
+            return
+        todo = [b for b in self.library.books.values() if b.get("source") == "litres" and "genres" not in b]
+        if not todo:
+            return
+        self._details_running = True
+
+        def step(i):
+            if i >= len(todo) or not self.litres.logged_in:
+                self._details_running = False
+                self.library.save()
+                if self.graph_page:
+                    self.graph_page.refresh()
+                return
+            book = todo[i]
+
+            def done(status, data):
+                if status == 200 and data:
+                    d = (data.get("payload") or {}).get("data") or {}
+                    book["genres"] = [g["name"] for g in d.get("genres") or [] if g.get("name")]
+                    book["tags"] = [t["name"] for t in d.get("tags") or [] if t.get("name")][:8]
+                elif status == 404:
+                    book["genres"], book["tags"] = [], []
+                if i % 20 == 19:
+                    self.library.save()
+                    if self.graph_page:
+                        self.graph_page.refresh()
+                QTimer.singleShot(250, lambda: step(i + 1))
+            self.litres.api_get(f"{API}/arts/{book['id']}", done)
+        step(0)
 
     # --- свои книги и статьи
 

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; form-action 'none';">
+<link rel="stylesheet" href="graph.css">
+<script src="vendor/d3-dispatch.min.js"></script>
+<script src="vendor/d3-quadtree.min.js"></script>
+<script src="vendor/d3-timer.min.js"></script>
+<script src="vendor/d3-force.min.js"></script>
+<script src="graph.js" defer></script>
+</head>
+<body>
+<canvas id="graph"></canvas>
+
+<aside id="panel">
+  <input id="search" type="search" placeholder="Найти книгу или тег" autocomplete="off">
+  <section>
+    <h3>Книги</h3>
+    <div class="seg" id="source">
+      <button data-v="all" class="on">Все</button>
+      <button data-v="litres">ЛитРес</button>
+      <button data-v="mine">Мои</button>
+    </div>
+  </section>
+  <section>
+    <h3>Связи</h3>
+    <div id="kinds"></div>
+  </section>
+  <section>
+    <label class="row" for="minDeg">Тег — от <b id="minDegVal">2</b> книг</label>
+    <input id="minDeg" type="range" min="1" max="6" value="2">
+    <label class="check"><input id="orphans" type="checkbox"> Книги без связей</label>
+  </section>
+  <section class="foot">
+    <span id="stats"></span>
+    <button id="fit">Показать всё</button>
+  </section>
+</aside>
+
+<div id="tip" hidden></div>
+<div id="empty" hidden>Нет связей для выбранных фильтров</div>
+</body>
+</html>
