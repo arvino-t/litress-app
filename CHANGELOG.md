@@ -5,6 +5,8 @@
 
 ## [Не выпущено]
 
+## [0.13.0] — 2026-10-09
+
 ### Добавлено
 - Скачивание всех книг разом: меню → «Скачать все книги…». Можно выбрать только книги
   или книги вместе с аудиокнигами. Книги скачиваются по одной, ход виден в заголовке,
@@ -161,7 +163,8 @@
   голоса и таймером сна.
 - Обход VPN для ЛитРес (`vpn-bypass/`).
 
-[Не выпущено]: https://github.com/arvino-t/litress-app/compare/v0.12.0...HEAD
+[Не выпущено]: https://github.com/arvino-t/litress-app/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/arvino-t/litress-app/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/arvino-t/litress-app/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/arvino-t/litress-app/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/arvino-t/litress-app/compare/v0.9.0...v0.10.0
