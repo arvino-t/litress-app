@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 import zipfile
@@ -21,7 +22,8 @@ from pathlib import Path
 from PySide6.QtCore import QStandardPaths
 
 from . import __version__
-from .core import CONFIG_DIR, CONFIG_FILE, DATA_DIR, LIBRARY_FILE, PROGRESS_FILE, STATS_FILE, load_json, save_json
+from .core import (CONFIG_DIR, CONFIG_FILE, DATA_DIR, LIBRARY_FILE, PROGRESS_FILE, STATS_FILE, STORE_BOOKS,
+                   STORE_PROGRESS, folder_store_dir, load_json, save_json)
 from .i18n import tr
 
 SINGULARITY_FILE = CONFIG_DIR / "singularity.json"
@@ -37,7 +39,18 @@ PENDING_DIR = DATA_DIR / "restore-pending"
 MAX_FILE = 50 * 1024 * 1024
 INTERVALS = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
 # Настройки, которые не берутся из копии: они про этот компьютер и про сами копии
-LOCAL_SETTINGS = ("booksDir", "localFolders", "backupDir", "backupLast")
+# Данные своих библиотек (их хранилища `.library/`) — в архиве как libraries/<id>/<файл>
+STORE_ENTRY = re.compile(r"^libraries/(folder-[0-9a-f]{10})/(%s|%s)$" % (re.escape(STORE_BOOKS), re.escape(STORE_PROGRESS)))
+LOCAL_SETTINGS = ("booksDir", "libraries", "localFolders", "backupDir", "backupLast")
+
+
+def _folder_stores(settings) -> dict[str, Path]:
+    """{id библиотеки: папка хранилища} для своих библиотек из реестра настроек."""
+    out = {}
+    for lib in settings.get("libraries") or []:
+        if isinstance(lib, dict) and lib.get("kind") == "folder" and lib.get("id") and lib.get("path"):
+            out[lib["id"]] = folder_store_dir(Path(lib["path"]), lib["id"])
+    return out
 
 
 def default_dir() -> Path:
@@ -77,6 +90,12 @@ def create(settings, reason: str = "") -> Path:
                 continue
             z.writestr(arc, data)
             stored.append(arc)
+        for lib_id, store in _folder_stores(settings).items():
+            for name in (STORE_BOOKS, STORE_PROGRESS):
+                if (store / name).exists():
+                    arc = f"libraries/{lib_id}/{name}"
+                    z.writestr(arc, (store / name).read_bytes())
+                    stored.append(arc)
         z.writestr("manifest.json", json.dumps({
             "app": "litres-reader", "version": __version__, "created": now.isoformat(timespec="seconds"),
             "files": stored, "token": include_token, "reason": reason,
@@ -138,7 +157,8 @@ def stage_restore(path: Path) -> dict:
     staged = {}
     with zipfile.ZipFile(path) as z:
         for info in z.infolist():
-            if info.filename not in FILES:       # только известные имена — никаких путей из архива
+            # только известные имена — никаких путей из архива
+            if info.filename not in FILES and not STORE_ENTRY.match(info.filename):
                 continue
             if info.file_size > MAX_FILE:
                 raise ValueError(tr('{0}: слишком большой файл', info.filename))
@@ -153,7 +173,9 @@ def stage_restore(path: Path) -> dict:
     shutil.rmtree(PENDING_DIR, ignore_errors=True)
     PENDING_DIR.mkdir(parents=True)
     for name, data in staged.items():
-        (PENDING_DIR / name).write_bytes(data)
+        target = PENDING_DIR / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
     return manifest
 
 
@@ -184,5 +206,15 @@ def apply_pending() -> bool:
                     data.pop(key, None)
         save_json(target, data)
         applied = True
+    # хранилища своих библиотек — в те библиотеки этого компьютера, что есть в его реестре
+    stores = _folder_stores(load_json(CONFIG_FILE, {}))
+    pending_libs = PENDING_DIR / "libraries"
+    if pending_libs.is_dir():
+        for src in pending_libs.glob("*/*.json"):
+            lib_id = src.parent.name
+            data = load_json(src, None)
+            if lib_id in stores and data is not None and STORE_ENTRY.match(f"libraries/{lib_id}/{src.name}"):
+                save_json(stores[lib_id] / src.name, data)
+                applied = True
     shutil.rmtree(PENDING_DIR, ignore_errors=True)
     return applied

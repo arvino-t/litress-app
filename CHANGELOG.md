@@ -14,6 +14,12 @@ All notable changes to LitRes Reader. The format is based on
 
 ### Changed
 - Project documentation (README, CHANGELOG, TODO) is now in English.
+- Your folders become **libraries**: a registry of libraries (`libraries` setting) replaces
+  `localFolders`; existing folders and LitRes are migrated automatically on first start.
+- A library's data (read marks, reading positions) is stored in its own folder, `<root>/.library/`,
+  keyed by the path inside the library — it travels with the books (cloud sync, another computer).
+  Data of your books is moved there from the app's shared files on first start.
+- Backups include the data of all your libraries (`libraries/<id>/…` in the archive).
 
 ### Fixed
 - Backups made within the same second could be pruned in the wrong order, deleting the newest one.

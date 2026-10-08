@@ -59,6 +59,32 @@ CONFIG_FILE = CONFIG_DIR / "settings.json"
 LIBRARY_FILE = DATA_DIR / "library.json"
 PROGRESS_FILE = DATA_DIR / "progress.json"
 STATS_FILE = DATA_DIR / "stats.json"
+# Данные своей библиотеки лежат в её корневой папке — едут вместе с книгами (облако, другой компьютер)
+LIBRARY_STORE = ".library"
+STORE_BOOKS = "books.json"
+STORE_PROGRESS = "progress.json"
+# Поля книги из папки, которые получаются сканированием (в хранилище библиотеки не пишутся)
+FOLDER_DERIVED = {"id", "source", "format", "path", "title", "authors", "section", "collection", "library", "rel"}
+
+
+def folder_library_id(path) -> str:
+    return "folder-" + hashlib.sha1(str(Path(path).expanduser()).encode()).hexdigest()[:10]
+
+
+def folder_store_dir(root: Path, lib_id: str, create=False) -> Path:
+    """`<корень>/.library`; если папка только для чтения — запасное место в данных приложения."""
+    store = Path(root).expanduser() / LIBRARY_STORE
+    if store.is_dir() and os.access(store, os.W_OK):
+        return store
+    if create:
+        try:
+            store.mkdir()
+            return store
+        except OSError:
+            pass
+    elif not store.exists() and os.access(Path(root).expanduser(), os.W_OK):
+        return store
+    return DATA_DIR / "libraries" / lib_id
 HEADERS_FILE = SESSION_DIR / "api-headers.json"
 
 API = "https://api.litres.ru/foundation/api"
@@ -114,8 +140,8 @@ DEFAULT_SETTINGS = {
     "lastBook": None,
     # Папка для скачанных книг; None — папка внутри данных приложения
     "booksDir": None,
-    # Папки со своими книгами и статьями: [{"path": …, "name": раздел}]; None — по умолчанию из «Документов»
-    "localFolders": None,
+    # Библиотеки, внесённые в программу (см. libraries.py); None — создаётся из прежних настроек
+    "libraries": None,
     # Как часто подтягивать библиотеку с ЛитРес, пока окно открыто (минуты; 0 — не обновлять)
     "remoteSyncMin": 15,
     # Скорость чтения для оценки чтения на телефоне (знаков в минуту)
@@ -234,6 +260,9 @@ class Library:
         # Изменения папок, ещё не отправленные на ЛитРес: [{op, folder, art}]
         self.folder_ops: list[dict] = data.get("folder_ops", [])
         self.progress: dict[str, dict] = load_json(PROGRESS_FILE, {})
+        # Свои библиотеки: {id: {"root", "name", "store"}}; последнее записанное — чтобы не писать зря
+        self.folder_libs: dict[str, dict] = {}
+        self._written: dict[Path, str] = {}
         # Статистика: секунды чтения по дням и по книгам, даты дочитывания
         self.stats: dict = {"days": {}, "books": {}, "finished": {}, **load_json(STATS_FILE, {})}
         for d in (books_dir(), COVERS_DIR, SESSION_DIR):
@@ -243,8 +272,27 @@ class Library:
         self._progress_timer.timeout.connect(self.flush)
 
     def save(self):
-        save_json(LIBRARY_FILE, {"books": self.books, "order": self.order,
+        """Книги ЛитРес и открытые файлы — в library.json; свои — в хранилище своей библиотеки."""
+        own = {bid for bid, b in self.books.items() if b.get("source") == "folder"}
+        save_json(LIBRARY_FILE, {"books": {bid: b for bid, b in self.books.items() if bid not in own},
+                                 "order": [bid for bid in self.order if bid not in own],
                                  "folders": self.folders, "folder_ops": self.folder_ops})
+        for lib_id, lib in self.folder_libs.items():
+            data = {b["rel"]: {k: v for k, v in b.items() if k not in FOLDER_DERIVED}
+                    for b in self.books.values() if b.get("library") == lib_id and b.get("rel")}
+            self._write_store(lib, STORE_BOOKS, {"version": 1, "books": {k: v for k, v in data.items() if v}})
+
+    def _write_store(self, lib, name, data):
+        """Пишет файл хранилища, только если он изменился (меньше лишних синхронизаций с облаком)."""
+        path = lib["store"] / name
+        text = json.dumps(data, ensure_ascii=False, sort_keys=True)
+        if self._written.get(path) == text and path.exists():
+            return
+        try:
+            save_json(path, data)
+            self._written[path] = text
+        except OSError as e:
+            log("хранилище библиотеки недоступно:", path, e)
 
     def ordered(self):
         return [self.books[i] for i in self.order if i in self.books]
@@ -431,14 +479,28 @@ class Library:
         """Находит свои книги и статьи в папках [{"path", "name"}]; name — раздел (подпись и фильтр).
         Файлы не копируются и не меняются: в библиотеке хранится только путь.
         Возвращает число найденных файлов."""
+        if self.folder_libs:
+            # повторное сканирование: сначала дописываем несохранённое, иначе хранилище его затрёт
+            self.save()
+            self.flush()
         downloads = books_dir().resolve()
         seen: set[str] = set()
         changed = False
+        self.folder_libs = {}
         for folder in folders:
             root = Path(folder["path"]).expanduser()
             section = folder.get("name") or root.name
             if not root.is_dir():
                 continue
+            lib_id = folder.get("id") or folder_library_id(root)
+            store = folder_store_dir(root, lib_id, create=True)
+            self.folder_libs[lib_id] = {"root": root, "name": section, "store": store}
+            # хранилища ещё нет — первый запуск этой версии: данные берутся из общих файлов (миграция)
+            saved_books = load_json(store / STORE_BOOKS, None)
+            saved_progress = load_json(store / STORE_PROGRESS, None)
+            migrate = saved_books is None
+            saved_books = (saved_books or {}).get("books", {})
+            saved_progress = saved_progress or {}
             for dirpath, dirnames, files in os.walk(root):
                 here = Path(dirpath)
                 # книги ЛитРес (если их папка внутри) уже есть в библиотеке
@@ -455,30 +517,38 @@ class Library:
                     bid = "file-" + hashlib.sha1(str(path).encode()).hexdigest()[:12]
                     seen.add(bid)
                     rel = here.relative_to(root)
+                    file_rel = path.relative_to(root).as_posix()
                     # подпись на карточке: раздел и вложенная папка
                     collection = section + ("" if str(rel) == "." else f" / {rel.as_posix()}")
+                    derived = {"section": section, "collection": collection, "library": lib_id, "rel": file_rel}
+                    if not migrate:
+                        # отметки и место чтения — из хранилища библиотеки (оно главнее общих файлов)
+                        if file_rel in saved_progress:
+                            self.progress[bid] = saved_progress[file_rel]
                     if bid in self.books:
                         book = self.books[bid]
-                        if (book.get("section"), book.get("collection")) != (section, collection):
-                            book.update(section=section, collection=collection)   # раздел переименовали
+                        if any(book.get(k) != v for k, v in derived.items()):
+                            book.update(derived)                   # раздел переименовали / новая версия
                             changed = True
+                        if not migrate and saved_books.get(file_rel):
+                            book.update(saved_books[file_rel])
                         continue
                     self.books[bid] = {
                         "id": bid, "source": "folder", "format": fmt, "path": str(path),
                         "title": name[: -len(fmt) - 1].replace("_", " ").strip() or name,
-                        "authors": [],
-                        "section": section,
-                        "collection": collection,
+                        "authors": [], **derived, **saved_books.get(file_rel, {}),
                     }
                     self.order.append(bid)
                     changed = True
         for bid in [b for b, v in self.books.items() if v.get("source") == "folder" and b not in seen]:
             del self.books[bid]              # файл удалён или папку убрали из списка
+            self.progress.pop(bid, None)     # место чтения осталось в хранилище библиотеки
             if bid in self.order:
                 self.order.remove(bid)
             changed = True
-        if changed:
-            self.save()
+        # сохраняем всегда: при первом запуске так создаются хранилища (миграция), дальше — только изменения
+        self.save()
+        self.flush()
         return len(seen)
 
     def remove_file(self, bid):
@@ -497,7 +567,7 @@ class Library:
             self.books.pop(bid, None)
             self.order = [i for i in self.order if i != bid]
         self.save()
-        save_json(PROGRESS_FILE, self.progress)
+        self.flush()
 
     def set_progress(self, bid, cfi, fraction, chapter=None):
         # ts — когда книгу читали последний раз (для панели «Продолжить чтение»)
@@ -577,5 +647,11 @@ class Library:
         return [self.books[bid] for _ts, bid in items[:count]]
 
     def flush(self):
+        """Место чтения: книги ЛитРес — в progress.json, свои — в хранилище своей библиотеки."""
         self._progress_timer.stop()
-        save_json(PROGRESS_FILE, self.progress)
+        own = {bid: b for bid, b in self.books.items() if b.get("source") == "folder"}
+        save_json(PROGRESS_FILE, {bid: p for bid, p in self.progress.items() if bid not in own})
+        for lib_id, lib in self.folder_libs.items():
+            data = {own[bid]["rel"]: p for bid, p in self.progress.items()
+                    if bid in own and own[bid].get("library") == lib_id and own[bid].get("rel")}
+            self._write_store(lib, STORE_PROGRESS, data)

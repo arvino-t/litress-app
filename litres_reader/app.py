@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QHBoxLayout, QInputDialog, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, backup, core, style
+from . import __version__, backup, core, libraries, style
 from .i18n import plural, tr
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, CONFIG_FILE,
                    COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
@@ -148,6 +148,8 @@ class App(QObject):
         self.qapp = qapp
         self.settings = {**DEFAULT_SETTINGS, **load_json(CONFIG_FILE, {})}
         core.set_debug(self.settings.get("debugLog"))
+        if libraries.ensure_registry(self.settings):      # первый запуск с библиотеками — перенос настроек
+            save_json(CONFIG_FILE, self.settings)
         try:
             set_books_dir(self.settings.get("booksDir"))
         except OSError:
@@ -1538,21 +1540,8 @@ class App(QObject):
     # --- свои книги и статьи
 
     def local_folders(self) -> list[dict]:
-        """Папки со своими книгами и статьями: [{"path", "name"}], name — раздел.
-        По умолчанию — три папки из «Документов»; старый формат (просто пути) — раздел по имени папки."""
-        raw = self.settings.get("localFolders")
-        if raw is None:
-            docs = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation))
-            defaults = (("Books/others", tr("Другие книги")), ("articles", tr("Статьи")),
-                        ("trainings", tr("Тренинги и презентации")))
-            return [{"path": str(docs / d), "name": name} for d, name in defaults if (docs / d).is_dir()]
-        out = []
-        for f in raw:
-            if isinstance(f, str):
-                f = {"path": f}
-            if isinstance(f, dict) and f.get("path"):
-                out.append({"path": f["path"], "name": (f.get("name") or "").strip() or Path(f["path"]).name})
-        return out
+        """Свои библиотеки: [{"id", "path", "name"}] — корневые папки из реестра библиотек."""
+        return libraries.folder_libraries(self.settings)
 
     def rescan_local(self, report=False):
         n = self.library.scan_folders(self.local_folders())
@@ -1575,7 +1564,7 @@ class App(QObject):
         return name if ok and name else None
 
     def _save_local_folders(self, folders):
-        self.settings["localFolders"] = folders
+        libraries.set_folder_libraries(self.settings, folders)
         self.save_settings()
         self.rescan_local(report=True)
 
