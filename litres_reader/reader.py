@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHB
                                QListWidget, QListWidgetItem, QSlider, QVBoxLayout, QWidget)
 
 from . import style
-from .core import BOOKS_DIR, DEBUG, SCHEME, WEB_DIR, log
+from .core import DEBUG, SCHEME, WEB_DIR, books_dir, log
 from .litres import PREFIX
 from .widgets import HeaderBar, IconButton, Popover, SeekSlider, Switch, attach_popover, cls, label
 
@@ -44,7 +44,7 @@ class SchemeHandler(QWebEngineUrlSchemeHandler):
 
     def requestStarted(self, job: QWebEngineUrlRequestJob):
         path = job.requestUrl().path().lstrip("/")
-        base, rel = (BOOKS_DIR, path[5:]) if path.startswith("book/") else (WEB_DIR, path)
+        base, rel = (books_dir(), path[5:]) if path.startswith("book/") else (WEB_DIR, path)
         target = (base / rel).resolve()
         if not target.is_file() or base.resolve() not in target.parents:
             job.fail(QWebEngineUrlRequestJob.Error.UrlNotFound)

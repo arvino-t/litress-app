@@ -18,10 +18,10 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import __version__, style
-from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, BOOKS_DIR, CONFIG_FILE,
+from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FILE_TYPES, AUDIO_FORMATS, CONFIG_FILE,
                    COVERS_DIR, DEFAULT_SETTINGS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, NO_FOLDER,
-                   READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, load_json,
-                   looks_like_book, save_json)
+                   READABLE, SITE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
+                   load_json, looks_like_book, save_json, set_books_dir)
 from .litres import LitresSession
 from .player import AudioPlayer, PlayerPage, audio_tracks
 from .reader import ReaderPage
@@ -142,8 +142,13 @@ class App(QObject):
     def __init__(self, qapp: QApplication):
         super().__init__()
         self.qapp = qapp
-        self.library = Library()
         self.settings = {**DEFAULT_SETTINGS, **load_json(CONFIG_FILE, {})}
+        try:
+            set_books_dir(self.settings.get("booksDir"))
+        except OSError:
+            # выбранная папка недоступна (например, отключён диск) — берём папку по умолчанию
+            set_books_dir(None)
+        self.library = Library()
         self._settings_timer = QTimer(self, singleShot=True, interval=500)
         self._settings_timer.timeout.connect(lambda: save_json(CONFIG_FILE, self.settings))
         self.cards: dict[str, BookCard] = {}
@@ -297,6 +302,7 @@ class App(QObject):
         self.last_action.toggled.connect(lambda on: (self.settings.__setitem__("openLastBook", on),
                                                      self.save_settings()))
         self.menu.addAction(self.last_action)
+        self.menu.addAction("Папка для книг…", self.choose_books_dir)
         self.menu.addSeparator()
         self.account_action = self.menu.addAction("Войти в ЛитРес", self._account_action)
         self.menu.addAction("Singularity…", self.show_singularity_dialog)
@@ -889,7 +895,7 @@ class App(QObject):
                 ftype, local = choice
                 f = by_type[ftype]
                 remote_ext = f.get("extension") or local
-                dest = BOOKS_DIR / f"{bid}.{local}"
+                dest = books_dir() / f"{bid}.{local}"
                 try_next([f"{SITE}/download_book/{bid}/{f['id']}/{bid}.{remote_ext}",
                           f"{SITE}/download_book_subscr/{bid}/{f['id']}/{bid}.{remote_ext}"], dest, local, local)
                 return
@@ -900,7 +906,7 @@ class App(QObject):
                 return
             file_id = by_ext[fmt]["id"]
             local_ext = LOCAL_SUFFIX.get(fmt, fmt)
-            dest = BOOKS_DIR / f"{bid}.{local_ext}"
+            dest = books_dir() / f"{bid}.{local_ext}"
             try_next([f"{SITE}/download_book/{bid}/{file_id}/{bid}.{fmt}",
                       f"{SITE}/download_book_subscr/{bid}/{file_id}/{bid}.{fmt}"], dest, fmt, local_ext)
 
@@ -921,7 +927,7 @@ class App(QObject):
 
             def done(ok, err):
                 if ok and looks_like_book(dest, fmt) and book.get("is_audio") and fmt == "zip":
-                    folder = BOOKS_DIR / bid   # MP3-архив распаковываем в папку книги
+                    folder = books_dir() / bid   # MP3-архив распаковываем в папку книги
 
                     def extracted(error):
                         if error:
@@ -1214,6 +1220,26 @@ class App(QObject):
         self.refresh_library()
         book = self.library.books[bid]
         self.open_book(book, self.library.file_path(book))
+
+    def choose_books_dir(self):
+        """Выбор папки для скачанных книг; уже скачанные переносятся туда же."""
+        current = books_dir()
+        path = QFileDialog.getExistingDirectory(self.window, f"Папка для книг (сейчас: {current})", str(current))
+        if not path:
+            return
+        new_dir = Path(path)
+        if new_dir.resolve() == current.resolve():
+            return
+        moved, errors = self.library.move_files(new_dir)
+        self.library.save()
+        self.settings["booksDir"] = str(new_dir)
+        self.save_settings()
+        self.refresh_library()
+        if errors:
+            self.toast(f"Книги теперь в {new_dir}. Перенесено: {moved}, не удалось: {len(errors)} — "
+                       + errors[0], timeout=10000)
+        else:
+            self.toast(f"Книги теперь в {new_dir}" + (f" — перенесено файлов: {moved}" if moved else ""))
 
     def on_open_file(self):
         path, _ = QFileDialog.getOpenFileName(self.window, "Открыть книгу", str(Path.home()),

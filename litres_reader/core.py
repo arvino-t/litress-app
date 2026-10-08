@@ -35,7 +35,21 @@ def _dirs():
 
 
 DATA_DIR, CONFIG_DIR, CACHE_DIR = _dirs()
+# Папка со скачанными книгами: по умолчанию внутри данных приложения,
+# пользователь может выбрать свою (настройка booksDir)
 BOOKS_DIR = DATA_DIR / "books"
+_books_dir = BOOKS_DIR
+
+
+def books_dir() -> Path:
+    return _books_dir
+
+
+def set_books_dir(path: str | None) -> Path:
+    global _books_dir
+    _books_dir = Path(path).expanduser() if path else BOOKS_DIR
+    _books_dir.mkdir(parents=True, exist_ok=True)
+    return _books_dir
 COVERS_DIR = DATA_DIR / "covers"
 SESSION_DIR = DATA_DIR / "webengine"
 CONFIG_FILE = CONFIG_DIR / "settings.json"
@@ -85,6 +99,8 @@ DEFAULT_SETTINGS = {
     # Автопереход: при запуске открыть последнюю книгу на месте, где остановились
     "openLastBook": True,
     "lastBook": None,
+    # Папка для скачанных книг; None — папка внутри данных приложения
+    "booksDir": None,
 }
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
@@ -162,7 +178,7 @@ class Library:
         self.progress: dict[str, dict] = load_json(PROGRESS_FILE, {})
         # Статистика: секунды чтения по дням и по книгам, даты дочитывания
         self.stats: dict = {"days": {}, "books": {}, "finished": {}, **load_json(STATS_FILE, {})}
-        for d in (BOOKS_DIR, COVERS_DIR, SESSION_DIR):
+        for d in (books_dir(), COVERS_DIR, SESSION_DIR):
             d.mkdir(parents=True, exist_ok=True)
         # Пишем прогресс на диск не чаще раза в 2 секунды — при листании событий много
         self._progress_timer = QTimer(singleShot=True, interval=2000)
@@ -279,7 +295,7 @@ class Library:
         fmt = "fb2.zip" if name.endswith(".fb2.zip") else src.suffix.lstrip(".").lower()
         digest = hashlib.sha1(src.read_bytes()).hexdigest()[:12]
         bid = f"local-{digest}"
-        dest = BOOKS_DIR / f"{bid}.{fmt}"
+        dest = books_dir() / f"{bid}.{fmt}"
         if not dest.exists():
             shutil.copyfile(src, dest)
         title = src.name[: -len(fmt) - 1] if name.endswith("." + fmt) else src.stem
@@ -293,7 +309,7 @@ class Library:
 
     def file_path(self, book) -> Path | None:
         if book.get("file"):
-            p = BOOKS_DIR / book["file"]
+            p = books_dir() / book["file"]
             if p.exists():
                 return p
         return None
@@ -301,6 +317,28 @@ class Library:
     def cover_path(self, book) -> Path | None:
         p = COVERS_DIR / f"{book['id']}.jpg"
         return p if p.exists() and p.stat().st_size > 0 else None
+
+    def move_files(self, new_dir: Path) -> tuple[int, list[str]]:
+        """Переносит скачанные книги в другую папку. Возвращает (сколько перенесено, ошибки)."""
+        old_dir = books_dir()
+        new_dir.mkdir(parents=True, exist_ok=True)
+        moved, errors = 0, []
+        if old_dir.resolve() != new_dir.resolve():
+            for book in self.books.values():
+                name = book.get("file")
+                if not name or not (old_dir / name).exists():
+                    continue
+                target = new_dir / name
+                if target.exists():
+                    errors.append(f"{name}: в новой папке уже есть файл с таким именем")
+                    continue
+                try:
+                    shutil.move(str(old_dir / name), str(target))
+                    moved += 1
+                except OSError as e:
+                    errors.append(f"{name}: {e}")
+        set_books_dir(str(new_dir))
+        return moved, errors
 
     def remove_file(self, bid):
         book = self.books.get(bid)
