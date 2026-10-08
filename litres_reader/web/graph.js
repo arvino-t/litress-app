@@ -81,20 +81,14 @@ function build(keepView) {
     if (hover && !byId.has(hover.id)) hover = null
 
     if (sim) sim.stop()
-    sim = d3.forceSimulation(nodes)
+    sim = d3.forceSimulation(nodes).stop()
         .force('link', d3.forceLink(links).distance(l => 18 + l.target.r * 1.5).strength(0.35))
         .force('charge', d3.forceManyBody().strength(n => n.kind === 'book' ? -28 : -90 - n.deg * 2).distanceMax(700))
         .force('x', d3.forceX(0).strength(0.035))
         .force('y', d3.forceY(0).strength(0.035))
         .force('collide', d3.forceCollide(n => n.r + 1.5))
         .alphaDecay(0.025)
-        .on('tick', () => { draw(); onTickProgress() })
-        .on('end', () => {
-            if (!keepView) fit()
-            progress.layout = null
-            showProgress()
-            post({ type: 'layout-done' })
-        })
+    runLayout(keepView)
     if (!keepView) setTimeout(fit, 600)
     progress.layout = nodes.length ? 0.01 : null
     showProgress()
@@ -107,6 +101,47 @@ function build(keepView) {
         if (el) el.textContent = [...deg.entries()].filter(([id, d]) => kindOf(id) === k.id && d >= state.minDeg).length
     }
 }
+
+// --- раскладка: свой цикл вместо таймера d3 — сколько успеем шагов за ~14 мс, потом один кадр.
+// Встроенный таймер делает один шаг на кадр и каждый раз перерисовывает весь граф — на большом
+// экране это десятки секунд; так раскладка занимает 1–3 секунды.
+let layoutRun = 0, layoutActive = false
+function runLayout(keepView) {
+    const run = ++layoutRun
+    layoutActive = true
+    const frame = () => {
+        if (run !== layoutRun) return            // начали новую раскладку
+        const t0 = performance.now()
+        do { sim.tick() } while (sim.alpha() > sim.alphaMin() && performance.now() - t0 < 14)
+        draw()
+        progress.layout = layoutFraction()
+        showProgress()
+        if (sim.alpha() > sim.alphaMin()) {
+            requestAnimationFrame(frame)
+        } else {
+            layoutActive = false
+            if (!keepView && !dragging()) fit()
+            progress.layout = null
+            showProgress()
+            post({ type: 'layout-done' })
+        }
+    }
+    requestAnimationFrame(frame)
+}
+// при перетаскивании узла «подогреваем» раскладку и ведём её своим циклом
+function reheat() {
+    if (sim.alpha() < 0.1) sim.alpha(0.3)
+    if (layoutActive) return                     // раскладка и так идёт — её цикл всё отрисует
+    const run = ++layoutRun
+    const frame = () => {
+        if (run !== layoutRun) return
+        sim.tick()
+        draw()
+        if (sim.alpha() > sim.alphaMin() && (dragging() || sim.alpha() > 0.02)) requestAnimationFrame(frame)
+    }
+    requestAnimationFrame(frame)
+}
+const dragging = () => !!(drag && drag.node && drag.moved)
 
 // --- отрисовка
 
@@ -267,7 +302,7 @@ canvas.addEventListener('pointermove', e => {
             if (drag.moved) {
                 const [wx, wy] = toWorld(e.clientX, e.clientY)
                 drag.node.fx = wx; drag.node.fy = wy
-                sim.alphaTarget(0.25).restart()
+                if (!drag.heated) { drag.heated = true; reheat() }
             }
         } else {
             view.x += e.clientX - drag.lastX
@@ -294,7 +329,6 @@ function endPointer(e) {
     drag = null
     if (node) {
         node.fx = node.fy = null
-        sim.alphaTarget(0)
     }
     if (moved) return
     if (!node) {                       // щелчок по пустому месту — снять выделение
@@ -422,7 +456,6 @@ const progress = {
     layout: null,     // доля раскладки 0..1 или null — готово
     fetch: null,      // { text, fraction } или null
 }
-let lastShown = 0
 function showProgress() {
     const box = $('progress')
     const layoutOn = progress.layout !== null
@@ -442,13 +475,6 @@ function showProgress() {
 }
 // доля раскладки: alpha убывает экспоненциально от 1 до alphaMin
 const layoutFraction = () => Math.min(1, Math.max(0.01, Math.log(sim.alpha()) / Math.log(sim.alphaMin())))
-function onTickProgress() {
-    const now = performance.now()
-    if (now - lastShown < 120) return
-    lastShown = now
-    progress.layout = layoutFraction()
-    showProgress()
-}
 
 progress.layout = 0
 showProgress()

@@ -5,6 +5,7 @@ import json
 import mimetypes
 import os
 import re
+import sys
 import uuid
 from pathlib import Path
 
@@ -102,6 +103,9 @@ class _ReaderWebPage(QWebEnginePage):
                 self._on_message(json.loads(text[len(PREFIX):]))
             except ValueError:
                 pass
+        elif level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
+            # ошибки страниц читалки и графа — в журнал всегда, чтобы было видно причину сбоя
+            print(f"litres-reader js error: {text} ({source.rsplit('/', 1)[-1]}:{line})", file=sys.stderr, flush=True)
         elif DEBUG:
             log("reader console:", text)
 
