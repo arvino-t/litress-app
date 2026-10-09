@@ -66,6 +66,15 @@ def all_libraries(settings) -> list[dict]:
     return out
 
 
+def scope_from_filter(library_type: str) -> str:
+    """Фильтр «Источник» → библиотека: "litres", id своей или "all"."""
+    if library_type in ("litres", "text", "audio"):
+        return LITRES_ID
+    if library_type.startswith("lib:"):
+        return library_type[len("lib:"):]
+    return "all"
+
+
 def folder_libraries(settings) -> list[dict]:
     return [lib for lib in all_libraries(settings) if lib["kind"] == "folder"]
 

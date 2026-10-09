@@ -17,12 +17,12 @@ from urllib.parse import urlencode
 
 from PySide6.QtCore import QByteArray, QObject, QTimer, QUrl, Signal
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLineEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget
 
 from . import libraries
 from .core import CONFIG_DIR, load_json, log, save_json
 from .i18n import tr
-from .widgets import Switch, cls, exec_dialog, frameless_dialog, label
+from .widgets import (BoxedList, cls, exec_dialog, frameless_dialog, label, Switch)
 
 API = "https://api.singularity-app.com/v2"
 STATE_FILE = CONFIG_DIR / "singularity.json"   # токен и служебные id — только для владельца
@@ -433,11 +433,7 @@ def show_dialog(app):
     b.addWidget(token)
     b.addSpacing(6)
 
-    boxed = QFrame()
-    cls(boxed, "boxed")
-    rows = QVBoxLayout(boxed)
-    rows.setContentsMargins(0, 0, 0, 0)
-    rows.setSpacing(0)
+    boxed = BoxedList()
     switches = {}
     for key, title, hint in (
             ("reading", tr("Задачи «Читаю»"),
@@ -445,17 +441,8 @@ def show_dialog(app):
             ("progress", tr("Прогресс в задаче"), tr("Процент и текущая глава в заметке задачи")),
             ("wishlist", tr("«Хочу прочитать»"), tr("Непрочитанные книги — задачи в отдельном проекте")),
             ("daily", tr("Ежедневное чтение"), tr("Привычка отмечается сама, когда за день набралось N минут"))):
-        row = QWidget()
-        h = QHBoxLayout(row)
-        h.setContentsMargins(14, 8, 14, 8)
-        texts = QVBoxLayout()
-        texts.setSpacing(0)
-        texts.addWidget(label(title))
-        texts.addWidget(label(hint, "dim", "caption", wrap=True))
-        h.addLayout(texts, 1)
         sw = Switch(bool(s.state.get(key)))
-        h.addWidget(sw)
-        rows.addWidget(row)
+        boxed.add_row(title, hint, sw)
         switches[key] = sw
     b.addWidget(boxed)
 
@@ -465,19 +452,10 @@ def show_dialog(app):
     lib_switches = {}
     if len(libs) > 1:
         b.addWidget(label(tr("Библиотеки"), "heading"))
-        lib_box = QFrame()
-        cls(lib_box, "boxed")
-        lrows = QVBoxLayout(lib_box)
-        lrows.setContentsMargins(0, 0, 0, 0)
-        lrows.setSpacing(0)
+        lib_box = BoxedList()
         for lib in libs:
-            row = QWidget()
-            h = QHBoxLayout(row)
-            h.setContentsMargins(14, 6, 14, 6)
-            h.addWidget(label(lib["name"]), 1)
             sw = Switch(allowed is None or lib["id"] in allowed)
-            h.addWidget(sw)
-            lrows.addWidget(row)
+            lib_box.add_row(lib["name"], "", sw, padding=(14, 6))
             lib_switches[lib["id"]] = sw
         b.addWidget(lib_box)
 

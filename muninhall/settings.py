@@ -23,7 +23,7 @@ from .i18n import tr
 from .core import CACHE_DIR, CONFIG_DIR, DATA_DIR, DEFAULT_SETTINGS, SITE, books_dir
 from .player import SPEEDS
 from .reader import FONTS, TEXT_THEMES
-from .widgets import HeaderBar, IconButton, Switch, cls, label
+from .widgets import (BoxedList, cls, confirm, HeaderBar, IconButton, label, LibraryScopeCombo, Switch)
 
 
 TABS = (("general", tr("Общие")), ("libraries", tr("Библиотеки")), ("appearance", tr("Внешний вид")),
@@ -201,11 +201,8 @@ class SettingsPage(QWidget):
         self.col.addWidget(label(title, "heading"))
         if description:
             self.col.addWidget(label(description, "dim", "caption", wrap=True))
-        box = QFrame()
-        cls(box, "boxed")
-        rows = QVBoxLayout(box)
-        rows.setContentsMargins(0, 0, 0, 0)
-        rows.setSpacing(0)
+        box = BoxedList()
+        rows = box.lay
         self.col.addSpacing(4)
         self.col.addWidget(box)
         return rows
@@ -426,15 +423,11 @@ class SettingsPage(QWidget):
         g = self.group(tr("Резервные копии"), tr("Копия «Все библиотеки» — настройки, статистика, Singularity и данные "
                        "всех библиотек; копия одной библиотеки — её отметки, место чтения и граф. Книги и обложки "
                        "в копию не входят, вход в ЛитРес — тоже. Папку с копиями удобно держать в облаке."))
-        libs = libraries.all_libraries(st)
-        self._backup_scopes = ["all"] + [lib["id"] for lib in libs]
-        self.backup_scope = getattr(self, "backup_scope", "all")
-        if self.backup_scope not in self._backup_scopes:
-            self.backup_scope = "all"
-        scope_combo = QComboBox()
-        scope_combo.addItems([tr("Все библиотеки")] + [lib["name"] for lib in libs])
-        scope_combo.setCurrentIndex(self._backup_scopes.index(self.backup_scope))
-        scope_combo.currentIndexChanged.connect(self._on_backup_scope)
+        scope_combo = LibraryScopeCombo(st, getattr(self, "backup_scope", "all"))
+        scope_combo.setVisible(True)                 # копия «Все библиотеки» есть даже при одной библиотеке
+        self.backup_scope = scope_combo.scope()
+        self._backup_scopes = scope_combo.scopes()
+        scope_combo.scope_changed.connect(self._on_backup_scope)
         self.row(g, tr("Библиотека"), scope_combo, tr("К ней относятся «Создать» и список копий ниже"))
         self.backup_now = self.button(g, tr("Создать копию сейчас"), tr("Создать"), self._backup_now)
         self.combo(g, tr("Создавать автоматически"), "backupAuto", BACKUP_AUTO,
@@ -565,9 +558,9 @@ class SettingsPage(QWidget):
 
     # --- резервные копии
 
-    def _on_backup_scope(self, idx):
-        if 0 <= idx < len(self._backup_scopes):
-            self.backup_scope = self._backup_scopes[idx]
+    def _on_backup_scope(self, scope):
+        if scope in self._backup_scopes:
+            self.backup_scope = scope
             self._fill_backups()
 
     def _sync_backup_hint(self):
@@ -649,24 +642,16 @@ class SettingsPage(QWidget):
             QMessageBox.warning(self.app.window, tr("Не удалось восстановить"),
                                 tr("Это копия библиотеки, которой нет в программе. Добавьте библиотеку и повторите."))
             return
-        box = QMessageBox(self.app.window)
-        box.setWindowTitle(tr("Восстановить из копии?"))
-        box.setText(tr('<b>Восстановить данные из копии ({0})?</b>', when))
         if scope == "all":
-            box.setInformativeText(
-                tr('Копия версии {0}. Библиотека, место чтения, статистика и настройки заменятся данными '
-                   'из копии; текущие сначала сохранятся в отдельную копию. Приложение перезапустится.',
-                   manifest.get('version', '?')))
+            info = tr('Копия версии {0}. Библиотека, место чтения, статистика и настройки заменятся данными '
+                      'из копии; текущие сначала сохранятся в отдельную копию. Приложение перезапустится.',
+                      manifest.get('version', '?'))
         else:
-            box.setInformativeText(tr("Отметки, место чтения и граф библиотеки «{0}» заменятся данными из копии; "
-                                      "текущие сначала сохранятся в отдельную копию. Приложение перезапустится.",
-                                      names[scope]))
-        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
-        ok = box.addButton(tr("Восстановить и перезапустить"), QMessageBox.ButtonRole.DestructiveRole)
-        cls(ok, "destructive")
-        box.setDefaultButton(cancel)
-        box.exec()
-        if box.clickedButton() is not ok:
+            info = tr("Отметки, место чтения и граф библиотеки «{0}» заменятся данными из копии; "
+                      "текущие сначала сохранятся в отдельную копию. Приложение перезапустится.", names[scope])
+        if not confirm(self.app.window, tr("Восстановить из копии?"),
+                       tr('<b>Восстановить данные из копии ({0})?</b>', when), info,
+                       tr("Восстановить и перезапустить")):
             return
         # сначала читаем копию (старые копии может удалить очистка при новой копии), потом страхуемся
         try:
@@ -809,17 +794,9 @@ class SettingsPage(QWidget):
         self.app.toast(text, button=button, on_button=self.app.restart, timeout=10000)
 
     def _reset(self):
-        box = QMessageBox(self.app.window)
-        box.setWindowTitle(tr("Сбросить настройки?"))
-        box.setText(tr("<b>Сбросить настройки?</b>"))
-        box.setInformativeText(tr("Вид текста, чтение вслух, аудио, обновление с ЛитРес и журнал вернутся "
-                               "к исходным. Папки, вход в ЛитРес и библиотека не изменятся."))
-        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
-        ok = box.addButton(tr("Сбросить"), QMessageBox.ButtonRole.DestructiveRole)
-        cls(ok, "destructive")
-        box.setDefaultButton(cancel)
-        box.exec()
-        if box.clickedButton() is not ok:
+        if not confirm(self.app.window, tr("Сбросить настройки?"), tr("<b>Сбросить настройки?</b>"),
+                       tr("Вид текста, чтение вслух, аудио, обновление с ЛитРес и журнал вернутся "
+                          "к исходным. Папки, вход в ЛитРес и библиотека не изменятся."), tr("Сбросить")):
             return
         st = self.app.settings
         for k, v in DEFAULT_SETTINGS.items():

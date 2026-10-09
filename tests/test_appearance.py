@@ -51,3 +51,25 @@ def test_elide_lines():
     long = "Очень длинное название книги " * 10
     out = elide_lines(fm, long, 132, 2)
     assert out.endswith("…") and len(out) < len(long)
+
+
+def test_scope_from_filter():
+    from muninhall.libraries import scope_from_filter
+    assert [scope_from_filter(k) for k in ("all", "litres", "text", "audio", "lib:folder-0123456789")] == \
+        ["all", "litres", "litres", "litres", "folder-0123456789"]
+
+
+def test_library_scope_combo(tmp_path):
+    from PySide6.QtWidgets import QApplication
+    from muninhall.widgets import LibraryScopeCombo
+    app = QApplication.instance() or QApplication([])
+    settings = {"libraries": [{"id": "litres", "kind": "litres"},
+                              {"id": "folder-0123456789", "kind": "folder", "name": "Статьи", "path": str(tmp_path)}]}
+    combo = LibraryScopeCombo(settings, "folder-0123456789")
+    assert combo.scopes() == ["all", "litres", "folder-0123456789"] and combo.scope() == "folder-0123456789"
+    seen = []
+    combo.scope_changed.connect(seen.append)
+    combo.setCurrentIndex(1)
+    assert seen == ["litres"]
+    combo.refill("missing")                         # неизвестная — остаётся текущая
+    assert combo.scope() == "litres"

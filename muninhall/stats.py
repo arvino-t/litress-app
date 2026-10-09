@@ -5,11 +5,11 @@ import datetime as dt
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QComboBox, QFrame, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QVBoxLayout, QWidget
 
-from . import libraries, style
+from . import style
 from .i18n import plural, tr
-from .widgets import cls, exec_dialog, frameless_dialog, label
+from .widgets import (BoxedList, cls, exec_dialog, frameless_dialog, label, LibraryScopeCombo)
 
 
 def minutes_word(n: int) -> str:
@@ -146,21 +146,12 @@ def stats_body(lib, scope: str) -> QWidget:
     top = [(lib.books[bid], sec) for bid, sec in top if bid in lib.books]
     if top:
         b.addWidget(label(tr("Больше всего времени"), "heading"))
-        box = QFrame()
-        cls(box, "boxed")
-        rows = QVBoxLayout(box)
-        rows.setContentsMargins(0, 0, 0, 0)
-        rows.setSpacing(0)
+        box = BoxedList()
         for book, sec in top:
-            row = QWidget()
-            h = QHBoxLayout(row)
-            h.setContentsMargins(14, 8, 14, 8)
-            h.addWidget(label(book.get("title") or "", wrap=True), 1)
-            if book.get("is_audio"):
-                h.addWidget(label(tr("аудио"), "dim", "caption"))
+            trailing = [label(tr("аудио"), "dim", "caption")] if book.get("is_audio") else []
             hours, mins = divmod(int(sec) // 60, 60)
-            h.addWidget(label(tr('{0} ч {1} мин', hours, mins) if hours else tr('{0} мин', mins), "dim"))
-            rows.addWidget(row)
+            trailing.append(label(tr('{0} ч {1} мин', hours, mins) if hours else tr('{0} мин', mins), "dim"))
+            box.add_row(book.get("title") or "", "", *trailing, wrap_title=True)
         b.addWidget(box)
     else:
         b.addWidget(label(tr("Пока пусто — статистика копится, пока вы читаете и слушаете."), "dim", wrap=True))
@@ -171,25 +162,21 @@ def show_stats(app):
     dlg, outer = frameless_dialog(app.window, tr("Статистика чтения"), 620)
     header = dlg.header
     # статистика общая, но её можно посмотреть по одной библиотеке
-    libs = libraries.all_libraries(app.settings)
-    scopes = ["all"] + [lib["id"] for lib in libs]
-    scope_combo = QComboBox()
-    scope_combo.addItems([tr("Все библиотеки")] + [lib["name"] for lib in libs])
-    scope_combo.setVisible(len(scopes) > 2)
+    scope_combo = LibraryScopeCombo(app.settings)
     header.pack_start(scope_combo)
 
     holder = QVBoxLayout()
     outer.addLayout(holder)
     current = [None]
 
-    def show(idx):
+    def show(scope):
         if current[0] is not None:
             holder.removeWidget(current[0])
             current[0].deleteLater()
-        current[0] = stats_body(app.library, scopes[idx])
+        current[0] = stats_body(app.library, scope)
         holder.addWidget(current[0])
         dlg.adjustSize()
-    scope_combo.currentIndexChanged.connect(show)
-    show(0)
+    scope_combo.scope_changed.connect(show)
+    show(scope_combo.scope())
 
     exec_dialog(dlg)

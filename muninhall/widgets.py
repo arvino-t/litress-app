@@ -7,7 +7,7 @@ import os
 from PySide6.QtCore import (Property, QEasingCurve, QPoint, QPropertyAnimation, QRect, QRectF, QSize, QTimer,
                             Qt, Signal)
 from PySide6.QtGui import QColor, QGuiApplication, QImageReader, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import (QAbstractButton, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QAbstractButton, QComboBox, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
                                QLayout, QProgressBar, QPushButton, QSizePolicy, QSlider, QStyle,
                                QStyleOptionSlider,
                                QToolButton, QVBoxLayout, QWidget)
@@ -841,3 +841,90 @@ class Spinner(QWidget):
         r = QRectF(9, 9, 16, 16)
         p.drawArc(r, -self._angle * 16, 270 * 16)
         p.end()
+
+
+def confirm(parent, title: str, text: str, info: str, action: str) -> bool:
+    """Подтверждение опасного действия: «Отмена» (по умолчанию) и красная кнопка action."""
+    from PySide6.QtWidgets import QMessageBox
+    box = QMessageBox(parent)
+    box.setWindowTitle(title)
+    box.setText(text)
+    box.setInformativeText(info)
+    cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
+    ok = box.addButton(action, QMessageBox.ButtonRole.DestructiveRole)
+    cls(ok, "destructive")
+    box.setDefaultButton(cancel)
+    box.exec()
+    return box.clickedButton() is ok
+
+
+class BoxedList(QFrame):
+    """Список строк в рамке (как Adw.PreferencesGroup / boxed-list): строки с разделителями."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        cls(self, "boxed")
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(0, 0, 0, 0)
+        self.lay.setSpacing(0)
+
+    def add_row(self, title: str | None = None, hint: str = "", *trailing, wrap_title=False, padding=(14, 8)):
+        """Строка: заголовок (и подпись под ним) слева, виджеты trailing справа. Возвращает строку."""
+        row = QWidget()
+        h = QHBoxLayout(row)
+        h.setContentsMargins(padding[0], padding[1], padding[0], padding[1])
+        h.setSpacing(12)
+        if title is not None:
+            texts = QVBoxLayout()
+            texts.setSpacing(0)
+            texts.addWidget(label(title, wrap=wrap_title or bool(hint)))
+            if hint:
+                texts.addWidget(label(hint, "dim", "caption", wrap=True))
+            h.addLayout(texts, 1)
+        for w in trailing:
+            h.addWidget(w, 0, Qt.AlignmentFlag.AlignVCenter)
+        if self.lay.count():
+            line = QFrame()
+            line.setFixedHeight(1)
+            cls(line, "separator-line")
+            self.lay.addWidget(line)
+        self.lay.addWidget(row)
+        return row
+
+
+class LibraryScopeCombo(QComboBox):
+    """Выбор «Все библиотеки» или одной из реестра; scope — "all", "litres" или id своей библиотеки."""
+
+    scope_changed = Signal(str)
+
+    def __init__(self, settings, current: str = "all", parent=None):
+        super().__init__(parent)
+        self._settings = settings
+        self._scopes: list[str] = []
+        self.setToolTip(tr("Библиотека"))
+        self.currentIndexChanged.connect(self._on_index)
+        self.refill(current)
+
+    def refill(self, current: str | None = None):
+        """Перечитывает реестр библиотек; прячется, если библиотека одна."""
+        from . import libraries
+        libs = libraries.all_libraries(self._settings)
+        previous = self.scope()
+        self._scopes = ["all"] + [lib["id"] for lib in libs]
+        self.blockSignals(True)
+        self.clear()
+        self.addItems([tr("Все библиотеки")] + [lib["name"] for lib in libs])
+        target = current if current in self._scopes else previous if previous in self._scopes else "all"
+        self.setCurrentIndex(self._scopes.index(target))
+        self.blockSignals(False)
+        self.setVisible(len(self._scopes) > 2)
+
+    def scope(self) -> str:
+        i = self.currentIndex()
+        return self._scopes[i] if 0 <= i < len(self._scopes) else "all"
+
+    def scopes(self) -> list[str]:
+        return list(self._scopes)
+
+    def _on_index(self, _i):
+        self.scope_changed.emit(self.scope())

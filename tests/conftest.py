@@ -17,7 +17,6 @@ os.environ["LITREADER_LANG"] = "ru"
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest  # noqa: E402
-from PySide6.QtGui import QGuiApplication  # noqa: E402
 
 import muninhall  # noqa: E402
 
@@ -26,7 +25,8 @@ assert Path(muninhall.__file__).resolve().is_relative_to(ROOT), "тесты до
 
 @pytest.fixture(scope="session", autouse=True)
 def qt_app():
-    return QGuiApplication.instance() or QGuiApplication([])
+    from PySide6.QtWidgets import QApplication
+    return QApplication.instance() or QApplication([])
 
 
 @pytest.fixture

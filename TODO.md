@@ -14,10 +14,6 @@ Reviewed: 2026-10-09 (after 0.18.0).
 ## Refactoring towards SOLID
 Behaviour doesn't change; every step — tests plus a full flow run on the installed build. Numbers are from
 the review after 1.0.0. Step 3 prepares new connectors (OPDS).
-- [ ] **1. Shared widgets (duplication):** `LibraryScopeCombo` — the "All libraries + list" selector built
-  three times (graph, statistics, backups) plus the Source filter → library mapping done twice;
-  `BoxedList` — the Adwaita boxed-list rows assembled by hand in statistics, Singularity and LitRes folders
-  (settings have `group()`/`row()`); `confirm()` — the Cancel + destructive-button dialog repeated 4 times.
 - [ ] **2. A `Settings` class (DIP):** typed properties and a `changed` signal instead of the raw dict read
   by string keys in 10 modules and manual `save_settings()` calls. Move module-level state into objects:
   accent/theme overrides in `style`, `_books_dir` and `DEBUG` in `core`, `widgets.THUMBS_DIR` (set by

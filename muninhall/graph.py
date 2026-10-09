@@ -8,12 +8,12 @@ from __future__ import annotations
 import json
 
 from PySide6.QtCore import QUrl
-from PySide6.QtWidgets import QComboBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from . import libraries, style
 from .core import SCHEME, STORE_GRAPH, folder_store_dir, load_json, save_json
 from .reader import _ReaderWebPage, reader_profile
-from .widgets import HeaderBar, IconButton
+from .widgets import (HeaderBar, IconButton, LibraryScopeCombo)
 from .i18n import tr, web_strings
 
 # (вид тега, название, цвет, включён по умолчанию)
@@ -113,10 +113,8 @@ class GraphPage(QWidget):
         self.header.pack_start(back)
         # у каждой библиотеки свой граф; «Все» — общий
         self.scope = "all"
-        self._scopes: list[str] = []
-        self.scope_combo = QComboBox()
-        self.scope_combo.setToolTip(tr("Библиотека"))
-        self.scope_combo.currentIndexChanged.connect(self._on_scope_selected)
+        self.scope_combo = LibraryScopeCombo(app.settings)
+        self.scope_combo.scope_changed.connect(self.set_scope)
         self.header.pack_end(self.scope_combo)
 
         from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -138,21 +136,9 @@ class GraphPage(QWidget):
     # --- выбор библиотеки и состояние графа по библиотекам
 
     def fill_scopes(self, scope=None):
-        libs = libraries.all_libraries(self.app.settings)
-        self._scopes = ["all"] + [lib["id"] for lib in libs]
-        self.scope_combo.blockSignals(True)
-        self.scope_combo.clear()
-        self.scope_combo.addItems([tr("Все библиотеки")] + [lib["name"] for lib in libs])
-        target = scope if scope in self._scopes else (self.scope if self.scope in self._scopes else "all")
-        self.scope_combo.setCurrentIndex(self._scopes.index(target))
-        self.scope_combo.blockSignals(False)
-        self.scope_combo.setVisible(len(self._scopes) > 2)
-        if target != self.scope:
-            self.set_scope(target)
-
-    def _on_scope_selected(self, idx):
-        if 0 <= idx < len(self._scopes):
-            self.set_scope(self._scopes[idx])
+        self.scope_combo.refill(scope if scope else self.scope)
+        if self.scope_combo.scope() != self.scope:
+            self.set_scope(self.scope_combo.scope())
 
     def set_scope(self, scope):
         self.scope = scope

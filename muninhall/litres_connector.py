@@ -14,13 +14,13 @@ import zipfile
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, QUrl, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLineEdit, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLineEdit, QMessageBox, QVBoxLayout, QWidget
 
 from . import litres_data
 from .i18n import plural, tr
 from .core import (AUDIO_FILE_TYPES, AUDIO_FORMATS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, API, READABLE,
                    SITE, books_dir, looks_like_book)
-from .widgets import cls, exec_dialog, frameless_dialog, label, Switch
+from .widgets import BoxedList, confirm, exec_dialog, frameless_dialog, label, Switch
 
 class _Bridge(QObject):
     """Передаёт результат из рабочего потока в главный."""
@@ -61,16 +61,8 @@ class LitresConnector(QObject):
             self.app.litres.page.load(QUrl(LOGIN_URL))
 
     def on_logout(self):
-        box = QMessageBox(self.app.window)
-        box.setWindowTitle(tr("Выйти из ЛитРес?"))
-        box.setText(tr("<b>Выйти из ЛитРес?</b>"))
-        box.setInformativeText(tr("Скачанные книги и закладки останутся на этом компьютере."))
-        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
-        out = box.addButton(tr("Выйти"), QMessageBox.ButtonRole.DestructiveRole)
-        cls(out, "destructive")
-        box.setDefaultButton(cancel)
-        box.exec()
-        if box.clickedButton() is out:
+        if confirm(self.app.window, tr("Выйти из ЛитРес?"), tr("<b>Выйти из ЛитРес?</b>"),
+                   tr("Скачанные книги и закладки останутся на этом компьютере."), tr("Выйти")):
             self.app.litres.logout(lambda: (self.app._update_account_ui(), self.app.toast(tr("Вы вышли из ЛитРес"))))
 
     def flush_folder_ops(self, then=None):
@@ -372,23 +364,14 @@ class LitresConnector(QObject):
         desc = label(tr("Изменения сразу отправляются на ЛитРес"), "dim", wrap=True)
         b.addWidget(desc)
         b.addSpacing(6)
-        boxed = QFrame()
-        cls(boxed, "boxed")
-        rows = QVBoxLayout(boxed)
-        rows.setContentsMargins(0, 0, 0, 0)
-        rows.setSpacing(0)
+        boxed = BoxedList()
         b.addWidget(boxed)
         switches = []
 
         def add_row(fid, name):
-            row = QWidget()
-            h = QHBoxLayout(row)
-            h.setContentsMargins(14, 10, 14, 10)
-            h.addWidget(label(name), 1)
             sw = Switch(fid in (book.get("folders") or []))
             sw.toggled.connect(lambda on: self.set_book_folder(book, fid, on))
-            h.addWidget(sw)
-            rows.addWidget(row)
+            boxed.add_row(name, "", sw, padding=(14, 10))
             switches.append(sw)
             boxed.setVisible(True)
 

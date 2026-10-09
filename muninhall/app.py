@@ -27,7 +27,7 @@ from .singularity import SingularitySync
 from .appearance import SHORTCUTS, Appearance
 from .library import LibraryPage
 from .model import Library
-from .widgets import BookCard, cls, HeaderBar, IconButton, Toast
+from .widgets import BookCard, confirm, HeaderBar, IconButton, Toast
 
 EBOOK_PATTERNS = "*.epub *.fb2 *.fb2.zip *.fbz *.mobi *.azw3"
 
@@ -315,17 +315,9 @@ class App(QObject, LibraryPage, Appearance):
             self.litres_lib.show_login()
 
     def disconnect_litres(self):
-        box = QMessageBox(self.window)
-        box.setWindowTitle(tr("Отключить ЛитРес?"))
-        box.setText(tr("<b>Отключить библиотеку ЛитРес?</b>"))
-        box.setInformativeText(tr("Книги ЛитРес пропадут из программы. Скачанные файлы, отметки и вход "
-                                  "сохранятся — библиотеку можно подключить снова."))
-        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
-        off = box.addButton(tr("Отключить"), QMessageBox.ButtonRole.DestructiveRole)
-        cls(off, "destructive")
-        box.setDefaultButton(cancel)
-        box.exec()
-        if box.clickedButton() is not off:
+        if not confirm(self.window, tr("Отключить ЛитРес?"), tr("<b>Отключить библиотеку ЛитРес?</b>"),
+                       tr("Книги ЛитРес пропадут из программы. Скачанные файлы, отметки и вход "
+                          "сохранятся — библиотеку можно подключить снова."), tr("Отключить")):
             return
         libraries.set_litres(self.settings, False)
         self.save_settings()
@@ -551,9 +543,7 @@ class App(QObject, LibraryPage, Appearance):
 
     def show_graph(self):
         """Граф библиотеки, выбранной в фильтре «Источник» (или всех)."""
-        kind = self.settings.get("libraryType", "all")
-        scope = ("litres" if kind in ("litres", "text", "audio") else
-                 kind[len("lib:"):] if kind.startswith("lib:") else "all")
+        scope = libraries.scope_from_filter(self.settings.get("libraryType", "all"))
         if self.graph_page is None:
             self.graph_page = GraphPage(self)
         self.graph_page.fill_scopes(scope)
