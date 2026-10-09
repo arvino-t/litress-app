@@ -12,9 +12,9 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
+from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton,
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QKeySequenceEdit, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import __version__, backup, core, i18n, libraries, style
@@ -27,8 +27,18 @@ THEMES = (("auto", tr("Как в системе")), ("light", tr("Светлая
           ("dark", tr("Тёмная")), ("black", tr("Чёрная")))
 FONTS = (("book", tr("Как в книге")), ("serif", tr("С засечками")), ("sans", tr("Без засечек")))
 
-TABS = (("general", tr("Общие")), ("libraries", tr("Библиотеки")), ("reading", tr("Чтение")),
+TABS = (("general", tr("Общие")), ("libraries", tr("Библиотеки")), ("appearance", tr("Внешний вид")),
+        ("reading", tr("Чтение")),
         ("integrations", tr("Интеграции")), ("backup", tr("Резервные копии")), ("advanced", tr("Дополнительно")))
+UI_THEMES = (("auto", tr("Как в системе")), ("light", tr("Светлая")), ("dark", tr("Тёмная")))
+# цвета акцента — палитра GNOME; "auto" — системный
+ACCENTS = (("auto", tr("Системный")), ("#3584e4", tr("Синий")), ("#2190a4", tr("Бирюзовый")),
+           ("#3a944a", tr("Зелёный")), ("#c88800", tr("Жёлтый")), ("#ed5b00", tr("Оранжевый")),
+           ("#e62d42", tr("Красный")), ("#d56199", tr("Розовый")), ("#9141ac", tr("Фиолетовый")),
+           ("#6f8396", tr("Сланцевый")))
+APP_ICON_TITLES = {"raven-hall": tr("Ворон в чертоге"), "moon": tr("Ворон на луне"), "flight": tr("Полёт на закате"),
+                   "twins": tr("Хугин и Мунин"), "runestone": tr("Рунный камень"), "hall": tr("Чертог"),
+                   "quill": tr("Перо ворона"), "eye": tr("Глаз ворона"), "wings": tr("Крылья-«М»")}
 BACKUP_AUTO = (("off", tr("Выключено")), ("daily", tr("Раз в день")), ("weekly", tr("Раз в неделю")))
 MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
           "сентября", "октября", "ноября", "декабря")
@@ -59,7 +69,7 @@ SERVICES = {
 ICONS_DIR = CACHE_DIR / "service-icons"
 ICON_SIZE = 32
 # Настройки, которые «Сбросить» не трогает: где лежат книги, что открыто, состояние графа
-KEEP_ON_RESET = {"booksDir", "libraries", "lastBook", "graph", "settingsTab",
+KEEP_ON_RESET = {"booksDir", "libraries", "appIcon", "shortcuts", "lastBook", "graph", "settingsTab",
                  "libraryStatus", "libraryFolder", "librarySubdir", "libraryType", "librarySort",
                  "backupDir", "backupAuto", "backupKeep", "backupLast", "backupToken", "language"}
 
@@ -357,6 +367,22 @@ class SettingsPage(QWidget):
         self._fill_libraries()
         self.col.addStretch()
 
+        # --- Внешний вид
+        self.page("appearance")
+        g = self.group(tr("Оформление"))
+        self.combo(g, tr("Тема интерфейса"), "uiTheme", UI_THEMES, tr("Светлая или тёмная — независимо от системы"),
+                   on_change=lambda _v: app.apply_appearance())
+        self.row(g, tr("Цвет акцента"), self._accent_picker())
+
+        g = self.group(tr("Значок приложения"), tr("Значок окна и ярлыка в меню приложений."))
+        self.row(g, tr("Значок"), self._icon_picker())
+
+        self.shortcuts_group = self.group(tr("Горячие клавиши"),
+                                          tr("Щёлкните поле и нажмите новое сочетание; Backspace — убрать."))
+        self._shortcut_rows = []
+        self._fill_shortcuts()
+        self.col.addStretch()
+
         # --- Чтение
         self.page("reading")
         g = self.group(tr("Вид текста"))
@@ -652,6 +678,123 @@ class SettingsPage(QWidget):
             return
         self.app.restart()
 
+    # --- внешний вид
+
+    def _accent_picker(self) -> QWidget:
+        box = QWidget()
+        h = QHBoxLayout(box)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(6)
+        group = QButtonGroup(box)
+        current = self.app.settings.get("accent") or "auto"
+        for value, title in ACCENTS:
+            b = QPushButton()
+            b.setCheckable(True)
+            b.setToolTip(title)
+            b.setFixedSize(26, 26)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            if value == "auto":
+                b.setText("A")
+                b.setStyleSheet("QPushButton { border-radius: 13px; padding: 0; }"
+                                "QPushButton:checked { border: 2px solid palette(text); }")
+            else:
+                b.setStyleSheet(f"QPushButton {{ background: {value}; border-radius: 13px; padding: 0; }}"
+                                f"QPushButton:checked {{ border: 3px solid palette(text); }}")
+            b.setChecked(value == current)
+            b.clicked.connect(lambda _=False, v=value: self._set_accent(v))
+            group.addButton(b)
+            h.addWidget(b)
+        return box
+
+    def _set_accent(self, value):
+        self.app.settings["accent"] = value
+        self.app.save_settings()
+        self.app.apply_appearance()
+
+    def _icon_picker(self) -> QWidget:
+        box = QWidget()
+        grid = QHBoxLayout(box)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(4)
+        group = QButtonGroup(box)
+        current = self.app.settings.get("appIcon") or core.APP_ICON_NAMES[0]
+        for name in core.APP_ICON_NAMES:
+            b = QPushButton()
+            b.setCheckable(True)
+            cls(b, "flat")
+            b.setIcon(QIcon(str(core.app_icon_path(name))))
+            b.setIconSize(QSize(36, 36))
+            b.setFixedSize(46, 46)
+            b.setToolTip(APP_ICON_TITLES.get(name, name))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setChecked(name == current)
+            b.clicked.connect(lambda _=False, n=name: self._set_icon(n))
+            group.addButton(b)
+            grid.addWidget(b)
+        return box
+
+    def _set_icon(self, name):
+        self.app.settings["appIcon"] = name
+        self.app.save_settings()
+        self.app.apply_app_icon(name)
+
+    def _fill_shortcuts(self):
+        from .app import SHORTCUTS
+        g = self.shortcuts_group
+        for w in self._shortcut_rows:
+            g.removeWidget(w)
+            w.deleteLater()
+        before = g.count()
+        keys = {a: self.app.shortcut_keys(a) for a, *_ in SHORTCUTS}
+        taken: dict[str, list[str]] = {}
+        for a, ks in keys.items():
+            for k in ks:
+                taken.setdefault(QKeySequence(k).toString(), []).append(a)
+        titles = {a: t for a, t, *_ in SHORTCUTS}
+        for action, title, default, _slot in SHORTCUTS:
+            edit = QKeySequenceEdit(QKeySequence(keys[action][0]) if keys[action] else QKeySequence())
+            edit.setMaximumSequenceLength(1)
+            edit.setClearButtonEnabled(True)
+            edit.setFixedWidth(150)
+            inner = edit.findChild(QLineEdit)
+            if inner is not None:
+                inner.setPlaceholderText(tr("Нажмите сочетание"))
+            edit.editingFinished.connect(lambda a=action, e=edit: self._set_shortcut(a, e.keySequence()))
+            edit.keySequenceChanged.connect(lambda seq, a=action: (not seq.isEmpty()) or self._set_shortcut(a, seq))
+            extra = [k for k in keys[action][1:]]
+            conflicts = sorted({titles[o] for k in keys[action] for o in taken.get(QKeySequence(k).toString(), [])
+                                if o != action})
+            hint = []
+            if extra:
+                hint.append(tr("Также: {0}", ", ".join(QKeySequence(k).toString(QKeySequence.SequenceFormat.NativeText)
+                                                       for k in extra)))
+            if conflicts:
+                hint.append(tr("Совпадает с: {0}", ", ".join(conflicts)))
+            if keys[action] != default:
+                hint.append(tr("По умолчанию: {0}", ", ".join(default) or "—"))
+            self.row(g, title, edit, " · ".join(hint))
+        reset = QPushButton(tr("Сбросить клавиши"))
+        reset.clicked.connect(self._reset_shortcuts)
+        self.row(g, tr("Все сочетания по умолчанию"), reset)
+        self._shortcut_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
+
+    def _set_shortcut(self, action, seq: QKeySequence):
+        custom = dict(self.app.settings.get("shortcuts") or {})
+        new = [seq.toString()] if not seq.isEmpty() else []
+        if custom.get(action) == new or (action not in custom and self.app.shortcut_keys(action) == new):
+            return
+        custom[action] = new
+        self.app.settings["shortcuts"] = custom
+        self.app.save_settings()
+        self.app.apply_shortcuts()
+        QTimer.singleShot(0, self._fill_shortcuts)    # подсказки о совпадениях
+
+    def _reset_shortcuts(self):
+        self.app.settings["shortcuts"] = None
+        self.app.save_settings()
+        self.app.apply_shortcuts()
+        self._fill_shortcuts()
+
     def _language_changed(self, lang):
         effective = lang if lang in ("ru", "en") else i18n.system_language()
         if effective == i18n.LANG:
@@ -683,6 +826,7 @@ class SettingsPage(QWidget):
         self.app.library.chars_per_min = st["readingCharsPerMin"]
         self.app.apply_remote_sync()
         self.app.player.set_rate(st["audioRate"])
+        self.app.apply_appearance()
         self.app.save_settings()
         self._rebuild()
         self.app.toast(tr("Настройки сброшены"))

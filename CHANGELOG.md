@@ -10,6 +10,16 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 - The app icon reflects the name: Muninn, Odin's raven of memory, perched on books against the moon
   under the gabled roof of a Norse hall (SVG and a multi-size `.ico`).
 
+### Added
+- Settings → **Appearance** tab:
+  - interface theme (system, light, dark) and accent color (system or the GNOME palette), applied
+    immediately;
+  - app icon: nine icons to choose from (the raven in the hall, raven and the moon, flight at sunset,
+    Huginn and Muninn, rune stone, the hall, raven quill, raven's eye, wings "M"); changes the window icon
+    and, for an installed app on Linux, the app menu icon;
+  - keyboard shortcuts for refresh, search, open file, graph, statistics, settings, full screen and
+    back; conflicts are pointed out; "Reset shortcuts" restores the defaults.
+
 ### Fixed
 - Linux installer: the user icon cache was not refreshed (no `index.theme` in `~/.local/share/icons/hicolor`),
   so a stale cache hid the new app icon; the cache is now rebuilt with `gtk-update-icon-cache -f -t`.

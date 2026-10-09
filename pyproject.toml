@@ -25,4 +25,4 @@ packages = ["muninhall"]
 [tool.setuptools.package-data]
 muninhall = ["web/*", "web/vendor/*", "web/foliate/*", "web/foliate/vendor/*",
              "web/foliate/vendor/pdfjs/*", "web/foliate/vendor/pdfjs/cmaps/*",
-             "web/foliate/vendor/pdfjs/standard_fonts/*", "data/*", "data/sym/*"]
+             "web/foliate/vendor/pdfjs/standard_fonts/*", "data/*", "data/sym/*", "data/icons/*"]

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><clipPath id="c"><rect x="4" y="4" width="120" height="120" rx="26"/></clipPath></defs>
+<g clip-path="url(#c)">
+<rect x="4" y="4" width="120" height="120" rx="26" fill="#7a2e2e"/>
+<circle cx="64" cy="64" r="50" fill="#c9a24a"/>
+<circle cx="64" cy="64" r="44" fill="#f0e2bc"/>
+<!-- Хугин (слева, смотрит вправо) и Мунин (справа, смотрит влево) -->
+<g transform="translate(71 44) scale(-0.43 0.43)"><path d="M30 50 L46 44 C50 37 58 33 66 35 C74 37 80 44 85 52 C92 58 100 64 110 72 L99 71 L105 79 L91 74 C86 81 78 86 70 86 L71 98 L67 98 L66 87 L61 87 L61 98 L57 98 L57 85 C49 81 45 72 46 63 L45 55 L46 50 Z" fill="#1b1b22"/></g>
+<g transform="translate(57 44) scale(0.43 0.43)"><path d="M30 50 L46 44 C50 37 58 33 66 35 C74 37 80 44 85 52 C92 58 100 64 110 72 L99 71 L105 79 L91 74 C86 81 78 86 70 86 L71 98 L67 98 L66 87 L61 87 L61 98 L57 98 L57 85 C49 81 45 72 46 63 L45 55 L46 50 Z" fill="#1b1b22"/></g>
+<path d="M28 87 H100" stroke="#7a2e2e" stroke-width="3" stroke-linecap="round"/>
+</g>
+</svg>

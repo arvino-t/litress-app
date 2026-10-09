@@ -68,9 +68,24 @@ GNOME_ACCENTS = {
 }
 
 
+# Выбор в «Настройки → Внешний вид»: тема "light" / "dark" (None — как в системе) и цвет акцента (None — системный)
+FORCED_SCHEME: str | None = None
+FORCED_ACCENT: str | None = None
+
+
+def set_overrides(scheme: str | None, accent: str | None):
+    global FORCED_SCHEME, FORCED_ACCENT
+    FORCED_SCHEME = scheme if scheme in ("light", "dark") else None
+    FORCED_ACCENT = accent if accent and accent.startswith("#") else None
+    read_accent()
+
+
 def read_accent() -> str:
-    """Цвет акцента системы: на GNOME — из настроек, на Windows — из палитры Qt."""
+    """Цвет акцента: выбранный в настройках, иначе системный (GNOME — из настроек, Windows — из палитры Qt)."""
     global ACCENT
+    if FORCED_ACCENT:
+        ACCENT = FORCED_ACCENT
+        return ACCENT
     accent = None
     if sys.platform.startswith("linux"):
         try:
@@ -94,6 +109,8 @@ def accent_rgba(alpha: float) -> str:
 
 
 def is_dark() -> bool:
+    if FORCED_SCHEME:
+        return FORCED_SCHEME == "dark"
     if _portal_scheme in (1, 2):
         return _portal_scheme == 1
     return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark

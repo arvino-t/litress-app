@@ -26,6 +26,14 @@ PKG_DIR = Path(__file__).resolve().parent
 WEB_DIR = PKG_DIR / "web"
 ICONS_DIR = PKG_DIR / "data" / "sym"
 APP_ICON = PKG_DIR / "data" / f"{APP_ID}.svg"
+# Значки приложения на выбор («Настройки → Внешний вид»); по умолчанию — ворон в чертоге
+APP_ICONS_DIR = PKG_DIR / "data" / "icons"
+APP_ICON_NAMES = ("raven-hall", "moon", "flight", "twins", "runestone", "hall", "quill", "eye", "wings")
+
+
+def app_icon_path(name: str | None) -> Path:
+    p = APP_ICONS_DIR / f"{name}.svg"
+    return p if name in APP_ICON_NAMES and p.exists() else APP_ICON
 
 
 def _dirs(slug=APP_SLUG):
@@ -214,6 +222,12 @@ DEFAULT_SETTINGS = {
     "settingsTab": "general",
     # Язык интерфейса: auto (как в системе) / ru / en — применяется после перезапуска
     "language": "auto",
+    # Внешний вид: тема интерфейса (auto / light / dark), цвет акцента (auto или #rrggbb), значок приложения
+    "uiTheme": "auto",
+    "accent": "auto",
+    "appIcon": "raven-hall",
+    # Горячие клавиши, изменённые пользователем: {действие: [клавиши]}; None — все по умолчанию
+    "shortcuts": None,
     # Резервные копии: папка (None — Документы/Backups/muninhall), off / daily / weekly,
     # сколько хранить, время последней копии, класть ли в копию токен Singularity
     "backupDir": None,

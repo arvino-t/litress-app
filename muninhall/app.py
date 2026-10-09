@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -133,6 +134,18 @@ class MainWindow(QMainWindow):
         super().closeEvent(e)
 
 
+# Горячие клавиши: действие, подпись, клавиши по умолчанию, метод App
+SHORTCUTS = (
+    ("sync", tr("Обновить библиотеку"), ["F5", "Ctrl+R"], "sync"),
+    ("search", tr("Поиск"), ["Ctrl+F"], "_toggle_search"),
+    ("open", tr("Открыть файл"), ["Ctrl+O"], "on_open_file"),
+    ("graph", tr("Граф книг"), ["Ctrl+G"], "show_graph"),
+    ("stats", tr("Статистика чтения"), [], "show_stats_dialog"),
+    ("settings", tr("Настройки"), ["Ctrl+,"], "show_settings"),
+    ("fullscreen", tr("Во весь экран"), ["F11"], "toggle_fullscreen"),
+    ("back", tr("Назад"), ["Alt+Left"], "go_back"),
+)
+
 class App(QObject):
     def __init__(self, qapp: QApplication):
         super().__init__()
@@ -168,7 +181,7 @@ class App(QObject):
         self._cover_queue: list[str] = []
 
         style.read_portal_scheme()
-        style.read_accent()
+        style.set_overrides(self.settings.get("uiTheme"), self.settings.get("accent"))
         style.apply_palette(qapp)
         qapp.styleHints().colorSchemeChanged.connect(self._on_theme_changed)
         # Портал не шлёт сигнал в Qt — проверяем смену темы и акцента раз в 2 секунды
@@ -198,7 +211,7 @@ class App(QObject):
         QTimer.singleShot(10_000, self.singularity.sync)
 
         self.window = MainWindow(self)
-        self.window.setWindowIcon(QIcon(str(APP_ICON)))
+        self.apply_app_icon(self.settings.get("appIcon"))
         self.stack = QStackedWidget()
         self.window.setCentralWidget(self.stack)
         self.history: list[QWidget] = []
@@ -207,11 +220,13 @@ class App(QObject):
         self.login_page = self._build_login_page()
         self.push(self.library_page)
 
-        for keys, slot in (("F11", self.toggle_fullscreen), ("F5", self.litres_lib.sync), ("Ctrl+R", self.litres_lib.sync),
-                           ("Ctrl+O", self.on_open_file), ("Ctrl+F", self._toggle_search),
-                           ("Ctrl+G", self.show_graph), ("Ctrl+,", self.show_settings),
-                           ("Alt+Left", self.go_back)):
-            QShortcut(QKeySequence(keys), self.window, activated=slot)
+        # горячие клавиши — настраиваются в «Настройки → Внешний вид»
+        self.shortcuts: dict[str, QShortcut] = {}
+        for action, _title, _keys, slot in SHORTCUTS:
+            sc = QShortcut(self.window)
+            sc.activated.connect(getattr(self, slot))
+            self.shortcuts[action] = sc
+        self.apply_shortcuts()
 
         self._apply_litres_ui()
         self.library.scan_folders(self.local_folders())
@@ -1364,6 +1379,46 @@ class App(QObject):
             self.reader.apply_settings()
         self._settings_timer.start()
 
+    # --- внешний вид: тема, акцент, значок, горячие клавиши
+
+    def shortcut_keys(self, action) -> list[str]:
+        custom = (self.settings.get("shortcuts") or {}).get(action)
+        if custom is not None:
+            return [k for k in custom if k]
+        return next(keys for a, _t, keys, _s in SHORTCUTS if a == action)
+
+    def apply_shortcuts(self):
+        for action, sc in self.shortcuts.items():
+            sc.setKeys([QKeySequence(k) for k in self.shortcut_keys(action)])
+
+    def apply_appearance(self):
+        """Тема и цвет акцента из настроек (или системные) — сразу, без перезапуска."""
+        style.set_overrides(self.settings.get("uiTheme"), self.settings.get("accent"))
+        style.read_portal_scheme()
+        self._on_theme_changed()
+
+    def apply_app_icon(self, name):
+        """Значок окна и — если приложение установлено — ярлыка в меню (тема значков пользователя)."""
+        path = core.app_icon_path(name)
+        icon = QIcon(str(path))
+        self.qapp.setWindowIcon(icon)
+        if getattr(self, "window", None) is not None:
+            self.window.setWindowIcon(icon)
+        if sys.platform.startswith("linux"):
+            base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+            if not (base / "applications" / f"{APP_ID}.desktop").exists():
+                return                      # не установлено (запуск из исходников) — ярлыка нет
+            target = base / "icons" / "hicolor" / "scalable" / "apps" / f"{APP_ID}.svg"
+            try:
+                data = path.read_bytes()
+                if not target.exists() or target.read_bytes() != data:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+                    subprocess.Popen(["gtk-update-icon-cache", "-q", "-f", "-t", str(base / "icons" / "hicolor")],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError as e:
+                log("значок ярлыка не обновлён:", e)
+
     def _poll_theme(self):
         style.read_portal_scheme()
         style.read_accent()
@@ -1388,7 +1443,7 @@ class App(QObject):
     def on_about(self):
         box = QMessageBox(self.window)
         box.setWindowTitle(tr("О приложении"))
-        box.setIconPixmap(QIcon(str(APP_ICON)).pixmap(96, 96))
+        box.setIconPixmap(QIcon(str(core.app_icon_path(self.settings.get("appIcon")))).pixmap(96, 96))
         box.setText(tr('<h3>{0}</h3><p>Версия {1}</p>', APP_NAME, __version__))
         libs = libraries.all_libraries(self.settings)
         box.setInformativeText(

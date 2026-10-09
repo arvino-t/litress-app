@@ -206,6 +206,7 @@ Menu → "Settings" or Ctrl+,. Changes apply immediately.
 |---|---|
 | **General** | interface language (system default, Русский, English — after restart); open the last book on startup; downloaded only; download all books (if LitRes is connected); statistics |
 | **Libraries** | your libraries and LitRes — see [Libraries](#libraries) and [LitRes](#litres) |
+| **Appearance** | interface theme (system, light, dark); accent color (system or the GNOME palette); app icon — nine to choose from, changes the window and app menu icon; keyboard shortcuts |
 | **Reading** | text appearance, read aloud, auto page turn, audiobook speed |
 | **Integrations** | Singularity |
 | **Backups** | see [Backups](#backups) |
@@ -278,6 +279,9 @@ You can change the folder for LitRes books in Settings → Libraries. Data files
 created with owner-only access. Downloaded books and progress remain after uninstalling the app.
 
 ## Keyboard shortcuts
+
+These are the defaults; change them in Settings → Appearance → Keyboard shortcuts (including one for
+Reading statistics, which has none by default). Reader and player keys are not configurable.
 
 | Keys | Action |
 |---|---|
