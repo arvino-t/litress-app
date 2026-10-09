@@ -11,15 +11,15 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, QObject, QPoint, QProcess, QRectF, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QIcon, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket, QNetworkAccessManager, QNetworkRequest
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, QFileDialog, QFrame,
-                               QHBoxLayout, QInputDialog, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout,
+                               QInputDialog, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import __version__, backup, core, libraries, style, widgets
 from .i18n import tr
-from .core import (APP_ICON, APP_ID, APP_NAME, APP_SLUG, OLD_APP_IDS, AUDIO_FORMATS, CONFIG_FILE, COVERS_DIR, DEFAULT_SETTINGS,
-                   NO_FOLDER, READABLE, SORT_MODES, STATUS_FILTERS, Library, books_dir, load_json, log,
-                   save_json, set_books_dir)
+from .core import (APP_ICON, APP_ID, APP_NAME, APP_SLUG, OLD_APP_IDS, AUDIO_FORMATS, CONFIG_FILE, COVERS_DIR,
+                   DEFAULT_SETTINGS, NO_FOLDER, READABLE, SORT_MODES, STATUS_FILTERS, Library, books_dir,
+                   load_json, log, save_json, set_books_dir)
 from .graph import GraphPage
 from .settings import SettingsPage
 from .litres import LitresSession
@@ -27,8 +27,8 @@ from .player import AudioPlayer, PlayerPage, audio_tracks
 from .reader import ReaderPage
 from .litres_connector import LitresConnector
 from .singularity import SingularitySync
-from .widgets import (BookCard, FlowLayout, HeaderBar, IconButton, RecentPanel, Switch, Toast, cls,
-                      label)
+from .widgets import (BookCard, cls, exec_dialog, FlowLayout, frameless_dialog, HeaderBar, IconButton, label,
+                      RecentPanel, Switch, Toast)
 
 EBOOK_PATTERNS = "*.epub *.fb2 *.fb2.zip *.fbz *.mobi *.azw3"
 
@@ -907,7 +907,8 @@ class App(QObject):
                                                            len(self.library.ordered())))
         elif self.litres_lib.bulk:
             b = self.litres_lib.bulk
-            self.lib_header.set_title(tr("Библиотека"), tr('Скачиваю книги: {0} из {1}', b['done'] + b['failed'], b['total']))
+            self.lib_header.set_title(tr("Библиотека"),
+                                      tr('Скачиваю книги: {0} из {1}', b['done'] + b['failed'], b['total']))
         elif self.litres.logged_in:
             self.account_action.setText(tr("Выйти из ЛитРес"))
             self.lib_header.set_title(tr("Библиотека"), tr('ЛитРес: {0}', self.litres.user_name)
@@ -1000,7 +1001,8 @@ class App(QObject):
             menu.addAction(tr("Отметить прочитанной"), lambda: self.set_finished(book, True))
         if book.get("source") == "litres":
             menu.addAction(tr("Папки…"), lambda: self.litres_lib.show_folders_dialog(book))
-            menu.addAction(tr("Скачать заново") if downloaded else tr("Скачать"), lambda: self.litres_lib.download_book(book))
+            menu.addAction(tr("Скачать заново") if downloaded else tr("Скачать"),
+                           lambda: self.litres_lib.download_book(book))
             if book.get("url"):
                 menu.addAction(tr("Открыть на сайте ЛитРес"), lambda: QDesktopServices.openUrl(QUrl(book["url"])))
         nxt = self.library.next_in_series(book)
@@ -1222,7 +1224,7 @@ class App(QObject):
                 p.end()
                 img.save(str(target), "JPG", 85)
             doc.close()
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             log("обложка PDF:", book["path"], e)
         if not target.exists():
             target.touch()                           # пустой файл: больше не пытаться
@@ -1259,17 +1261,7 @@ class App(QObject):
 
     def show_singularity_dialog(self):
         s = self.singularity
-        dlg = QDialog(self.window, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
-        dlg.setMinimumWidth(460)
-        v = QVBoxLayout(dlg)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-        header = HeaderBar(dlg, "Singularity", show_controls=False)
-        close = IconButton("window-close", tr("Закрыть"), flat=False)
-        cls(close, "wincontrol")
-        close.clicked.connect(dlg.accept)
-        header.pack_end(close)
-        v.addWidget(header)
+        dlg, v = frameless_dialog(self.window, "Singularity", 460)
 
         body = QWidget()
         b = QVBoxLayout(body)
@@ -1293,7 +1285,8 @@ class App(QObject):
         rows.setSpacing(0)
         switches = {}
         for key, title, hint in (
-                ("reading", tr("Задачи «Читаю»"), tr("Начатые книги — задачи в проекте «Книги», дочитанные закрываются")),
+                ("reading", tr("Задачи «Читаю»"),
+                 tr("Начатые книги — задачи в проекте «Книги», дочитанные закрываются")),
                 ("progress", tr("Прогресс в задаче"), tr("Процент и текущая глава в заметке задачи")),
                 ("wishlist", tr("«Хочу прочитать»"), tr("Непрочитанные книги — задачи в отдельном проекте")),
                 ("daily", tr("Ежедневное чтение"), tr("Привычка отмечается сама, когда за день набралось N минут"))):
@@ -1385,11 +1378,7 @@ class App(QObject):
         run.clicked.connect(check_and_sync)
         disconnect.clicked.connect(off)
 
-        frame = QFrame(dlg)
-        frame.setObjectName("popover")
-        frame.lower()
-        dlg.resizeEvent = lambda e: frame.setGeometry(dlg.rect())
-        dlg.exec()
+        exec_dialog(dlg)
         apply()
         s.status.disconnect(status.setText)
 
@@ -1602,8 +1591,9 @@ def main(argv=None):
 
     # Переименование «Читалка ЛитРес» → Muninhall: данные переезжают в новые каталоги (один раз)
     if core.migration_needed() and _old_version_running():
-        QMessageBox.information(None, APP_NAME, tr("Закройте прежнюю версию приложения («Читалка ЛитРес» или Shelfwise) "
-                                                   "и запустите Muninhall снова: её данные перенесутся."))
+        QMessageBox.information(None, APP_NAME, tr("Закройте прежнюю версию приложения («Читалка ЛитРес» "
+                                                   "или Shelfwise) и запустите Muninhall снова: её данные "
+                                                   "перенесутся."))
         return 0
     moved = core.migrate_old_dirs()
     backup.migrate_default_dir()

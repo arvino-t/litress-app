@@ -5,11 +5,11 @@ import datetime as dt
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QComboBox, QDialog, QFrame, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QFrame, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
 
 from . import libraries, style
 from .i18n import plural, tr
-from .widgets import HeaderBar, IconButton, cls, label
+from .widgets import cls, exec_dialog, frameless_dialog, label
 
 
 def minutes_word(n: int) -> str:
@@ -168,16 +168,8 @@ def stats_body(lib, scope: str) -> QWidget:
 
 
 def show_stats(app):
-    dlg = QDialog(app.window, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
-    dlg.setMinimumWidth(620)
-    outer = QVBoxLayout(dlg)
-    outer.setContentsMargins(0, 0, 0, 0)
-    outer.setSpacing(0)
-    header = HeaderBar(dlg, tr("Статистика чтения"), show_controls=False)
-    close = IconButton("window-close", tr("Закрыть"), flat=False)
-    cls(close, "wincontrol")
-    close.clicked.connect(dlg.accept)
-    header.pack_end(close)
+    dlg, outer = frameless_dialog(app.window, tr("Статистика чтения"), 620)
+    header = dlg.header
     # статистика общая, но её можно посмотреть по одной библиотеке
     libs = libraries.all_libraries(app.settings)
     scopes = ["all"] + [lib["id"] for lib in libs]
@@ -185,7 +177,6 @@ def show_stats(app):
     scope_combo.addItems([tr("Все библиотеки")] + [lib["name"] for lib in libs])
     scope_combo.setVisible(len(scopes) > 2)
     header.pack_start(scope_combo)
-    outer.addWidget(header)
 
     holder = QVBoxLayout()
     outer.addLayout(holder)
@@ -201,8 +192,4 @@ def show_stats(app):
     scope_combo.currentIndexChanged.connect(show)
     show(0)
 
-    frame = QFrame(dlg)
-    frame.setObjectName("popover")
-    frame.lower()
-    dlg.resizeEvent = lambda e: frame.setGeometry(dlg.rect())
-    dlg.exec()
+    exec_dialog(dlg)

@@ -244,7 +244,8 @@ DEFAULT_SETTINGS = {
 
 # Особое значение фильтра по папкам: книги, не лежащие ни в одной папке
 NO_FOLDER = "__none__"
-STATUS_FILTERS = (("all", tr("Все")), ("reading", tr("Читаю")), ("unread", tr("Не читал")), ("finished", tr("Прочитано")))
+STATUS_FILTERS = (("all", tr("Все")), ("reading", tr("Читаю")), ("unread", tr("Не читал")),
+                  ("finished", tr("Прочитано")))
 SORT_MODES = (("recent", tr("Недавние")), ("litres", tr("Как на ЛитРес")), ("title", tr("По названию")),
               ("author", tr("По автору")), ("series", tr("По сериям")), ("progress", tr("По прогрессу")),
               ("purchased", tr("По дате покупки")))

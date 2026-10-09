@@ -13,13 +13,13 @@ import threading
 import zipfile
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
-from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLineEdit, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtCore import QObject, QTimer, QUrl, Signal
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLineEdit, QMessageBox, QVBoxLayout, QWidget
 
 from .i18n import plural, tr
 from .core import (AUDIO_FILE_TYPES, AUDIO_FORMATS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, API, READABLE,
                    SITE, books_dir, looks_like_book)
-from .widgets import HeaderBar, IconButton, Switch, cls, label
+from .widgets import cls, exec_dialog, frameless_dialog, label, Switch
 
 class _Bridge(QObject):
     """Передаёт результат из рабочего потока в главный."""
@@ -271,9 +271,6 @@ class LitresConnector(QObject):
 
         self.app.litres.fetch_files(bid, got_files)
 
-    @staticmethod
-    def _books_word(n, one, few, many):
-        return plural(n, one, few, many)
 
     def download_all(self):
         if self.bulk:
@@ -296,12 +293,14 @@ class LitresConnector(QObject):
         box.setWindowTitle(tr("Скачать все книги?"))
         box.setText(tr("<b>Скачать все книги на компьютер?</b>"))
         box.setInformativeText(
-            tr('Не скачано: {0} {1}', len(texts), self._books_word(len(texts), 'книга', 'книги', 'книг'))
-            + (tr(' и {0} {1} (аудиокниги большие — сотни мегабайт каждая)', len(audio), self._books_word(len(audio), 'аудиокнига', 'аудиокниги', 'аудиокниг')) if audio else "")
+            tr('Не скачано: {0} {1}', len(texts), plural(len(texts), 'книга', 'книги', 'книг'))
+            + (tr(' и {0} {1} (аудиокниги большие — сотни мегабайт каждая)', len(audio),
+                  plural(len(audio), 'аудиокнига', 'аудиокниги', 'аудиокниг')) if audio else "")
             + tr('.\nПапка: {0}\nКниги скачиваются по одной; остановить можно в меню.', books_dir()))
         cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
         only_text = box.addButton(tr('Книги ({0})', len(texts)), QMessageBox.ButtonRole.AcceptRole) if texts else None
-        everything = box.addButton(tr('Всё, с аудио ({0})', len(missing)), QMessageBox.ButtonRole.AcceptRole) if audio else None
+        everything = (box.addButton(tr('Всё, с аудио ({0})', len(missing)), QMessageBox.ButtonRole.AcceptRole)
+                      if audio else None)
         box.setDefaultButton(only_text or everything)
         box.exec()
         clicked = box.clickedButton()
@@ -362,17 +361,7 @@ class LitresConnector(QObject):
 
     def show_folders_dialog(self, book):
         """Окно выбора папок ЛитРес для книги: переключатель у каждой папки и новая папка."""
-        dlg = QDialog(self.app.window, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
-        dlg.setMinimumWidth(400)
-        v = QVBoxLayout(dlg)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-        header = HeaderBar(dlg, tr("Папки"), show_controls=False)
-        close = IconButton("window-close", tr("Закрыть"), flat=False)
-        cls(close, "wincontrol")
-        close.clicked.connect(dlg.accept)
-        header.pack_end(close)
-        v.addWidget(header)
+        dlg, v = frameless_dialog(self.app.window, tr("Папки"), 400)
 
         body = QWidget()
         b = QVBoxLayout(body)
@@ -437,11 +426,7 @@ class LitresConnector(QObject):
         entry.returnPressed.connect(create)
         v.addWidget(body)
 
-        frame = QFrame(dlg)
-        frame.setObjectName("popover")
-        frame.lower()
-        dlg.resizeEvent = lambda e: frame.setGeometry(dlg.rect())
-        dlg.exec()
+        exec_dialog(dlg)
 
     def set_book_folder(self, book, fid, inside: bool):
         if inside == (fid in (book.get("folders") or [])):

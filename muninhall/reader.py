@@ -24,6 +24,11 @@ from .widgets import HeaderBar, IconButton, Popover, SeekSlider, Switch, attach_
 from .i18n import tr, web_strings
 
 
+# Темы и шрифты текста книги — общие для панели «Вид текста» и страницы настроек
+TEXT_THEMES = (("auto", tr("Авто")), ("light", tr("Светлая")), ("sepia", tr("Сепия")),
+               ("dark", tr("Тёмная")), ("black", tr("Чёрная")))
+FONTS = (("book", tr("Как в книге")), ("serif", tr("С засечками")), ("sans", tr("Без засечек")))
+
 def register_scheme():
     """Схема litreader:// для страницы читалки и файлов книг (до создания QApplication).
 
@@ -255,8 +260,7 @@ class ReaderPage(QWidget):
         tl.setContentsMargins(0, 0, 0, 0)
         tl.setSpacing(0)
         group = QButtonGroup(themes)
-        options = (("auto", tr("Авто")), ("light", tr("Светлая")), ("sepia", tr("Сепия")),
-                   ("dark", tr("Тёмная")), ("black", tr("Чёрная")))
+        options = TEXT_THEMES
         from PySide6.QtWidgets import QPushButton
         for i, (key, text) in enumerate(options):
             b = QPushButton(text)
@@ -271,8 +275,8 @@ class ReaderPage(QWidget):
         row += 1
 
         fonts = QComboBox()
-        font_keys = ["book", "serif", "sans"]
-        fonts.addItems([tr("Как в книге"), tr("С засечками"), tr("Без засечек")])
+        font_keys = [k for k, _t in FONTS]
+        fonts.addItems([t for _k, t in FONTS])
         fonts.setCurrentIndex(font_keys.index(st["font"]) if st["font"] in font_keys else 0)
         fonts.currentIndexChanged.connect(lambda i: self._set("font", font_keys[i]))
         add(tr("Шрифт"), fonts)

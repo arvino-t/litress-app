@@ -166,7 +166,8 @@ class SingularitySync(QObject):
             elif status in (401, 403):
                 done(False, tr("Токен не подходит — создайте новый с доступом к задачам, проектам и привычкам"))
             elif status == 0:
-                done(False, tr('Сервер Singularity недоступен ({0}). Если включён VPN — нужен обход (см. vpn-bypass).', err or tr('нет связи')))
+                done(False, tr('Сервер Singularity недоступен ({0}). '
+                               'Если включён VPN — нужен обход (см. vpn-bypass).', err or tr('нет связи')))
             else:
                 done(False, tr('Ошибка Singularity: код {0}', status))
         self._request("GET", "/project", query={"maxCount": 1}, done=got)

@@ -14,18 +14,17 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QKeySequenceEdit, QLabel, QLineEdit, QMenu, QMessageBox, QPushButton,
-                               QScrollArea, QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QKeySequenceEdit,
+                               QLabel, QLineEdit, QMenu, QMessageBox, QPushButton, QScrollArea, QSlider,
+                               QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import __version__, backup, core, i18n, libraries, style
 from .i18n import tr
 from .core import CACHE_DIR, CONFIG_DIR, DATA_DIR, DEFAULT_SETTINGS, SITE, books_dir
 from .player import SPEEDS
+from .reader import FONTS, TEXT_THEMES
 from .widgets import HeaderBar, IconButton, Switch, cls, label
 
-THEMES = (("auto", tr("Как в системе")), ("light", tr("Светлая")), ("sepia", tr("Сепия")),
-          ("dark", tr("Тёмная")), ("black", tr("Чёрная")))
-FONTS = (("book", tr("Как в книге")), ("serif", tr("С засечками")), ("sans", tr("Без засечек")))
 
 TABS = (("general", tr("Общие")), ("libraries", tr("Библиотеки")), ("appearance", tr("Внешний вид")),
         ("reading", tr("Чтение")),
@@ -387,7 +386,7 @@ class SettingsPage(QWidget):
         self.page("reading")
         g = self.group(tr("Вид текста"))
         self.spin(g, tr("Размер шрифта"), "fontSize", 12, 40)
-        self.combo(g, tr("Тема"), "theme", THEMES)
+        self.combo(g, tr("Тема"), "theme", TEXT_THEMES)
         self.combo(g, tr("Шрифт"), "font", FONTS)
         self.slider(g, tr("Межстрочный интервал"), "lineHeight", 1.1, 2.2, 10)
         self.slider(g, tr("Поля"), "margin", 0, 20, fmt=lambda v: f"{v:g} %")
@@ -456,7 +455,8 @@ class SettingsPage(QWidget):
                     tr("Без него после восстановления на другом компьютере Singularity придётся подключить "
                     "заново. Токен даёт доступ к вашим задачам — храните такие копии бережно"))
 
-        self.restore_group = self.group(tr("Восстановление"), tr("Перед восстановлением текущие данные тоже сохраняются "
+        self.restore_group = self.group(
+            tr("Восстановление"), tr("Перед восстановлением текущие данные тоже сохраняются "
                                         "в копию. Папки книг и копий остаются как на этом компьютере. "
                                         "Приложение перезапустится."))
         self._restore_rows = []
@@ -486,7 +486,8 @@ class SettingsPage(QWidget):
             self.button(g, title, tr("Открыть папку"),
                         lambda _=False, p=path: QDesktopServices.openUrl(QUrl.fromLocalFile(str(p))),
                         f"{hint}\n{path}")
-        self.button(g, tr("Сбросить настройки"), tr("Сбросить…"), self._reset, tr("Вид текста, чтение, обновление, журнал. "
+        self.button(g, tr("Сбросить настройки"), tr("Сбросить…"), self._reset,
+                    tr("Вид текста, чтение, обновление, журнал. "
                     "Папки, вход и библиотека не меняются"), style="destructive")
 
         g = self.group(tr("О приложении"))
@@ -653,7 +654,9 @@ class SettingsPage(QWidget):
         box.setText(tr('<b>Восстановить данные из копии ({0})?</b>', when))
         if scope == "all":
             box.setInformativeText(
-                tr('Копия версии {0}. Библиотека, место чтения, статистика и настройки заменятся данными из копии; текущие сначала сохранятся в отдельную копию. Приложение перезапустится.', manifest.get('version', '?')))
+                tr('Копия версии {0}. Библиотека, место чтения, статистика и настройки заменятся данными '
+                   'из копии; текущие сначала сохранятся в отдельную копию. Приложение перезапустится.',
+                   manifest.get('version', '?')))
         else:
             box.setInformativeText(tr("Отметки, место чтения и граф библиотеки «{0}» заменятся данными из копии; "
                                       "текущие сначала сохранятся в отдельную копию. Приложение перезапустится.",

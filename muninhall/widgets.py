@@ -785,3 +785,30 @@ class Popover(QFrame):
 def attach_popover(button: QToolButton, popover: Popover):
     button.clicked.connect(lambda: popover.popup_under(button))
     return popover
+
+
+def frameless_dialog(parent, title: str, min_width: int):
+    """Окно без рамки в стиле Adwaita: заголовок с кнопкой «Закрыть». Возвращает (окно, вертикальная раскладка)."""
+    from PySide6.QtWidgets import QDialog
+    dlg = QDialog(parent, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+    dlg.setMinimumWidth(min_width)
+    v = QVBoxLayout(dlg)
+    v.setContentsMargins(0, 0, 0, 0)
+    v.setSpacing(0)
+    header = HeaderBar(dlg, title, show_controls=False)
+    close = IconButton("window-close", tr("Закрыть"), flat=False)
+    cls(close, "wincontrol")
+    close.clicked.connect(dlg.accept)
+    header.pack_end(close)
+    v.addWidget(header)
+    dlg.header = header
+    return dlg, v
+
+
+def exec_dialog(dlg):
+    """Показывает окно из frameless_dialog с рамкой-подложкой (#popover) и ждёт закрытия."""
+    frame = QFrame(dlg)
+    frame.setObjectName("popover")
+    frame.lower()
+    dlg.resizeEvent = lambda e: frame.setGeometry(dlg.rect())
+    return dlg.exec()
