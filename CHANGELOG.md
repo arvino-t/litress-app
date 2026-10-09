@@ -1,12 +1,24 @@
 # Changelog
 
-All notable changes to LitRes Reader. The format is based on
+All notable changes to Shelfwise (called LitRes Reader / «Читалка ЛитРес» before 0.16). The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-10-09
+
 ### Changed
+- **Renamed to Shelfwise** (formerly LitRes Reader / «Читалка ЛитРес»): app name, package and command
+  `shelfwise` (the `litres-reader` command stays as an alias), app ID `io.github.arvino_t.Shelfwise`,
+  data folders `~/.local/share/shelfwise`, `~/.config/shelfwise`, `~/.cache/shelfwise` (Windows:
+  `%LOCALAPPDATA%\shelfwise`, `%APPDATA%\shelfwise`), default backup folder `Documents/Backups/shelfwise`,
+  backup files `shelfwise-backup-…`, the GitHub repository `arvino-t/shelfwise`. Environment variables
+  `SHELFWISE_DEBUG` and `SHELFWISE_LANG` (the old `LITREADER_*` still work).
+- On first start Shelfwise moves the old version's data (library, positions, settings, LitRes session,
+  backup folder) into its folders; if the old version is still open, it asks you to close it first.
+  Old backups are listed and can be restored. The installers remove the old version's shortcut, icon,
+  menu entry and program files.
 - New app icon: a bookshelf in the GNOME style instead of the LitRes logo (SVG for Linux, a
   multi-size `.ico` for Windows).
 - About: describes the app as your own library manager with LitRes as a pluggable library, shows the
@@ -231,15 +243,16 @@ library. The interface stays the same — "Source" is now the name of a library.
   pitch and a sleep timer.
 - VPN bypass for LitRes (`vpn-bypass/`).
 
-[Unreleased]: https://github.com/arvino-t/litress-app/compare/v0.15.0...HEAD
-[0.15.0]: https://github.com/arvino-t/litress-app/compare/v0.14.0...v0.15.0
-[0.14.0]: https://github.com/arvino-t/litress-app/compare/v0.13.0...v0.14.0
-[0.13.0]: https://github.com/arvino-t/litress-app/compare/v0.12.0...v0.13.0
-[0.12.0]: https://github.com/arvino-t/litress-app/compare/v0.11.0...v0.12.0
-[0.11.0]: https://github.com/arvino-t/litress-app/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/arvino-t/litress-app/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/arvino-t/litress-app/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/arvino-t/litress-app/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/arvino-t/litress-app/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/arvino-t/litress-app/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/arvino-t/litress-app/releases/tag/v0.5.0
+[Unreleased]: https://github.com/arvino-t/shelfwise/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/arvino-t/shelfwise/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/arvino-t/shelfwise/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/arvino-t/shelfwise/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/arvino-t/shelfwise/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/arvino-t/shelfwise/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/arvino-t/shelfwise/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/arvino-t/shelfwise/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/arvino-t/shelfwise/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/arvino-t/shelfwise/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/arvino-t/shelfwise/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/arvino-t/shelfwise/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/arvino-t/shelfwise/releases/tag/v0.5.0

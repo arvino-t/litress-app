@@ -2,8 +2,8 @@
 import json
 import shutil
 
-from litres_reader import backup, core, libraries
-from litres_reader.core import Library, folder_library_id
+from shelfwise import backup, core, libraries
+from shelfwise.core import Library, folder_library_id
 
 
 def make_lib(root):

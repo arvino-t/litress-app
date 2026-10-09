@@ -4,7 +4,7 @@ import zipfile
 
 import pytest
 
-from litres_reader import backup, core
+from shelfwise import backup, core
 
 
 @pytest.fixture

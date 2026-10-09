@@ -469,8 +469,8 @@ class SettingsPage(QWidget):
         self.row(g, core.APP_NAME, about, tr("версия {0} · своя библиотека книг и статей; ЛитРес — подключаемая "
                                              "библиотека", __version__), icon_path=str(core.APP_ICON))
         self.button(g, tr("Документация и исходный код"), tr("Открыть"),
-                    lambda: QDesktopServices.openUrl(QUrl("https://github.com/arvino-t/litress-app")),
-                    "github.com/arvino-t/litress-app")
+                    lambda: QDesktopServices.openUrl(QUrl("https://github.com/arvino-t/shelfwise")),
+                    "github.com/arvino-t/shelfwise")
         self.col.addStretch()
 
         self.show_tab(st.get("settingsTab") or "general")

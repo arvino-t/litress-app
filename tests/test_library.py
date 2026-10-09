@@ -1,7 +1,7 @@
 """Модель библиотеки: книги ЛитРес, свои папки, статусы и проценты."""
 from pathlib import Path
 
-from litres_reader.core import Library
+from shelfwise.core import Library
 
 
 def art(id_, **kw):
@@ -79,7 +79,7 @@ def test_library_persists(clean_data):
 
 
 def test_graph_scope(clean_data, tmp_path):
-    from litres_reader.graph import build_graph
+    from shelfwise.graph import build_graph
     make_tree(tmp_path / "articles")
     lib = Library()
     lib.merge_litres([art(1, persons=[{"role": "author", "full_name": "Автор"}])])
@@ -106,13 +106,13 @@ def test_stats_per_library(clean_data, tmp_path):
 
 
 def test_old_stats_attributed_to_litres(clean_data):
-    from litres_reader import core
+    from shelfwise import core
     core.save_json(core.STATS_FILE, {"days": {"2026-10-01": 600}, "books": {"5": 600}, "finished": {}})
     assert Library().stats["lib_days"] == {"litres": {"2026-10-01": 600}}
 
 
 def test_singularity_library_filter(clean_data, tmp_path):
-    from litres_reader.singularity import SingularitySync
+    from shelfwise.singularity import SingularitySync
     make_tree(tmp_path / "articles")
     lib = Library()
     lib.merge_litres([art(1, read_percent=30)])

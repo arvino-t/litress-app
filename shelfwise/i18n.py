@@ -24,7 +24,9 @@ def _config_file() -> Path:
         base = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
     else:
         base = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
-    return base / "litres-reader" / "settings.json"
+    new = base / "shelfwise" / "settings.json"
+    old = base / "litres-reader" / "settings.json"   # до переноса данных прежней версии
+    return new if new.exists() or not old.exists() else old
 
 
 def system_language() -> str:
@@ -34,7 +36,7 @@ def system_language() -> str:
 
 
 def _detect() -> str:
-    forced = os.environ.get("LITREADER_LANG", "")
+    forced = os.environ.get("SHELFWISE_LANG") or os.environ.get("LITREADER_LANG", "")
     if forced in ("ru", "en"):
         return forced
     try:

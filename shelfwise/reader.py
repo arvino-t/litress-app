@@ -106,7 +106,7 @@ class _ReaderWebPage(QWebEnginePage):
                 pass
         elif level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
             # ошибки страниц читалки и графа — в журнал всегда, чтобы было видно причину сбоя
-            print(f"litres-reader js error: {text} ({source.rsplit('/', 1)[-1]}:{line})", file=sys.stderr, flush=True)
+            print(f"shelfwise js error: {text} ({source.rsplit('/', 1)[-1]}:{line})", file=sys.stderr, flush=True)
         elif core.DEBUG:
             log("reader console:", text)
 

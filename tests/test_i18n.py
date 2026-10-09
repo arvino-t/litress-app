@@ -3,9 +3,9 @@ import ast
 import re
 from pathlib import Path
 
-from litres_reader import i18n_en, i18n
+from shelfwise import i18n_en, i18n
 
-PKG = Path(__file__).resolve().parent.parent / "litres_reader"
+PKG = Path(__file__).resolve().parent.parent / "shelfwise"
 PLACEHOLDER = re.compile(r"\{[^}]*\}")
 
 

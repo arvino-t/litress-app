@@ -242,7 +242,7 @@ class SingularitySync(QObject):
             lines.append("Автор: " + ", ".join(book["authors"]))
         if book.get("url"):
             lines.append(book["url"])
-        lines.append(f"Обновлено из «Читалки ЛитРес» {dt.datetime.now():%d.%m.%Y %H:%M}")
+        lines.append(f"Обновлено из Shelfwise {dt.datetime.now():%d.%m.%Y %H:%M}")
         return "\n".join(lines)
 
     def _sync_tasks(self, next_step):
@@ -401,6 +401,6 @@ class SingularitySync(QObject):
                 return
             self._request("POST", "/habit",
                           body={"title": title, "externalId": EXT_HABIT, "color": "lightBlue",
-                                "description": "Отмечается само из «Читалки ЛитРес»"},
+                                "description": "Отмечается само из Shelfwise"},
                           done=lambda st, p, e: remember(p.get("id")) if st in (200, 201) and p else with_habit(None))
         self._list_all("/habit", "habits", {}, listed)

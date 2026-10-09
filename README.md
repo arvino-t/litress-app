@@ -1,4 +1,4 @@
-# LitRes Reader
+# Shelfwise
 
 A desktop app for Linux and Windows to build, read and organize **your own library** of e-books and
 articles, and to look after it with extra features. A library is a folder on disk (EPUB, FB2, MOBI,
@@ -8,6 +8,9 @@ PDF); you can add several and browse them together as one big library. Each libr
 website in a built-in browser and downloads purchased books and audiobooks. Books open in a built-in
 reader and audiobook player (M4B, MP3). The UI follows GNOME's libadwaita style on both systems and
 is available in Russian and English.
+
+Formerly *Читалка ЛитРес* (LitRes Reader); renamed in 0.16 — data from the old version is migrated
+automatically.
 
 **User guide:** [English](docs/en/user-guide.md) · [Русский](docs/ru/user-guide.md)
 
@@ -40,8 +43,8 @@ bash install.sh              # install or update
 bash install.sh --uninstall  # remove
 ```
 
-Installs for the current user into `~/.local/opt/litres-reader` (a venv with PySide6), adds the
-`litres-reader` command, a menu entry and file associations. `sudo` is requested only for missing
+Installs for the current user into `~/.local/opt/shelfwise` (a venv with PySide6), adds the
+`shelfwise` command, a menu entry and file associations. `sudo` is requested only for missing
 system libraries.
 
 ### Windows 10/11
@@ -57,7 +60,7 @@ See the user guide for details. The first installation downloads PySide6 (~600 M
 
 ```
 python3 -m venv .venv && .venv/bin/pip install -e .
-.venv/bin/litres-reader
+.venv/bin/shelfwise
 ```
 
 Requires Python 3.10+ and `PySide6>=6.10,<6.12` (Qt 6 with QtWebEngine).
@@ -77,31 +80,31 @@ Environment variables:
 
 | Variable | Effect |
 |---|---|
-| `LITREADER_DEBUG=1` | verbose log: LitRes requests, downloads, page messages; DevTools via right click in the reader |
-| `LITREADER_LANG=en\|ru` | force the interface language |
+| `SHELFWISE_DEBUG=1` | verbose log: LitRes requests, downloads, page messages; DevTools via right click in the reader |
+| `SHELFWISE_LANG=en\|ru` | force the interface language |
 
 ### Project layout
 
 | Path | Contents |
 |---|---|
-| `litres_reader/app.py` | main window, library page and filters, own libraries, dialogs, app startup |
-| `litres_reader/core.py` | paths, default settings, the `Library` model (books, progress, statistics, per-library stores) |
-| `litres_reader/libraries.py` | the registry of libraries (`libraries` setting) and its migration |
-| `litres_reader/litres_connector.py` | the LitRes connector: sign-in, sync, downloads, LitRes folders, remote position |
-| `litres_reader/litres.py` | LitRes session and API inside the built-in Chromium (QtWebEngine) |
-| `litres_reader/reader.py` | reader page (foliate-js in QtWebEngine), `litreader://` scheme |
-| `litres_reader/player.py` | audiobook player (QtMultimedia), M4B chapter parsing |
-| `litres_reader/settings.py` | settings page (tabs: General, Reading, Integrations, Backups, Advanced) |
-| `litres_reader/backup.py` | backup archives (all libraries or one) and two-step restore |
-| `litres_reader/graph.py` | book graph data and page |
-| `litres_reader/stats.py` | reading statistics dialog |
-| `litres_reader/singularity.py` | SingularityApp sync |
-| `litres_reader/i18n.py`, `i18n_en.py` | translations: `tr()` with Russian source strings as keys, English dictionary |
-| `litres_reader/widgets.py`, `style.py` | libadwaita-style widgets and stylesheet |
-| `litres_reader/web/` | reader and graph pages, `litres-hook.js` (passes API headers from the LitRes site; doesn't touch passwords or forms) |
-| `litres_reader/web/foliate/` | [foliate-js](https://github.com/johnfactotum/foliate-js) rendering engine (MIT) with pdf.js |
-| `litres_reader/web/vendor/` | d3-force, d3-quadtree, d3-dispatch, d3-timer (ISC) for the graph |
-| `litres_reader/data/sym/` | Adwaita symbolic icons (CC-BY-SA 3.0 / LGPLv3) |
+| `shelfwise/app.py` | main window, library page and filters, own libraries, dialogs, app startup |
+| `shelfwise/core.py` | paths, default settings, the `Library` model (books, progress, statistics, per-library stores) |
+| `shelfwise/libraries.py` | the registry of libraries (`libraries` setting) and its migration |
+| `shelfwise/litres_connector.py` | the LitRes connector: sign-in, sync, downloads, LitRes folders, remote position |
+| `shelfwise/litres.py` | LitRes session and API inside the built-in Chromium (QtWebEngine) |
+| `shelfwise/reader.py` | reader page (foliate-js in QtWebEngine), `litreader://` scheme |
+| `shelfwise/player.py` | audiobook player (QtMultimedia), M4B chapter parsing |
+| `shelfwise/settings.py` | settings page (tabs: General, Reading, Integrations, Backups, Advanced) |
+| `shelfwise/backup.py` | backup archives (all libraries or one) and two-step restore |
+| `shelfwise/graph.py` | book graph data and page |
+| `shelfwise/stats.py` | reading statistics dialog |
+| `shelfwise/singularity.py` | SingularityApp sync |
+| `shelfwise/i18n.py`, `i18n_en.py` | translations: `tr()` with Russian source strings as keys, English dictionary |
+| `shelfwise/widgets.py`, `style.py` | libadwaita-style widgets and stylesheet |
+| `shelfwise/web/` | reader and graph pages, `litres-hook.js` (passes API headers from the LitRes site; doesn't touch passwords or forms) |
+| `shelfwise/web/foliate/` | [foliate-js](https://github.com/johnfactotum/foliate-js) rendering engine (MIT) with pdf.js |
+| `shelfwise/web/vendor/` | d3-force, d3-quadtree, d3-dispatch, d3-timer (ISC) for the graph |
+| `shelfwise/data/sym/` | Adwaita symbolic icons (CC-BY-SA 3.0 / LGPLv3) |
 | `install.sh`, `install.cmd`, `windows/` | installers |
 | `vpn-bypass/` | Linux scripts to reach LitRes directly while a VPN is on |
 | `docs/en/`, `docs/ru/` | user guide in English and Russian |
@@ -110,7 +113,7 @@ Environment variables:
 ### Translations
 
 UI strings are written in Russian and wrapped in `tr()`: `tr("Скачано {0} из {1}", done, total)`.
-The English text for each string lives in `litres_reader/i18n_en.py`; plurals use `plural()`.
+The English text for each string lives in `shelfwise/i18n_en.py`; plurals use `plural()`.
 Strings for the web pages are listed in `WEB_KEYS` in `i18n.py` and passed to the page with its data.
 When adding a string, add its English translation too — a missing one falls back to Russian.
 
@@ -121,7 +124,7 @@ Test features against the installed package (`bash install.sh`), not only the so
 
 ### Releases
 
-Bump the version in `pyproject.toml` and `litres_reader/__init__.py`, move the "Unreleased"
+Bump the version in `pyproject.toml` and `shelfwise/__init__.py`, move the "Unreleased"
 section of [CHANGELOG.md](CHANGELOG.md) under the new version, tag `vX.Y.Z` and publish a GitHub
 release with that section as notes. Planned work is in [TODO.md](TODO.md).
 

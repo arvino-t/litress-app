@@ -4,11 +4,11 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PKG = ROOT / "litres_reader"
+PKG = ROOT / "shelfwise"
 
 
 def test_package_data_covers_assets():
-    globs = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["setuptools"]["package-data"]["litres_reader"]
+    globs = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["setuptools"]["package-data"]["shelfwise"]
     missing = []
     for folder in ("web", "data"):
         for f in (PKG / folder).rglob("*"):

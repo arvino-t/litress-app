@@ -14,8 +14,11 @@ from PySide6.QtCore import QTimer
 
 from .i18n import tr
 
-APP_ID = "ru.local.LitresReader"
-APP_NAME = tr("Читалка ЛитРес")
+APP_ID = "io.github.arvino_t.Shelfwise"
+APP_NAME = "Shelfwise"
+APP_SLUG = "shelfwise"          # каталоги данных, команда, имя приложения для Qt
+OLD_SLUG = "litres-reader"      # до 0.16 приложение называлось «Читалка ЛитРес»
+OLD_APP_ID = "ru.local.LitresReader"
 SCHEME = "litreader"
 
 PKG_DIR = Path(__file__).resolve().parent
@@ -24,20 +27,66 @@ ICONS_DIR = PKG_DIR / "data" / "sym"
 APP_ICON = PKG_DIR / "data" / f"{APP_ID}.svg"
 
 
-def _dirs():
+def _dirs(slug=APP_SLUG):
     """Каталоги данных по правилам системы: XDG на Linux, AppData на Windows."""
     home = Path.home()
     if sys.platform == "win32":
         local = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
         roaming = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
-        return local / "litres-reader", roaming / "litres-reader", local / "litres-reader" / "cache"
+        return local / slug, roaming / slug, local / slug / "cache"
     data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
     config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
     cache = Path(os.environ.get("XDG_CACHE_HOME") or home / ".cache")
-    return data / "litres-reader", config / "litres-reader", cache / "litres-reader"
+    return data / slug, config / slug, cache / slug
 
 
 DATA_DIR, CONFIG_DIR, CACHE_DIR = _dirs()
+
+
+def migration_needed() -> bool:
+    """Есть данные прежней «Читалки ЛитРес», а у Shelfwise их ещё нет."""
+    old_data, old_config, _ = _dirs(OLD_SLUG)
+    return ((old_data / "library.json").exists() and not (DATA_DIR / "library.json").exists()) or \
+           ((old_config / "settings.json").exists() and not CONFIG_FILE.exists())
+
+
+def migrate_old_dirs() -> list[str]:
+    """Переносит данные прежней «Читалки ЛитРес» в каталоги Shelfwise (один раз, при запуске).
+
+    Возвращает список перенесённых каталогов. Если новый каталог уже есть — старый не трогается.
+    """
+    moved = []
+    old_dirs = _dirs(OLD_SLUG)
+    if sys.platform == "win32":     # на Windows кэш лежит внутри каталога данных — переносится вместе с ним
+        pairs = list(zip(old_dirs[:2], (DATA_DIR, CONFIG_DIR)))
+    else:
+        pairs = list(zip(old_dirs, (DATA_DIR, CONFIG_DIR, CACHE_DIR)))
+    # главный файл каталога: если его нет в новом, а в старом есть — новый пуст (например, его уже создал Qt)
+    markers = {DATA_DIR: "library.json", CONFIG_DIR: "settings.json", CACHE_DIR: None}
+    for old, new in pairs:
+        if not old.is_dir():
+            continue
+        if not new.exists():
+            new.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                old.rename(new)                  # тот же диск — мгновенно, со ссылками и правами
+            except OSError:
+                shutil.copytree(old, new, symlinks=True)
+            moved.append(str(new))
+        elif markers.get(new) and not (new / markers[new]).exists() and (old / markers[new]).exists():
+            _merge_move(old, new)
+            moved.append(str(new))
+    return moved
+
+
+def _merge_move(src: Path, dst: Path):
+    """Переносит содержимое src в существующую dst, не затирая уже имеющиеся файлы (рекурсивно)."""
+    for item in list(src.iterdir()):
+        target = dst / item.name
+        if not target.exists() and not target.is_symlink():
+            shutil.move(str(item), str(target))
+        elif item.is_dir() and not item.is_symlink() and target.is_dir():
+            _merge_move(item, target)
 # Папка со скачанными книгами: по умолчанию внутри данных приложения,
 # пользователь может выбрать свою (настройка booksDir)
 BOOKS_DIR = DATA_DIR / "books"
@@ -108,13 +157,13 @@ DROP_HEADERS = {"cookie", "host", "content-length", "content-type", "connection"
                 # одноразовые заголовки трассировки запросов
                 "sentry-trace", "baggage", "x-request-id"}
 
-DEBUG = bool(os.environ.get("LITREADER_DEBUG"))
+DEBUG = bool(os.environ.get("SHELFWISE_DEBUG") or os.environ.get("LITREADER_DEBUG"))
 
 
 def set_debug(on: bool):
-    """Подробный журнал: переменная LITREADER_DEBUG или настройка «Дополнительно → Подробный журнал»."""
+    """Подробный журнал: переменная SHELFWISE_DEBUG или настройка «Дополнительно → Подробный журнал»."""
     global DEBUG
-    DEBUG = bool(on) or bool(os.environ.get("LITREADER_DEBUG"))
+    DEBUG = bool(on) or bool(os.environ.get("SHELFWISE_DEBUG") or os.environ.get("LITREADER_DEBUG"))
 
 DEFAULT_SETTINGS = {
     "fontSize": 19,
@@ -147,13 +196,13 @@ DEFAULT_SETTINGS = {
     "remoteSyncMin": 15,
     # Скорость чтения для оценки чтения на телефоне (знаков в минуту)
     "readingCharsPerMin": 1300,
-    # Подробный журнал (то же, что LITREADER_DEBUG=1)
+    # Подробный журнал (то же, что SHELFWISE_DEBUG=1)
     "debugLog": False,
     # Последняя открытая вкладка настроек
     "settingsTab": "general",
     # Язык интерфейса: auto (как в системе) / ru / en — применяется после перезапуска
     "language": "auto",
-    # Резервные копии: папка (None — Документы/Backups/litres-reader), off / daily / weekly,
+    # Резервные копии: папка (None — Документы/Backups/shelfwise), off / daily / weekly,
     # сколько хранить, время последней копии, класть ли в копию токен Singularity
     "backupDir": None,
     "backupAuto": "weekly",

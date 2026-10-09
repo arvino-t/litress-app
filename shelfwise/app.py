@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 
 from . import __version__, backup, core, libraries, style
 from .i18n import tr
-from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FORMATS, CONFIG_FILE, COVERS_DIR, DEFAULT_SETTINGS,
+from .core import (APP_ICON, APP_ID, APP_NAME, APP_SLUG, OLD_APP_ID, AUDIO_FORMATS, CONFIG_FILE, COVERS_DIR, DEFAULT_SETTINGS,
                    NO_FOLDER, READABLE, SORT_MODES, STATUS_FILTERS, Library, books_dir, load_json, log,
                    save_json, set_books_dir)
 from .graph import GraphPage
@@ -1400,10 +1400,10 @@ class App(QObject):
             + "<br><br>" + tr("Библиотек: {0} · книг: {1}", len(libs), len(self.library.ordered()))
             + "<br><br>" + tr("Лицензия MIT. Движок чтения — foliate-js (MIT), PDF — pdf.js (Apache 2.0), "
                               "граф — d3-force (ISC), значки — Adwaita.")
-            + "<br>" + tr("Документация и исходный код: {0}", "github.com/arvino-t/litress-app"))
+            + "<br>" + tr("Документация и исходный код: {0}", "github.com/arvino-t/shelfwise"))
         site = box.addButton(tr("Открыть на GitHub"), QMessageBox.ButtonRole.ActionRole)
         site.clicked.disconnect()          # кнопка не закрывает окно
-        site.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/arvino-t/litress-app")))
+        site.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/arvino-t/shelfwise")))
         box.addButton(QMessageBox.StandardButton.Close)
         box.exec()
 
@@ -1416,7 +1416,7 @@ class App(QObject):
         try:
             path = backup.create(self.settings, reason, scope)
         except (OSError, ValueError) as e:
-            print(f"litres-reader: резервная копия не создана: {e}", file=sys.stderr, flush=True)
+            print(f"shelfwise: резервная копия не создана: {e}", file=sys.stderr, flush=True)
             return None
         if scope == "all":
             self.settings["backupLast"] = datetime.now().isoformat(timespec="seconds")
@@ -1430,7 +1430,7 @@ class App(QObject):
 
     def restart(self):
         """Перезапуск приложения (после восстановления из копии)."""
-        QProcess.startDetached(sys.executable, ["-m", "litres_reader", "--restarted"])
+        QProcess.startDetached(sys.executable, ["-m", "shelfwise", "--restarted"])
         self.window.close()
         self.qapp.quit()
 
@@ -1446,9 +1446,18 @@ class App(QObject):
 
 # ─────────────────────────────────────────────────────────────── запуск
 
-def _server_name():
+def _server_name(app_id=APP_ID):
     user = os.environ.get("USER") or os.environ.get("USERNAME") or "user"
-    return f"{APP_ID}-{user}"
+    return f"{app_id}-{user}"
+
+
+def _old_version_running() -> bool:
+    """Открыта прежняя «Читалка ЛитРес» — данные переносить нельзя, она пишет в старые каталоги."""
+    sock = QLocalSocket()
+    sock.connectToServer(_server_name(OLD_APP_ID))
+    running = sock.waitForConnected(300)
+    sock.abort()
+    return running
 
 
 def main(argv=None):
@@ -1476,7 +1485,7 @@ def main(argv=None):
 
     from .reader import register_scheme
     register_scheme()
-    QApplication.setApplicationName("litres-reader")
+    QApplication.setApplicationName(APP_SLUG)
     QApplication.setApplicationDisplayName(APP_NAME)
     QApplication.setDesktopFileName(APP_ID)
     qapp = QApplication(argv)
@@ -1484,6 +1493,15 @@ def main(argv=None):
     qapp.setFont(style.app_font())
     qapp.setWindowIcon(QIcon(str(APP_ICON)))
 
+    # Переименование «Читалка ЛитРес» → Shelfwise: данные переезжают в новые каталоги (один раз)
+    if core.migration_needed() and _old_version_running():
+        QMessageBox.information(None, APP_NAME, tr("Закройте «Читалку ЛитРес» — прежнюю версию приложения — "
+                                                   "и запустите Shelfwise снова: её данные перенесутся."))
+        return 0
+    moved = core.migrate_old_dirs()
+    backup.migrate_default_dir()
+    if moved:
+        log("данные прежней версии перенесены:", moved)
     restored = backup.apply_pending()     # восстановление из копии — до чтения данных
     app = App(qapp)
     app.window.show()

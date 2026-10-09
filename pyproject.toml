@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "litres-reader"
-version = "0.15.0"
-description = "LitRes Reader — read and listen to books bought on LitRes, plus your own e-books (Linux and Windows)"
+name = "shelfwise"
+version = "0.16.0"
+description = "Shelfwise — build, read and organize your own library of e-books and articles; LitRes as a pluggable library (Linux and Windows)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -15,12 +15,14 @@ dependencies = ["PySide6>=6.10,<6.12"]
 dev = ["pytest>=8"]
 
 [project.gui-scripts]
-litres-reader = "litres_reader.app:main"
+shelfwise = "shelfwise.app:main"
+# прежнее имя команды — для ярлыков и привычки
+litres-reader = "shelfwise.app:main"
 
 [tool.setuptools]
-packages = ["litres_reader"]
+packages = ["shelfwise"]
 
 [tool.setuptools.package-data]
-litres_reader = ["web/*", "web/vendor/*", "web/foliate/*", "web/foliate/vendor/*",
-                 "web/foliate/vendor/pdfjs/*", "web/foliate/vendor/pdfjs/cmaps/*",
-                 "web/foliate/vendor/pdfjs/standard_fonts/*", "data/*", "data/sym/*"]
+shelfwise = ["web/*", "web/vendor/*", "web/foliate/*", "web/foliate/vendor/*",
+             "web/foliate/vendor/pdfjs/*", "web/foliate/vendor/pdfjs/cmaps/*",
+             "web/foliate/vendor/pdfjs/standard_fonts/*", "data/*", "data/sym/*"]

@@ -1,24 +1,30 @@
-﻿# Установка «Читалки ЛитРес» на Windows 10/11 (для текущего пользователя, без прав администратора).
+﻿# Установка Shelfwise на Windows 10/11 (для текущего пользователя, без прав администратора).
 #
 #   Двойной щелчок по install.cmd — или в PowerShell:
 #   powershell -ExecutionPolicy Bypass -File windows\install.ps1
 #
 # Что делает:
 #   - при необходимости ставит Python 3.12 через winget;
-#   - создаёт своё окружение Python в %LOCALAPPDATA%\Programs\LitresReader и ставит туда приложение с PySide6;
+#   - создаёт своё окружение Python в %LOCALAPPDATA%\Programs\Shelfwise и ставит туда приложение с PySide6;
 #   - ярлыки в меню «Пуск» и на рабочем столе;
 #   - пункт «Открыть с помощью» для EPUB/FB2/MOBI;
-#   - запись в «Установка и удаление программ» (там же удаление).
+#   - запись в «Установка и удаление программ» (там же удаление);
+#   - убирает установку прежней «Читалки ЛитРес» (её данные Shelfwise перенесёт сам при запуске).
 $ErrorActionPreference = 'Stop'
 
 $Src      = Split-Path -Parent $PSScriptRoot
-$AppDir   = Join-Path $env:LOCALAPPDATA 'Programs\LitresReader'
+$AppDir   = Join-Path $env:LOCALAPPDATA 'Programs\Shelfwise'
 $Venv     = Join-Path $AppDir 'venv'
-$Exe      = Join-Path $Venv 'Scripts\litres-reader.exe'
-$Icon     = Join-Path $AppDir 'litres-reader.ico'
-$AppName  = 'Читалка ЛитРес'
-$ProgId   = 'LitresReader.Book'
-$UninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\LitresReader'
+$Exe      = Join-Path $Venv 'Scripts\shelfwise.exe'
+$Icon     = Join-Path $AppDir 'shelfwise.ico'
+$AppName  = 'Shelfwise'
+$ProgId   = 'Shelfwise.Book'
+$UninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Shelfwise'
+# прежняя «Читалка ЛитРес»
+$OldDir    = Join-Path $env:LOCALAPPDATA 'Programs\LitresReader'
+$OldName   = 'Читалка ЛитРес'
+$OldProgId = 'LitresReader.Book'
+$OldKey    = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\LitresReader'
 
 function Step($text) { Write-Host "`n==> $text" -ForegroundColor Cyan }
 
@@ -65,9 +71,9 @@ $VPy = Join-Path $Venv 'Scripts\python.exe'
 if ($LASTEXITCODE -ne 0) { throw 'pip не смог установить приложение' }
 # Свежий код ставим всегда, даже если номер версии не менялся
 & $VPy -m pip install --quiet --force-reinstall --no-deps $Src
-Copy-Item (Join-Path $Src 'litres_reader\data\litres-reader.ico') $Icon -Force
+Copy-Item (Join-Path $Src 'shelfwise\data\shelfwise.ico') $Icon -Force
 Copy-Item (Join-Path $PSScriptRoot 'uninstall.ps1') (Join-Path $AppDir 'uninstall.ps1') -Force
-$Version = & $VPy -c 'import litres_reader; print(litres_reader.__version__)'
+$Version = & $VPy -c 'import shelfwise; print(shelfwise.__version__)'
 Write-Host "  установлено: $Version"
 
 # ---------------------------------------------------------------- ярлыки
@@ -82,7 +88,7 @@ foreach ($lnk in $Targets) {
     $s.TargetPath = $Exe
     $s.WorkingDirectory = $AppDir
     $s.IconLocation = "$Icon,0"
-    $s.Description = 'Книги и аудиокниги, купленные на ЛитРес'
+    $s.Description = 'Своя библиотека книг и статей; ЛитРес — подключаемая библиотека'
     $s.Save()
     Write-Host "  $lnk"
 }
@@ -108,7 +114,7 @@ $props = @{
     DisplayName     = $AppName
     DisplayVersion  = "$Version"
     DisplayIcon     = "$Icon"
-    Publisher       = 'litres-reader'
+    Publisher       = 'Shelfwise'
     InstallLocation = $AppDir
     UninstallString = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$AppDir\uninstall.ps1`""
     NoModify        = 1
@@ -119,6 +125,26 @@ foreach ($k in $props.Keys) {
     New-ItemProperty -Force -Path $UninstKey -Name $k -Value $props[$k] -PropertyType $type | Out-Null
 }
 
+# ---------------------------------------------------------------- прежняя «Читалка ЛитРес»
+if ((Test-Path $OldDir) -or (Test-Path $OldKey)) {
+    Step 'Убираю прежнюю «Читалку ЛитРес»'
+    foreach ($lnk in @(
+        (Join-Path ([Environment]::GetFolderPath('Programs')) "$OldName.lnk"),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) "$OldName.lnk"))) {
+        Remove-Item -Force $lnk -ErrorAction SilentlyContinue
+    }
+    Remove-Item -Recurse -Force "$Classes\$OldProgId" -ErrorAction SilentlyContinue
+    foreach ($ext in @('.epub', '.fb2', '.fbz', '.mobi', '.azw3')) {
+        Remove-ItemProperty -Path "$Classes\$ext\OpenWithProgids" -Name $OldProgId -ErrorAction SilentlyContinue
+    }
+    Remove-Item -Recurse -Force $OldKey -ErrorAction SilentlyContinue
+    if (Get-Process litres-reader -ErrorAction SilentlyContinue) {
+        Write-Host "  прежняя версия открыта — её папка $OldDir удалится при следующей установке"
+    } else {
+        Remove-Item -Recurse -Force $OldDir -ErrorAction SilentlyContinue
+    }
+}
+
 Step 'Готово'
 Write-Host "«$AppName» есть в меню «Пуск» и на рабочем столе."
-Write-Host 'Удалить: «Параметры» → «Приложения» → «Читалка ЛитРес» → «Удалить».'
+Write-Host 'Удалить: «Параметры» → «Приложения» → «Shelfwise» → «Удалить».'

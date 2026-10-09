@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Установка «Читалки ЛитРес» на Linux (для текущего пользователя, без root —
+# Установка Shelfwise на Linux (для текущего пользователя, без root —
 # sudo нужен только для системных библиотек, если их нет).
 #
 #   bash install.sh              — установить или обновить
@@ -7,19 +7,36 @@
 #
 # Что делает:
 #   - ставит системные зависимости (Python 3.10+, venv, библиотеки для Qt/Chromium);
-#   - создаёт своё окружение Python в ~/.local/opt/litres-reader и ставит туда приложение с PySide6;
-#   - команда litres-reader в ~/.local/bin;
-#   - ярлык в меню приложений, значок, открытие файлов EPUB/FB2/MOBI.
+#   - создаёт своё окружение Python в ~/.local/opt/shelfwise и ставит туда приложение с PySide6;
+#   - команда shelfwise в ~/.local/bin (и прежняя litres-reader — ссылкой на неё);
+#   - ярлык в меню приложений, значок, открытие файлов EPUB/FB2/MOBI;
+#   - убирает установку прежней «Читалки ЛитРес» (её данные Shelfwise перенесёт сам при запуске).
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
-APP_ID=ru.local.LitresReader
+APP_ID=io.github.arvino_t.Shelfwise
 PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}"
-APP_DIR="$HOME/.local/opt/litres-reader"
-BIN="$HOME/.local/bin/litres-reader"
+APP_DIR="$HOME/.local/opt/shelfwise"
+BIN="$HOME/.local/bin/shelfwise"
 DESKTOP="$PREFIX/applications/$APP_ID.desktop"
 ICON="$PREFIX/icons/hicolor/scalable/apps/$APP_ID.svg"
 MIME="$PREFIX/mime/packages/$APP_ID.xml"
+# прежняя «Читалка ЛитРес»
+OLD_ID=ru.local.LitresReader
+OLD_DIR="$HOME/.local/opt/litres-reader"
+OLD_BIN="$HOME/.local/bin/litres-reader"
+
+remove_old_install() {
+    rm -f "$PREFIX/applications/$OLD_ID.desktop" "$PREFIX/icons/hicolor/scalable/apps/$OLD_ID.svg" \
+          "$PREFIX/mime/packages/$OLD_ID.xml"
+    if [[ -d "$OLD_DIR" ]]; then
+        if pgrep -f "^$OLD_DIR/venv/" >/dev/null 2>&1; then
+            echo "  прежняя версия сейчас открыта — её файлы в $OLD_DIR удалятся при следующей установке"
+        else
+            rm -rf "$OLD_DIR"
+        fi
+    fi
+}
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 
@@ -35,12 +52,13 @@ refresh_caches() {
 }
 
 if [[ "${1:-}" == "--uninstall" ]]; then
-    step "Удаляю «Читалку ЛитРес»"
+    step "Удаляю Shelfwise"
     rm -rf "$APP_DIR"
-    rm -f "$BIN" "$DESKTOP" "$ICON" "$MIME"
+    rm -f "$BIN" "$OLD_BIN" "$DESKTOP" "$ICON" "$MIME"
+    remove_old_install
     refresh_caches
-    echo "Готово. Книги и настройки остались в ~/.local/share/litres-reader и ~/.config/litres-reader —"
-    echo "удалите эти папки вручную, если они больше не нужны."
+    echo "Готово. Книги и настройки остались в ~/.local/share/shelfwise и ~/.config/shelfwise,"
+    echo "данные своих библиотек — в их папках (.library). Удалите их вручную, если они больше не нужны."
     exit 0
 fi
 
@@ -83,20 +101,22 @@ fi
 "$APP_DIR/venv/bin/python" -m pip install --upgrade --quiet "$SRC"
 # Свежий код ставим всегда, даже если номер версии не менялся
 "$APP_DIR/venv/bin/python" -m pip install --quiet --force-reinstall --no-deps "$SRC"
-echo "  установлено: $("$APP_DIR/venv/bin/python" -c 'import litres_reader; print(litres_reader.__version__)')"
+echo "  установлено: $("$APP_DIR/venv/bin/python" -c 'import shelfwise; print(shelfwise.__version__)')"
 
 mkdir -p "$(dirname "$BIN")"
-rm -f "$BIN"   # здесь могла остаться ссылка от старой GTK-версии
+rm -f "$BIN"
 cat > "$BIN" <<EOF
 #!/bin/sh
-exec "$APP_DIR/venv/bin/litres-reader" "\$@"
+exec "$APP_DIR/venv/bin/shelfwise" "\$@"
 EOF
 chmod +x "$BIN"
+rm -f "$OLD_BIN" && ln -s "$BIN" "$OLD_BIN"      # прежняя команда — ссылка на новую
+remove_old_install
 
 # ---------------------------------------------------------------- интеграция с рабочим столом
 step "Ярлык, значок и типы файлов"
 mkdir -p "$(dirname "$DESKTOP")" "$(dirname "$ICON")" "$(dirname "$MIME")"
-cp "$SRC/litres_reader/data/$APP_ID.svg" "$ICON"
+cp "$SRC/shelfwise/data/$APP_ID.svg" "$ICON"
 
 cat > "$MIME" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -116,19 +136,21 @@ EOF
 cat > "$DESKTOP" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Читалка ЛитРес
-GenericName=Чтение электронных книг
-Comment=Книги и аудиокниги, купленные на ЛитРес, и файлы EPUB/FB2
+Name=Shelfwise
+GenericName=Своя библиотека книг
+GenericName[en]=Personal library
+Comment=Своя библиотека книг и статей: читать, организовывать, обслуживать; ЛитРес — подключаемая библиотека
+Comment[en]=Build, read and organize your own library of books and articles; LitRes as a pluggable library
 Exec=$BIN %F
 Icon=$APP_ID
 Terminal=false
 Categories=Office;Viewer;GTK;Qt;
-Keywords=книги;литрес;litres;epub;fb2;аудиокниги;читалка;
+Keywords=книги;библиотека;статьи;литрес;litres;epub;fb2;pdf;аудиокниги;читалка;library;books;
 MimeType=application/epub+zip;application/x-fictionbook+xml;application/x-zip-compressed-fb2;application/x-mobipocket-ebook;
-StartupWMClass=litres-reader
+StartupWMClass=shelfwise
 EOF
 refresh_caches
 
 step "Готово"
-echo "«Читалка ЛитРес» есть в меню приложений; из терминала — litres-reader."
+echo "Shelfwise есть в меню приложений; из терминала — shelfwise."
 echo "Удалить: bash $SRC/install.sh --uninstall"

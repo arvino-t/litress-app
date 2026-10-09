@@ -9,7 +9,6 @@ EN_PLURAL = {
 
 EN = {
     # --- приложение и библиотека
-    "Читалка ЛитРес": "LitRes Reader",
     "Библиотека": "Library",
     "Вход в ЛитРес не выполнен": "Not signed in to LitRes",
     "Обновить список книг с ЛитРес (F5)": "Refresh books from LitRes (F5)",
@@ -159,9 +158,9 @@ EN = {
     "неверный ответ": "invalid response",
 
     # --- резервные копии (backup.py)
-    "это не копия Читалки ЛитРес": "this is not a LitRes Reader backup",
+    "это не резервная копия Shelfwise": "this is not a Shelfwise backup",
     "в копии нет данных": "the backup has no data",
-    "это не копия Читалки ЛитРес ({0})": "this is not a LitRes Reader backup ({0})",
+    "это не резервная копия Shelfwise ({0})": "this is not a Shelfwise backup ({0})",
     "{0}: слишком большой файл": "{0}: file is too large",
     "{0}: повреждён": "{0}: damaged",
 
@@ -498,4 +497,8 @@ EN = {
     "версия {0} · своя библиотека книг и статей; ЛитРес — подключаемая библиотека":
         "version {0} · your own library of books and articles; LitRes is a pluggable library",
     "Документация и исходный код": "Documentation and source code",
+    "Закройте «Читалку ЛитРес» — прежнюю версию приложения — и запустите Shelfwise снова: её данные "
+    "перенесутся.":
+        "Close \"Читалка ЛитРес\" (the previous version of the app) and start Shelfwise again: its data "
+        "will be moved over.",
 }
