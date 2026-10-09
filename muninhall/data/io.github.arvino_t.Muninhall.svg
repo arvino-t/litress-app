@@ -1,39 +1,59 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <!-- Своя библиотека: полка с книгами (значок приложения в стиле GNOME) -->
+  <!-- Muninhall — «чертог Мунина»: ворон памяти Одина на книгах под крышей скандинавского чертога -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3d5a80"/>
-      <stop offset="1" stop-color="#26405f"/>
+      <stop offset="0" stop-color="#4a6fa5"/>
+      <stop offset="1" stop-color="#25395c"/>
     </linearGradient>
-    <linearGradient id="shelf" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#c8935a"/>
-      <stop offset="1" stop-color="#9c6b3a"/>
+    <linearGradient id="raven" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b4256"/>
+      <stop offset="1" stop-color="#11131a"/>
     </linearGradient>
   </defs>
   <rect x="4" y="4" width="120" height="120" rx="26" fill="url(#bg)"/>
-  <rect x="4" y="4" width="120" height="120" rx="26" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="2"/>
-  <!-- книги -->
-  <g stroke="#000" stroke-opacity=".18" stroke-width="1">
-    <rect x="22" y="38" width="15" height="54" rx="2.5" fill="#e66100"/>
-    <rect x="39" y="30" width="17" height="62" rx="2.5" fill="#f6d32d"/>
-    <rect x="58" y="44" width="13" height="48" rx="2.5" fill="#2ec27e"/>
-    <rect x="73" y="34" width="15" height="58" rx="2.5" fill="#99c1f1"/>
-    <!-- наклонённая книга -->
-    <rect x="90" y="40" width="14" height="52" rx="2.5" fill="#c061cb" transform="rotate(14 104 92)"/>
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="none" stroke="#000" stroke-opacity=".15" stroke-width="2"/>
+
+  <!-- чертог: двускатная крыша с перекрещенными коньками и столбы -->
+  <g fill="none" stroke="#e8b04a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 60 L64 25 L111 60"/>
+    <path d="M56 22 L72 34 M72 22 L56 34" stroke-width="4"/>
+    <path d="M27 60 V102 M101 60 V102" stroke-width="4.5"/>
   </g>
-  <!-- полосы на корешках -->
-  <g fill="#fff" fill-opacity=".55">
-    <rect x="25" y="46" width="9" height="3" rx="1.5"/>
-    <rect x="25" y="80" width="9" height="3" rx="1.5"/>
-    <rect x="42" y="38" width="11" height="3" rx="1.5"/>
-    <rect x="42" y="44" width="11" height="2" rx="1"/>
-    <rect x="61" y="52" width="7" height="3" rx="1.5"/>
-    <rect x="76" y="42" width="9" height="3" rx="1.5"/>
-    <rect x="76" y="80" width="9" height="3" rx="1.5"/>
+
+  <!-- книги на полке -->
+  <g stroke="#000" stroke-opacity=".2" stroke-width="1">
+    <rect x="33" y="80" width="11" height="22" rx="2" fill="#e66100"/>
+    <rect x="45" y="76" width="12" height="26" rx="2" fill="#f6d32d"/>
+    <rect x="58" y="82" width="10" height="20" rx="2" fill="#2ec27e"/>
+    <rect x="69" y="78" width="12" height="24" rx="2" fill="#99c1f1"/>
+    <rect x="82" y="81" width="12" height="21" rx="2" fill="#c061cb"/>
   </g>
-  <!-- закладка -->
-  <path d="M48 30 v14 l3.5 -3 l3.5 3 V30 z" fill="#e01b24"/>
-  <!-- полка -->
-  <rect x="14" y="92" width="100" height="10" rx="3" fill="url(#shelf)"/>
-  <rect x="14" y="92" width="100" height="3" rx="1.5" fill="#fff" fill-opacity=".25"/>
+  <rect x="23" y="101" width="82" height="7" rx="2.5" fill="#9c6b3a"/>
+  <rect x="23" y="101" width="82" height="2.5" rx="1.25" fill="#fff" fill-opacity=".25"/>
+
+  <!-- луна за вороном — чтобы силуэт читался -->
+  <circle cx="58" cy="52" r="21" fill="#f4ecd0"/>
+  <circle cx="58" cy="52" r="21" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="2"/>
+
+  <!-- ворон Мунин, сидит на книгах, смотрит влево -->
+  <g transform="translate(64 64) scale(1.18) translate(-64 -66)">
+    <!-- хвост -->
+    <path d="M74 62 L95 75 L90 66 L97 66 L78 56 Z" fill="#11131a"/>
+    <!-- тело -->
+    <ellipse cx="67" cy="60" rx="17" ry="9.5" transform="rotate(-24 67 60)" fill="url(#raven)"/>
+    <!-- крыло -->
+    <path d="M58 56 C66 50 78 52 84 62 C76 63 66 64 58 56 Z" fill="#232838"/>
+    <path d="M64 58 C70 56 76 58 80 61" fill="none" stroke="#5a6788" stroke-width="1.2" stroke-linecap="round"/>
+    <!-- голова -->
+    <circle cx="51" cy="47" r="8.5" fill="#1a1d27"/>
+    <!-- клюв -->
+    <path d="M44.5 43 C40 43.5 34 46 30 49 C35 50 40 51.5 44.5 52.5 Z" fill="#2c3040"/>
+    <!-- взъерошенные перья на горле -->
+    <path d="M46 53 L49 59 L51 54 L54 60 L55 53 Z" fill="#1a1d27"/>
+    <!-- глаз -->
+    <circle cx="49.5" cy="45.5" r="2.4" fill="#f6d32d"/>
+    <circle cx="49.1" cy="45.2" r="1" fill="#11131a"/>
+    <!-- лапы -->
+    <path d="M62 69 L60 76 M70 68 L71 76" stroke="#2c3040" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
 </svg>

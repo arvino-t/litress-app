@@ -6,6 +6,10 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 
 ## [Unreleased]
 
+### Changed
+- The app icon reflects the name: Muninn, Odin's raven of memory, perched on books against the moon
+  under the gabled roof of a Norse hall (SVG and a multi-size `.ico`).
+
 ## [0.17.0] — 2026-10-09
 
 ### Changed
