@@ -298,7 +298,7 @@ class App(QObject, LibraryPage, Appearance):
     # --- аккаунт
 
     def has_litres(self) -> bool:
-        return any(lib["kind"] == "litres" for lib in libraries.all_libraries(self.settings))
+        return libraries.has_kind(self.settings, "litres")
 
     def connect_litres(self):
         if self.has_litres():

@@ -134,3 +134,24 @@ def test_backup_per_library(clean_data, tmp_path):
     backup.apply_pending()
     assert json.loads(store_a.read_text())["a.epub"]["fraction"] == 0.5
     assert (tmp_path / "b" / ".library" / "progress.json").read_text() == other
+
+
+def test_library_sources(tmp_path):
+    lib_dir = tmp_path / "articles"
+    lib_dir.mkdir()
+    settings = {"libraries": [{"id": "litres", "kind": "litres"},
+                              {"id": folder_library_id(lib_dir), "kind": "folder", "name": "Статьи",
+                               "path": str(lib_dir)}]}
+    srcs = libraries.sources(settings)
+    assert [s.kind for s in srcs] == ["litres", "folder"]
+    litres, folder = srcs
+    assert [k for k, _t in litres.filter_options()] == ["litres", "text", "audio"]
+    assert folder.filter_options() == [(f"lib:{folder.id}", "Статьи")]
+    audio = {"id": "1", "source": "litres", "is_audio": True}
+    own = {"id": "file-x", "source": "folder", "library": folder.id}
+    assert litres.matches("audio", audio) and not litres.matches("text", audio) and litres.matches("litres", audio)
+    assert folder.contains(own) and not folder.contains(audio) and not litres.contains(own)
+    assert folder.store_dir() == lib_dir / ".library" and litres.store_dir() is None
+    assert libraries.has_kind(settings, "litres")
+    libraries.set_litres(settings, False)
+    assert not libraries.has_kind(settings, "litres")

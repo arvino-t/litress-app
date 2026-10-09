@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QStandardPaths
 
-from .core import folder_library_id
+from .core import folder_library_id, folder_store_dir
 from .i18n import tr
 
 LITRES_ID = "litres"
@@ -92,3 +92,86 @@ def set_folder_libraries(settings, folders: list[dict]):
     settings["libraries"] = others + [
         {"id": f.get("id") or folder_library_id(f["path"]), "kind": "folder", "name": f["name"], "path": f["path"]}
         for f in folders]
+
+
+# --- виды библиотек: каждый сам знает свои пункты фильтра, свои книги и своё хранилище.
+# Новый вид (например, OPDS) — новый класс в KINDS, без правки проверок по всему приложению.
+
+class LibrarySource:
+    kind = ""
+
+    def __init__(self, entry: dict):
+        self.entry = entry
+        self.id: str = entry["id"]
+        self.name: str = entry["name"]
+
+    @property
+    def filter_key(self) -> str:
+        return "lib:" + self.id
+
+    def filter_options(self) -> list[tuple[str, str]]:
+        """Пункты фильтра «Источник»: (ключ, подпись)."""
+        return [(self.filter_key, self.name)]
+
+    def owns_filter(self, key: str) -> bool:
+        return key == self.filter_key
+
+    def contains(self, book: dict) -> bool:
+        """Книга из этой библиотеки."""
+        return book.get("library") == self.id
+
+    def matches(self, key: str, book: dict) -> bool:
+        """Подходит ли книга под пункт фильтра этой библиотеки."""
+        return self.contains(book)
+
+    def store_dir(self) -> Path | None:
+        """Папка данных библиотеки (`.library`) — для своих библиотек; у подключаемых её нет."""
+        return None
+
+
+class FolderLibrary(LibrarySource):
+    """Своя библиотека: корневая папка на диске, данные — в `<корень>/.library/`."""
+    kind = "folder"
+
+    def __init__(self, entry: dict):
+        super().__init__(entry)
+        self.path: str = entry["path"]
+
+    def store_dir(self) -> Path:
+        return folder_store_dir(Path(self.path), self.id)
+
+
+class LitresLibrary(LibrarySource):
+    """Подключаемая библиотека ЛитРес: купленные книги и аудиокниги аккаунта."""
+    kind = "litres"
+    KEYS = ("litres", "text", "audio")
+
+    @property
+    def filter_key(self) -> str:
+        return "litres"
+
+    def filter_options(self):
+        return [("litres", self.name), ("text", "— " + tr("Книги")), ("audio", "— " + tr("Аудиокниги"))]
+
+    def owns_filter(self, key):
+        return key in self.KEYS
+
+    def contains(self, book):
+        return book.get("source") == "litres"
+
+    def matches(self, key, book):
+        if not self.contains(book):
+            return False
+        return key == "litres" or bool(book.get("is_audio")) == (key == "audio")
+
+
+KINDS: dict[str, type[LibrarySource]] = {"folder": FolderLibrary, "litres": LitresLibrary}
+
+
+def sources(settings) -> list[LibrarySource]:
+    """Библиотеки реестра как объекты своих видов."""
+    return [KINDS[lib["kind"]](lib) for lib in all_libraries(settings) if lib["kind"] in KINDS]
+
+
+def has_kind(settings, kind: str) -> bool:
+    return any(src.kind == kind for src in sources(settings))

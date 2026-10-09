@@ -324,11 +324,8 @@ class LibraryPage:
     def _fill_type_combo(self):
         """«Все» и библиотеки по реестру; у ЛитРес — ещё «Книги» и «Аудиокниги»."""
         options = [("all", tr("Все"))]
-        for lib in libraries.all_libraries(self.settings):
-            if lib["kind"] == "litres":
-                options += [("litres", lib["name"]), ("text", "— " + tr("Книги")), ("audio", "— " + tr("Аудиокниги"))]
-            else:
-                options.append(("lib:" + lib["id"], lib["name"]))
+        for src in libraries.sources(self.settings):
+            options += src.filter_options()
         self._type_keys = [k for k, _t in options]
         cur = self.settings.get("libraryType", "all")
         if cur not in self._type_keys:
@@ -366,18 +363,23 @@ class LibraryPage:
             return q in hay
         return True
 
+    def _filter_owner(self, key):
+        """Библиотека, которой принадлежит пункт фильтра (запоминается, пока не сменились реестр и пункт)."""
+        cache_key = (id(self.settings.get("libraries")), key)
+        if getattr(self, "_owner_cache", (None, None))[0] != cache_key:
+            owner = next((src for src in libraries.sources(self.settings) if src.owns_filter(key)), None)
+            self._owner_cache = (cache_key, owner)
+        return self._owner_cache[1]
+
     def _in_scope(self, book) -> bool:
         """Источник, подкаталог и «только скачанные» — то, к чему относятся счётчики статусов."""
         if self.only_downloaded and not self.library.file_path(book):
             return False
-        kind = self.settings.get("libraryType", "all")
-        source = book.get("source")
-        if kind in ("litres", "text", "audio") and source != "litres":
-            return False
-        if kind in ("text", "audio") and bool(book.get("is_audio")) != (kind == "audio"):
-            return False
-        if kind.startswith("lib:") and book.get("library") != kind[len("lib:"):]:
-            return False
+        key = self.settings.get("libraryType", "all")
+        if key != "all":
+            owner = self._filter_owner(key)
+            if owner is not None and not owner.matches(key, book):
+                return False
         if self._fs_mode():
             sub = self.settings.get("librarySubdir")
             if sub:

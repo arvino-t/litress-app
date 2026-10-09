@@ -14,9 +14,6 @@ Reviewed: 2026-10-09 (after 0.18.0).
 ## Refactoring towards SOLID
 Behaviour doesn't change; every step — tests plus a full flow run on the installed build. Numbers are from
 the review after 1.0.0. Step 3 prepares new connectors (OPDS).
-- [ ] **3. `LibrarySource` interface (OCP, SRP):** `FolderLibrary` and `LitresLibrary` implement id, name,
-  scanning/sync, subfolders for the filter, graph tags, backup files and capabilities, replacing the
-  `kind == "litres"` / `"folder"` checks spread over app, library, settings, graph, statistics and backups.
 - [ ] **5. Real components instead of mixins (SRP, ISP):** `LibraryPage` as a widget with explicit
   dependencies (library model, settings, notifications) instead of a mixin sharing `App` state; settings
   tabs as separate classes (`SettingsPage` is 753 lines, `build()` 171); give `LitresConnector` (27 `App`
@@ -50,7 +47,7 @@ the review after 1.0.0. Step 3 prepares new connectors (OPDS).
 
 ## Libraries
 - [ ] **More pluggable libraries:** OPDS catalogs (Calibre server, public catalogs) and other stores as
-  connectors next to LitRes (`litres_connector.py` is the pattern).
+  connectors next to LitRes (a new `LibrarySource` subclass in `libraries.KINDS`; `litres_connector.py` is the pattern for sync).
 - [ ] **Conflicting `.library` copies** — when a library folder is edited on two computers, cloud sync
   (rclone) leaves conflict copies; merge them (positions — latest wins, marks and bookmarks — union).
 - [ ] **Library metadata from files:** title, authors and cover from EPUB/FB2 metadata instead of the file

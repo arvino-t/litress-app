@@ -517,33 +517,11 @@ class SettingsPage(QWidget):
         before = g.count()
         app = self.app
         self.account_btn = None
-        for lib in libraries.all_libraries(app.settings):
+        for src in libraries.sources(app.settings):
             box = QWidget()
             bh = QHBoxLayout(box)
             bh.setContentsMargins(0, 0, 0, 0)
-            if lib["kind"] == "litres":
-                self.account_btn = QPushButton()
-                self.account_btn.clicked.connect(self._account)
-                folder = QPushButton(tr("Папка для книг…"))
-                folder.setToolTip(str(books_dir()))
-                folder.clicked.connect(self._choose_books_dir)
-                off = QPushButton(tr("Отключить"))
-                off.clicked.connect(app.disconnect_litres)
-                for b in (self.account_btn, folder, off):
-                    bh.addWidget(b)
-                self.litres_row = self.row(g, lib["name"], box, "", service="litres")
-                self._sync_account()
-            else:
-                path = lib["path"]
-                rename = QPushButton(tr("Переименовать…"))
-                rename.clicked.connect(lambda _=False, p=path: (app.rename_local_folder(p), self._fill_libraries()))
-                remove = QPushButton(tr("Убрать"))
-                remove.setToolTip(tr("Убрать из программы — файлы и данные в папке останутся"))
-                remove.clicked.connect(lambda _=False, p=path: (app.remove_local_folder(p), self._fill_libraries()))
-                bh.addWidget(rename)
-                bh.addWidget(remove)
-                count = sum(1 for b in app.library.books.values() if b.get("library") == lib["id"])
-                self.row(g, lib["name"], box, f"{path} · {tr('книг: {0}', count)}", icon="accessories-dictionary")
+            getattr(self, f"_library_row_{src.kind}")(g, src, box, bh)
         add = QPushButton(tr("Добавить библиотеку…"))
         add.clicked.connect(lambda: self._add_library(add))
         rescan = QPushButton(tr("Обновить список"))
@@ -555,6 +533,35 @@ class SettingsPage(QWidget):
         h.addWidget(add)
         self.row(g, tr("Книг во всех библиотеках"), box, str(len(app.library.ordered())))
         self._library_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
+
+    def _library_row_litres(self, g, src, box, bh):
+        """Строка ЛитРес: вход и выход, папка для книг, отключение."""
+        app = self.app
+        self.account_btn = QPushButton()
+        self.account_btn.clicked.connect(self._account)
+        folder = QPushButton(tr("Папка для книг…"))
+        folder.setToolTip(str(books_dir()))
+        folder.clicked.connect(self._choose_books_dir)
+        off = QPushButton(tr("Отключить"))
+        off.clicked.connect(app.disconnect_litres)
+        for b in (self.account_btn, folder, off):
+            bh.addWidget(b)
+        self.litres_row = self.row(g, src.name, box, "", service="litres")
+        self._sync_account()
+
+    def _library_row_folder(self, g, src, box, bh):
+        """Строка своей библиотеки: путь, число книг, переименовать и убрать."""
+        app = self.app
+        path = src.path
+        rename = QPushButton(tr("Переименовать…"))
+        rename.clicked.connect(lambda _=False, p=path: (app.rename_local_folder(p), self._fill_libraries()))
+        remove = QPushButton(tr("Убрать"))
+        remove.setToolTip(tr("Убрать из программы — файлы и данные в папке останутся"))
+        remove.clicked.connect(lambda _=False, p=path: (app.remove_local_folder(p), self._fill_libraries()))
+        bh.addWidget(rename)
+        bh.addWidget(remove)
+        count = sum(1 for b in app.library.books.values() if src.contains(b))
+        self.row(g, src.name, box, f"{path} · {tr('книг: {0}', count)}", icon="accessories-dictionary")
 
     def _add_library(self, button):
         menu = QMenu(button)

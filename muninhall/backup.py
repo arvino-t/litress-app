@@ -23,7 +23,7 @@ from PySide6.QtCore import QStandardPaths
 
 from . import __version__
 from .core import (CONFIG_DIR, CONFIG_FILE, DATA_DIR, LIBRARY_FILE, PROGRESS_FILE, STATS_FILE, STORE_BOOKS,
-                   STORE_GRAPH, STORE_PROGRESS, folder_store_dir, load_json, save_json)
+                   STORE_GRAPH, STORE_PROGRESS, load_json, save_json)
 from .i18n import tr
 
 SINGULARITY_FILE = CONFIG_DIR / "singularity.json"
@@ -50,11 +50,10 @@ LOCAL_SETTINGS = ("booksDir", "libraries", "localFolders", "backupDir", "backupL
 
 def _folder_stores(settings) -> dict[str, Path]:
     """{id библиотеки: папка хранилища} для своих библиотек из реестра настроек."""
-    out = {}
-    for lib in settings.get("libraries") or []:
-        if isinstance(lib, dict) and lib.get("kind") == "folder" and lib.get("id") and lib.get("path"):
-            out[lib["id"]] = folder_store_dir(Path(lib["path"]), lib["id"])
-    return out
+    from . import libraries
+    if not isinstance(settings.get("libraries"), list):
+        return {}
+    return {src.id: store for src in libraries.sources(settings) if (store := src.store_dir()) is not None}
 
 
 def default_dir() -> Path:
