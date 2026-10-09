@@ -1,30 +1,31 @@
-﻿# Установка Shelfwise на Windows 10/11 (для текущего пользователя, без прав администратора).
+﻿# Установка Muninhall на Windows 10/11 (для текущего пользователя, без прав администратора).
 #
 #   Двойной щелчок по install.cmd — или в PowerShell:
 #   powershell -ExecutionPolicy Bypass -File windows\install.ps1
 #
 # Что делает:
 #   - при необходимости ставит Python 3.12 через winget;
-#   - создаёт своё окружение Python в %LOCALAPPDATA%\Programs\Shelfwise и ставит туда приложение с PySide6;
+#   - создаёт своё окружение Python в %LOCALAPPDATA%\Programs\Muninhall и ставит туда приложение с PySide6;
 #   - ярлыки в меню «Пуск» и на рабочем столе;
 #   - пункт «Открыть с помощью» для EPUB/FB2/MOBI;
 #   - запись в «Установка и удаление программ» (там же удаление);
-#   - убирает установку прежней «Читалки ЛитРес» (её данные Shelfwise перенесёт сам при запуске).
+#   - убирает установку прежних версий — Shelfwise и «Читалки ЛитРес» (их данные Muninhall
+#     перенесёт сам при запуске).
 $ErrorActionPreference = 'Stop'
 
 $Src      = Split-Path -Parent $PSScriptRoot
-$AppDir   = Join-Path $env:LOCALAPPDATA 'Programs\Shelfwise'
+$AppDir   = Join-Path $env:LOCALAPPDATA 'Programs\Muninhall'
 $Venv     = Join-Path $AppDir 'venv'
-$Exe      = Join-Path $Venv 'Scripts\shelfwise.exe'
-$Icon     = Join-Path $AppDir 'shelfwise.ico'
-$AppName  = 'Shelfwise'
-$ProgId   = 'Shelfwise.Book'
-$UninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Shelfwise'
-# прежняя «Читалка ЛитРес»
-$OldDir    = Join-Path $env:LOCALAPPDATA 'Programs\LitresReader'
-$OldName   = 'Читалка ЛитРес'
-$OldProgId = 'LitresReader.Book'
-$OldKey    = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\LitresReader'
+$Exe      = Join-Path $Venv 'Scripts\muninhall.exe'
+$Icon     = Join-Path $AppDir 'muninhall.ico'
+$AppName  = 'Muninhall'
+$ProgId   = 'Muninhall.Book'
+$UninstKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Muninhall'
+# прежние версии: «Читалка ЛитРес» (до 0.16) и Shelfwise (0.16)
+$OldInstalls = @(
+    @{ Key = 'LitresReader'; Name = 'Читалка ЛитРес'; Process = 'litres-reader' },
+    @{ Key = 'Shelfwise';    Name = 'Shelfwise';      Process = 'shelfwise' }
+)
 
 function Step($text) { Write-Host "`n==> $text" -ForegroundColor Cyan }
 
@@ -71,9 +72,9 @@ $VPy = Join-Path $Venv 'Scripts\python.exe'
 if ($LASTEXITCODE -ne 0) { throw 'pip не смог установить приложение' }
 # Свежий код ставим всегда, даже если номер версии не менялся
 & $VPy -m pip install --quiet --force-reinstall --no-deps $Src
-Copy-Item (Join-Path $Src 'shelfwise\data\shelfwise.ico') $Icon -Force
+Copy-Item (Join-Path $Src 'muninhall\data\muninhall.ico') $Icon -Force
 Copy-Item (Join-Path $PSScriptRoot 'uninstall.ps1') (Join-Path $AppDir 'uninstall.ps1') -Force
-$Version = & $VPy -c 'import shelfwise; print(shelfwise.__version__)'
+$Version = & $VPy -c 'import muninhall; print(muninhall.__version__)'
 Write-Host "  установлено: $Version"
 
 # ---------------------------------------------------------------- ярлыки
@@ -114,7 +115,7 @@ $props = @{
     DisplayName     = $AppName
     DisplayVersion  = "$Version"
     DisplayIcon     = "$Icon"
-    Publisher       = 'Shelfwise'
+    Publisher       = 'Muninhall'
     InstallLocation = $AppDir
     UninstallString = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$AppDir\uninstall.ps1`""
     NoModify        = 1
@@ -125,12 +126,16 @@ foreach ($k in $props.Keys) {
     New-ItemProperty -Force -Path $UninstKey -Name $k -Value $props[$k] -PropertyType $type | Out-Null
 }
 
-# ---------------------------------------------------------------- прежняя «Читалка ЛитРес»
-if ((Test-Path $OldDir) -or (Test-Path $OldKey)) {
-    Step 'Убираю прежнюю «Читалку ЛитРес»'
+# ---------------------------------------------------------------- прежние версии
+foreach ($old in $OldInstalls) {
+    $OldDir = Join-Path $env:LOCALAPPDATA ('Programs\' + $old.Key)
+    $OldKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $old.Key
+    $OldProgId = $old.Key + '.Book'
+    if (-not ((Test-Path $OldDir) -or (Test-Path $OldKey))) { continue }
+    Step ('Убираю прежнюю версию: ' + $old.Name)
     foreach ($lnk in @(
-        (Join-Path ([Environment]::GetFolderPath('Programs')) "$OldName.lnk"),
-        (Join-Path ([Environment]::GetFolderPath('Desktop')) "$OldName.lnk"))) {
+        (Join-Path ([Environment]::GetFolderPath('Programs')) ($old.Name + '.lnk')),
+        (Join-Path ([Environment]::GetFolderPath('Desktop')) ($old.Name + '.lnk')))) {
         Remove-Item -Force $lnk -ErrorAction SilentlyContinue
     }
     Remove-Item -Recurse -Force "$Classes\$OldProgId" -ErrorAction SilentlyContinue
@@ -138,7 +143,7 @@ if ((Test-Path $OldDir) -or (Test-Path $OldKey)) {
         Remove-ItemProperty -Path "$Classes\$ext\OpenWithProgids" -Name $OldProgId -ErrorAction SilentlyContinue
     }
     Remove-Item -Recurse -Force $OldKey -ErrorAction SilentlyContinue
-    if (Get-Process litres-reader -ErrorAction SilentlyContinue) {
+    if (Get-Process $old.Process -ErrorAction SilentlyContinue) {
         Write-Host "  прежняя версия открыта — её папка $OldDir удалится при следующей установке"
     } else {
         Remove-Item -Recurse -Force $OldDir -ErrorAction SilentlyContinue
@@ -147,4 +152,4 @@ if ((Test-Path $OldDir) -or (Test-Path $OldKey)) {
 
 Step 'Готово'
 Write-Host "«$AppName» есть в меню «Пуск» и на рабочем столе."
-Write-Host 'Удалить: «Параметры» → «Приложения» → «Shelfwise» → «Удалить».'
+Write-Host 'Удалить: «Параметры» → «Приложения» → «Muninhall» → «Удалить».'

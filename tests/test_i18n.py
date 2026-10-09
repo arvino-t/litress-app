@@ -3,9 +3,9 @@ import ast
 import re
 from pathlib import Path
 
-from shelfwise import i18n_en, i18n
+from muninhall import i18n_en, i18n
 
-PKG = Path(__file__).resolve().parent.parent / "shelfwise"
+PKG = Path(__file__).resolve().parent.parent / "muninhall"
 PLACEHOLDER = re.compile(r"\{[^}]*\}")
 
 

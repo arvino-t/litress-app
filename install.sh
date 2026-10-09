@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Установка Shelfwise на Linux (для текущего пользователя, без root —
+# Установка Muninhall на Linux (для текущего пользователя, без root —
 # sudo нужен только для системных библиотек, если их нет).
 #
 #   bash install.sh              — установить или обновить
@@ -7,35 +7,40 @@
 #
 # Что делает:
 #   - ставит системные зависимости (Python 3.10+, venv, библиотеки для Qt/Chromium);
-#   - создаёт своё окружение Python в ~/.local/opt/shelfwise и ставит туда приложение с PySide6;
-#   - команда shelfwise в ~/.local/bin (и прежняя litres-reader — ссылкой на неё);
+#   - создаёт своё окружение Python в ~/.local/opt/muninhall и ставит туда приложение с PySide6;
+#   - команда muninhall в ~/.local/bin (и прежняя litres-reader — ссылкой на неё);
 #   - ярлык в меню приложений, значок, открытие файлов EPUB/FB2/MOBI;
-#   - убирает установку прежней «Читалки ЛитРес» (её данные Shelfwise перенесёт сам при запуске).
+#   - убирает установку прежних версий — Shelfwise и «Читалки ЛитРес» (их данные Muninhall
+#     перенесёт сам при запуске).
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
-APP_ID=io.github.arvino_t.Shelfwise
+APP_ID=io.github.arvino_t.Muninhall
 PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}"
-APP_DIR="$HOME/.local/opt/shelfwise"
-BIN="$HOME/.local/bin/shelfwise"
+APP_DIR="$HOME/.local/opt/muninhall"
+BIN="$HOME/.local/bin/muninhall"
 DESKTOP="$PREFIX/applications/$APP_ID.desktop"
 ICON="$PREFIX/icons/hicolor/scalable/apps/$APP_ID.svg"
 MIME="$PREFIX/mime/packages/$APP_ID.xml"
-# прежняя «Читалка ЛитРес»
-OLD_ID=ru.local.LitresReader
-OLD_DIR="$HOME/.local/opt/litres-reader"
-OLD_BIN="$HOME/.local/bin/litres-reader"
+# прежние версии: «Читалка ЛитРес» (до 0.16) и Shelfwise (0.16)
+OLD_BIN="$HOME/.local/bin/litres-reader"       # прежняя команда остаётся ссылкой на новую
+OLD_INSTALLS=("ru.local.LitresReader:litres-reader" "io.github.arvino_t.Shelfwise:shelfwise")
 
 remove_old_install() {
-    rm -f "$PREFIX/applications/$OLD_ID.desktop" "$PREFIX/icons/hicolor/scalable/apps/$OLD_ID.svg" \
-          "$PREFIX/mime/packages/$OLD_ID.xml"
-    if [[ -d "$OLD_DIR" ]]; then
-        if pgrep -f "^$OLD_DIR/venv/" >/dev/null 2>&1; then
-            echo "  прежняя версия сейчас открыта — её файлы в $OLD_DIR удалятся при следующей установке"
-        else
-            rm -rf "$OLD_DIR"
+    local entry id slug dir
+    for entry in "${OLD_INSTALLS[@]}"; do
+        id=${entry%%:*}; slug=${entry##*:}; dir="$HOME/.local/opt/$slug"
+        rm -f "$PREFIX/applications/$id.desktop" "$PREFIX/icons/hicolor/scalable/apps/$id.svg" \
+              "$PREFIX/mime/packages/$id.xml"
+        [[ $slug != litres-reader ]] && rm -f "$HOME/.local/bin/$slug"
+        if [[ -d "$dir" ]]; then
+            if pgrep -f "^$dir/venv/" >/dev/null 2>&1; then
+                echo "  прежняя версия ($slug) сейчас открыта — её файлы удалятся при следующей установке"
+            else
+                rm -rf "$dir"
+            fi
         fi
-    fi
+    done
 }
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
@@ -52,12 +57,12 @@ refresh_caches() {
 }
 
 if [[ "${1:-}" == "--uninstall" ]]; then
-    step "Удаляю Shelfwise"
+    step "Удаляю Muninhall"
     rm -rf "$APP_DIR"
     rm -f "$BIN" "$OLD_BIN" "$DESKTOP" "$ICON" "$MIME"
     remove_old_install
     refresh_caches
-    echo "Готово. Книги и настройки остались в ~/.local/share/shelfwise и ~/.config/shelfwise,"
+    echo "Готово. Книги и настройки остались в ~/.local/share/muninhall и ~/.config/muninhall,"
     echo "данные своих библиотек — в их папках (.library). Удалите их вручную, если они больше не нужны."
     exit 0
 fi
@@ -101,13 +106,13 @@ fi
 "$APP_DIR/venv/bin/python" -m pip install --upgrade --quiet "$SRC"
 # Свежий код ставим всегда, даже если номер версии не менялся
 "$APP_DIR/venv/bin/python" -m pip install --quiet --force-reinstall --no-deps "$SRC"
-echo "  установлено: $("$APP_DIR/venv/bin/python" -c 'import shelfwise; print(shelfwise.__version__)')"
+echo "  установлено: $("$APP_DIR/venv/bin/python" -c 'import muninhall; print(muninhall.__version__)')"
 
 mkdir -p "$(dirname "$BIN")"
 rm -f "$BIN"
 cat > "$BIN" <<EOF
 #!/bin/sh
-exec "$APP_DIR/venv/bin/shelfwise" "\$@"
+exec "$APP_DIR/venv/bin/muninhall" "\$@"
 EOF
 chmod +x "$BIN"
 rm -f "$OLD_BIN" && ln -s "$BIN" "$OLD_BIN"      # прежняя команда — ссылка на новую
@@ -116,7 +121,7 @@ remove_old_install
 # ---------------------------------------------------------------- интеграция с рабочим столом
 step "Ярлык, значок и типы файлов"
 mkdir -p "$(dirname "$DESKTOP")" "$(dirname "$ICON")" "$(dirname "$MIME")"
-cp "$SRC/shelfwise/data/$APP_ID.svg" "$ICON"
+cp "$SRC/muninhall/data/$APP_ID.svg" "$ICON"
 
 cat > "$MIME" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -136,7 +141,7 @@ EOF
 cat > "$DESKTOP" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Shelfwise
+Name=Muninhall
 GenericName=Своя библиотека книг
 GenericName[en]=Personal library
 Comment=Своя библиотека книг и статей: читать, организовывать, обслуживать; ЛитРес — подключаемая библиотека
@@ -147,10 +152,10 @@ Terminal=false
 Categories=Office;Viewer;GTK;Qt;
 Keywords=книги;библиотека;статьи;литрес;litres;epub;fb2;pdf;аудиокниги;читалка;library;books;
 MimeType=application/epub+zip;application/x-fictionbook+xml;application/x-zip-compressed-fb2;application/x-mobipocket-ebook;
-StartupWMClass=shelfwise
+StartupWMClass=muninhall
 EOF
 refresh_caches
 
 step "Готово"
-echo "Shelfwise есть в меню приложений; из терминала — shelfwise."
+echo "Muninhall есть в меню приложений; из терминала — muninhall."
 echo "Удалить: bash $SRC/install.sh --uninstall"

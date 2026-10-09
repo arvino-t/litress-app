@@ -1,10 +1,22 @@
 # Changelog
 
-All notable changes to Shelfwise (called LitRes Reader / «Читалка ЛитРес» before 0.16). The format is based on
+All notable changes to Muninhall (called LitRes Reader / «Читалка ЛитРес» before 0.16 and Shelfwise in 0.16). The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.17.0] — 2026-10-09
+
+### Changed
+- **Renamed to Muninhall** — "the hall of Muninn", Odin's raven of memory — because the name Shelfwise
+  is already taken. Package and command `muninhall` (`litres-reader` stays as an alias; `shelfwise` is
+  removed), app ID `io.github.arvino_t.Muninhall`, data folders `muninhall`, default backup folder
+  `Documents/Backups/muninhall`, backup files `muninhall-backup-…`, GitHub repository
+  `arvino-t/muninhall`, environment variables `MUNINHALL_DEBUG` / `MUNINHALL_LANG` (the Shelfwise and
+  LitRes Reader ones still work).
+- Data, backups and the backup folder of both previous versions (Shelfwise and «Читалка ЛитРес») are
+  migrated on first start; the installers remove both previous installations.
 
 ## [0.16.0] — 2026-10-09
 
@@ -243,16 +255,17 @@ library. The interface stays the same — "Source" is now the name of a library.
   pitch and a sleep timer.
 - VPN bypass for LitRes (`vpn-bypass/`).
 
-[Unreleased]: https://github.com/arvino-t/shelfwise/compare/v0.16.0...HEAD
-[0.16.0]: https://github.com/arvino-t/shelfwise/compare/v0.15.0...v0.16.0
-[0.15.0]: https://github.com/arvino-t/shelfwise/compare/v0.14.0...v0.15.0
-[0.14.0]: https://github.com/arvino-t/shelfwise/compare/v0.13.0...v0.14.0
-[0.13.0]: https://github.com/arvino-t/shelfwise/compare/v0.12.0...v0.13.0
-[0.12.0]: https://github.com/arvino-t/shelfwise/compare/v0.11.0...v0.12.0
-[0.11.0]: https://github.com/arvino-t/shelfwise/compare/v0.10.0...v0.11.0
-[0.10.0]: https://github.com/arvino-t/shelfwise/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/arvino-t/shelfwise/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/arvino-t/shelfwise/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/arvino-t/shelfwise/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/arvino-t/shelfwise/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/arvino-t/shelfwise/releases/tag/v0.5.0
+[Unreleased]: https://github.com/arvino-t/muninhall/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/arvino-t/muninhall/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/arvino-t/muninhall/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/arvino-t/muninhall/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/arvino-t/muninhall/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/arvino-t/muninhall/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/arvino-t/muninhall/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/arvino-t/muninhall/compare/v0.10.0...v0.11.0
+[0.10.0]: https://github.com/arvino-t/muninhall/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/arvino-t/muninhall/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/arvino-t/muninhall/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/arvino-t/muninhall/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/arvino-t/muninhall/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/arvino-t/muninhall/releases/tag/v0.5.0

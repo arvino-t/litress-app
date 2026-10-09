@@ -158,9 +158,9 @@ EN = {
     "неверный ответ": "invalid response",
 
     # --- резервные копии (backup.py)
-    "это не резервная копия Shelfwise": "this is not a Shelfwise backup",
+    "это не резервная копия Muninhall": "this is not a Muninhall backup",
     "в копии нет данных": "the backup has no data",
-    "это не резервная копия Shelfwise ({0})": "this is not a Shelfwise backup ({0})",
+    "это не резервная копия Muninhall ({0})": "this is not a Muninhall backup ({0})",
     "{0}: слишком большой файл": "{0}: file is too large",
     "{0}: повреждён": "{0}: damaged",
 
@@ -497,8 +497,8 @@ EN = {
     "версия {0} · своя библиотека книг и статей; ЛитРес — подключаемая библиотека":
         "version {0} · your own library of books and articles; LitRes is a pluggable library",
     "Документация и исходный код": "Documentation and source code",
-    "Закройте «Читалку ЛитРес» — прежнюю версию приложения — и запустите Shelfwise снова: её данные "
-    "перенесутся.":
-        "Close \"Читалка ЛитРес\" (the previous version of the app) and start Shelfwise again: its data "
-        "will be moved over.",
+    "Закройте прежнюю версию приложения («Читалка ЛитРес» или Shelfwise) и запустите Muninhall снова: "
+    "её данные перенесутся.":
+        "Close the previous version of the app (\"Читалка ЛитРес\" or Shelfwise) and start Muninhall again: "
+        "its data will be moved over.",
 }

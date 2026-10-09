@@ -2,8 +2,8 @@
 import json
 import shutil
 
-from shelfwise import backup, core, libraries
-from shelfwise.core import Library, folder_library_id
+from muninhall import backup, core, libraries
+from muninhall.core import Library, folder_library_id
 
 
 def make_lib(root):

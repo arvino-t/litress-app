@@ -34,9 +34,10 @@ FILES = {
     "stats.json": STATS_FILE,
     "singularity.json": SINGULARITY_FILE,
 }
-PREFIX = "shelfwise-backup-"
-OLD_PREFIX = "litres-reader-backup-"      # копии прежней «Читалки ЛитРес» тоже видны и восстанавливаются
-APP_TAGS = ("shelfwise", "litres-reader")
+PREFIX = "muninhall-backup-"
+# копии прежних версий (Shelfwise, «Читалка ЛитРес») тоже видны и восстанавливаются
+OLD_PREFIXES = ("shelfwise-backup-", "litres-reader-backup-")
+APP_TAGS = ("muninhall", "shelfwise", "litres-reader")
 PENDING_DIR = DATA_DIR / "restore-pending"
 MAX_FILE = 50 * 1024 * 1024
 INTERVALS = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
@@ -58,16 +59,24 @@ def _folder_stores(settings) -> dict[str, Path]:
 
 def default_dir() -> Path:
     docs = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
-    return Path(docs or Path.home()) / "Backups" / "shelfwise"
+    return Path(docs or Path.home()) / "Backups" / "muninhall"
 
 
 def migrate_default_dir():
-    """Папка копий по умолчанию переименована: Backups/litres-reader → Backups/shelfwise."""
+    """Папка копий по умолчанию переименована: Backups/shelfwise или Backups/litres-reader → Backups/muninhall."""
     new = default_dir()
-    old = new.parent / "litres-reader"
-    if old.is_dir() and not new.exists():
+    for name in ("shelfwise", "litres-reader"):
+        old = new.parent / name
+        if not old.is_dir():
+            continue
         try:
-            old.rename(new)
+            if not new.exists():
+                old.rename(new)
+            else:                        # уже есть — переносим копии по одной
+                for f in old.iterdir():
+                    if not (new / f.name).exists():
+                        f.rename(new / f.name)
+                old.rmdir()
         except OSError:
             pass
 
@@ -129,7 +138,7 @@ def create(settings, reason: str = "", scope: str = "all") -> Path:
                     z.writestr(arc, (store / name).read_bytes())
                     stored.append(arc)
         z.writestr("manifest.json", json.dumps({
-            "app": "shelfwise", "version": __version__, "created": now.isoformat(timespec="seconds"),
+            "app": "muninhall", "version": __version__, "created": now.isoformat(timespec="seconds"),
             "files": stored, "token": include_token and scope == "all", "reason": reason, "scope": scope,
         }, ensure_ascii=False, indent=1))
     if sys.platform != "win32":
@@ -143,12 +152,12 @@ def list_backups(folder: Path, scope: str | None = None) -> list[tuple[Path, dat
     """Копии в папке (scope — только этой библиотеки), новые первыми; в одну секунду — по времени записи."""
     out = []
     try:
-        for p in [*folder.glob(PREFIX + "*.zip"), *folder.glob(OLD_PREFIX + "*.zip")]:
+        for p in [p for prefix in (PREFIX, *OLD_PREFIXES) for p in folder.glob(prefix + "*.zip")]:
             if scope is not None and scope_of(p) != scope:
                 continue
             st = p.stat()
             try:
-                start = len(PREFIX) if p.name.startswith(PREFIX) else len(OLD_PREFIX)
+                start = next(len(x) for x in (PREFIX, *OLD_PREFIXES) if p.name.startswith(x))
                 when = datetime.strptime(p.stem[start:start + 17], "%Y-%m-%d_%H%M%S")
             except ValueError:
                 when = datetime.fromtimestamp(st.st_mtime)
@@ -181,9 +190,9 @@ def read_manifest(path: Path) -> dict:
         with zipfile.ZipFile(path) as z:
             manifest = json.loads(z.read("manifest.json"))
     except (OSError, KeyError, ValueError, zipfile.BadZipFile) as e:
-        raise ValueError(tr('это не резервная копия Shelfwise ({0})', e)) from None
+        raise ValueError(tr('это не резервная копия Muninhall ({0})', e)) from None
     if manifest.get("app") not in APP_TAGS:
-        raise ValueError(tr("это не резервная копия Shelfwise"))
+        raise ValueError(tr("это не резервная копия Muninhall"))
     return manifest
 
 

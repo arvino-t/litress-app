@@ -323,7 +323,7 @@ class LitresConnector(QObject):
             if b["failed"]:
                 text += tr(', не удалось: {0} (список — в журнале)', b['failed'])
                 for title, err in b["errors"]:
-                    print(f"shelfwise: не скачалась «{title}»: {err}", file=sys.stderr, flush=True)
+                    print(f"muninhall: не скачалась «{title}»: {err}", file=sys.stderr, flush=True)
             self.app.toast(text, timeout=8000)
             return
         book = b["queue"].pop(0)

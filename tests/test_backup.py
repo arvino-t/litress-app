@@ -4,7 +4,7 @@ import zipfile
 
 import pytest
 
-from shelfwise import backup, core
+from muninhall import backup, core
 
 
 @pytest.fixture

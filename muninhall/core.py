@@ -14,11 +14,12 @@ from PySide6.QtCore import QTimer
 
 from .i18n import tr
 
-APP_ID = "io.github.arvino_t.Shelfwise"
-APP_NAME = "Shelfwise"
-APP_SLUG = "shelfwise"          # каталоги данных, команда, имя приложения для Qt
-OLD_SLUG = "litres-reader"      # до 0.16 приложение называлось «Читалка ЛитРес»
-OLD_APP_ID = "ru.local.LitresReader"
+APP_ID = "io.github.arvino_t.Muninhall"
+APP_NAME = "Muninhall"
+APP_SLUG = "muninhall"          # каталоги данных, команда, имя приложения для Qt
+# прежние имена: «Читалка ЛитРес» (до 0.16) и Shelfwise (0.16) — новые первыми
+OLD_SLUGS = ("shelfwise", "litres-reader")
+OLD_APP_IDS = ("io.github.arvino_t.Shelfwise", "ru.local.LitresReader")
 SCHEME = "litreader"
 
 PKG_DIR = Path(__file__).resolve().parent
@@ -44,23 +45,29 @@ DATA_DIR, CONFIG_DIR, CACHE_DIR = _dirs()
 
 
 def migration_needed() -> bool:
-    """Есть данные прежней «Читалки ЛитРес», а у Shelfwise их ещё нет."""
-    old_data, old_config, _ = _dirs(OLD_SLUG)
-    return ((old_data / "library.json").exists() and not (DATA_DIR / "library.json").exists()) or \
-           ((old_config / "settings.json").exists() and not CONFIG_FILE.exists())
+    """Есть данные прежней версии (Shelfwise или «Читалки ЛитРес»), а у Muninhall их ещё нет."""
+    for slug in OLD_SLUGS:
+        old_data, old_config, _ = _dirs(slug)
+        if ((old_data / "library.json").exists() and not (DATA_DIR / "library.json").exists()) or \
+                ((old_config / "settings.json").exists() and not CONFIG_FILE.exists()):
+            return True
+    return False
 
 
 def migrate_old_dirs() -> list[str]:
-    """Переносит данные прежней «Читалки ЛитРес» в каталоги Shelfwise (один раз, при запуске).
+    """Переносит данные прежней версии в каталоги Muninhall (один раз, при запуске).
 
-    Возвращает список перенесённых каталогов. Если новый каталог уже есть — старый не трогается.
+    Сначала Shelfwise, потом «Читалка ЛитРес»: что уже перенесено, второй раз не переносится.
+    Возвращает список перенесённых каталогов. Если новый каталог уже полон — старый не трогается.
     """
     moved = []
-    old_dirs = _dirs(OLD_SLUG)
-    if sys.platform == "win32":     # на Windows кэш лежит внутри каталога данных — переносится вместе с ним
-        pairs = list(zip(old_dirs[:2], (DATA_DIR, CONFIG_DIR)))
-    else:
-        pairs = list(zip(old_dirs, (DATA_DIR, CONFIG_DIR, CACHE_DIR)))
+    pairs = []
+    for slug in OLD_SLUGS:
+        old_dirs = _dirs(slug)
+        if sys.platform == "win32":     # на Windows кэш лежит внутри каталога данных — переносится вместе с ним
+            pairs += list(zip(old_dirs[:2], (DATA_DIR, CONFIG_DIR)))
+        else:
+            pairs += list(zip(old_dirs, (DATA_DIR, CONFIG_DIR, CACHE_DIR)))
     # главный файл каталога: если его нет в новом, а в старом есть — новый пуст (например, его уже создал Qt)
     markers = {DATA_DIR: "library.json", CONFIG_DIR: "settings.json", CACHE_DIR: None}
     for old, new in pairs:
@@ -157,13 +164,18 @@ DROP_HEADERS = {"cookie", "host", "content-length", "content-type", "connection"
                 # одноразовые заголовки трассировки запросов
                 "sentry-trace", "baggage", "x-request-id"}
 
-DEBUG = bool(os.environ.get("SHELFWISE_DEBUG") or os.environ.get("LITREADER_DEBUG"))
+def _env_debug() -> bool:
+    """MUNINHALL_DEBUG=1 (прежние SHELFWISE_DEBUG и LITREADER_DEBUG тоже понимаются)."""
+    return any(os.environ.get(v) for v in ("MUNINHALL_DEBUG", "SHELFWISE_DEBUG", "LITREADER_DEBUG"))
+
+
+DEBUG = _env_debug()
 
 
 def set_debug(on: bool):
-    """Подробный журнал: переменная SHELFWISE_DEBUG или настройка «Дополнительно → Подробный журнал»."""
+    """Подробный журнал: переменная MUNINHALL_DEBUG или настройка «Дополнительно → Подробный журнал»."""
     global DEBUG
-    DEBUG = bool(on) or bool(os.environ.get("SHELFWISE_DEBUG") or os.environ.get("LITREADER_DEBUG"))
+    DEBUG = bool(on) or _env_debug()
 
 DEFAULT_SETTINGS = {
     "fontSize": 19,
@@ -196,13 +208,13 @@ DEFAULT_SETTINGS = {
     "remoteSyncMin": 15,
     # Скорость чтения для оценки чтения на телефоне (знаков в минуту)
     "readingCharsPerMin": 1300,
-    # Подробный журнал (то же, что SHELFWISE_DEBUG=1)
+    # Подробный журнал (то же, что MUNINHALL_DEBUG=1)
     "debugLog": False,
     # Последняя открытая вкладка настроек
     "settingsTab": "general",
     # Язык интерфейса: auto (как в системе) / ru / en — применяется после перезапуска
     "language": "auto",
-    # Резервные копии: папка (None — Документы/Backups/shelfwise), off / daily / weekly,
+    # Резервные копии: папка (None — Документы/Backups/muninhall), off / daily / weekly,
     # сколько хранить, время последней копии, класть ли в копию токен Singularity
     "backupDir": None,
     "backupAuto": "weekly",

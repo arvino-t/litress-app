@@ -1,8 +1,8 @@
-# Shelfwise — user guide
+# Muninhall — user guide
 
 [Русская версия](../ru/user-guide.md)
 
-Shelfwise is a Linux and Windows app to build, read and organize **your own library**. A library
+Muninhall is a Linux and Windows app to build, read and organize **your own library**. A library
 is a folder on disk with books and articles (EPUB, FB2, MOBI, PDF); you can have several, and together
 they can be browsed as one big library. **[LitRes](https://www.litres.ru)** is a pluggable commercial
 library: purchased books and audiobooks are downloaded and opened in the built-in reader and audio
@@ -39,7 +39,7 @@ bash install.sh --uninstall  # remove
 
 The app is installed for the current user. `sudo` is requested only if system libraries are
 missing (Python 3.10+, venv, libraries for Qt and Chromium). The app lives in
-`~/.local/opt/shelfwise`, the command is `shelfwise`, and "Shelfwise" appears in the
+`~/.local/opt/muninhall`, the command is `muninhall`, and "Muninhall" appears in the
 app menu; EPUB, FB2 and MOBI files open with it.
 
 ### Windows 10/11
@@ -48,18 +48,19 @@ Double-click `install.cmd` (or run
 `powershell -ExecutionPolicy Bypass -File windows\install.ps1`).
 
 No administrator rights are needed. If Python 3.10+ is not found, the installer gets Python 3.12
-via winget. The app lives in `%LOCALAPPDATA%\Programs\Shelfwise`, shortcuts go to the Start menu
+via winget. The app lives in `%LOCALAPPDATA%\Programs\Muninhall`, shortcuts go to the Start menu
 and the desktop, and EPUB, FB2 and MOBI are added to "Open with" (default apps are not changed).
 Uninstall via "Settings → Apps".
 
 The first installation takes a while: PySide6 (Qt with the built-in Chromium) is about 600 MB.
 
-### Moving from "Читалка ЛитРес" (LitRes Reader)
+### Moving from an earlier version
 
-Before version 0.16 the app was called "Читалка ЛитРес" (LitRes Reader). The installer removes the
-previous version (shortcut, icon, program), and Shelfwise moves its data on first start — the library,
-reading positions, settings, the LitRes sign-in and the backup folder; old backups can be restored too.
-Close the previous version before the first start. The `litres-reader` command keeps working.
+The app was called "Читалка ЛитРес" (LitRes Reader) before version 0.16 and Shelfwise in 0.16. The
+installer removes the previous version (shortcut, icon, program), and Muninhall moves its data on
+first start — the library, reading positions, settings, the LitRes sign-in and the backup folder; old
+backups can be restored too. Close the previous version before the first start. The `litres-reader`
+command keeps working.
 
 ## Libraries
 
@@ -224,7 +225,7 @@ Settings → Backups.
   "All libraries" backup only if "Include the Singularity token" is on.
 - **When:** with the "Back up" button and automatically — an all-libraries backup daily or weekly
   (weekly by default). Old backups beyond the set number are deleted, counted per library.
-- **Where:** `Documents/Backups/shelfwise` by default; you can change the folder. If your
+- **Where:** `Documents/Backups/muninhall` by default; you can change the folder. If your
   Documents folder syncs to the cloud, the backups end up there too.
 - **Restore:** from the list of recent backups or from a file (for example, from another computer).
   A single-library backup restores only that library. Before restoring, the current data is backed
@@ -268,10 +269,10 @@ sudo bash vpn-bypass/install.sh --remove  # remove (and restore the original kil
 | What | Linux | Windows |
 |---|---|---|
 | Your library's data (marks, positions, graph) | `<library folder>/.library/` | `<library folder>\.library\` |
-| LitRes books, covers, LitRes data | `~/.local/share/shelfwise/` | `%LOCALAPPDATA%\shelfwise\` |
-| LitRes session | `~/.local/share/shelfwise/webengine/` | `%LOCALAPPDATA%\shelfwise\webengine\` |
-| Settings, Singularity token | `~/.config/shelfwise/` | `%APPDATA%\shelfwise\` |
-| Cache (service icons) | `~/.cache/shelfwise/` | `%LOCALAPPDATA%\shelfwise\cache\` |
+| LitRes books, covers, LitRes data | `~/.local/share/muninhall/` | `%LOCALAPPDATA%\muninhall\` |
+| LitRes session | `~/.local/share/muninhall/webengine/` | `%LOCALAPPDATA%\muninhall\webengine\` |
+| Settings, Singularity token | `~/.config/muninhall/` | `%APPDATA%\muninhall\` |
+| Cache (service icons) | `~/.cache/muninhall/` | `%LOCALAPPDATA%\muninhall\cache\` |
 
 You can change the folder for LitRes books in Settings → Libraries. Data files are
 created with owner-only access. Downloaded books and progress remain after uninstalling the app.
