@@ -18,9 +18,6 @@ the review after 1.0.0. Step 3 prepares new connectors (OPDS).
   (`LibraryView`), settings tabs are separate builder methods and the LitRes folders dialog has its own
   module; still left — `LitresConnector` and the settings page reach into the whole `App` (≈27 and 32
   attributes); pass them only what they need (library model, settings, notifications, navigation).
-- [ ] **6. Long methods (the rest):** `ReaderPage._build_settings` (87) and `_on_message` (72),
-  `App.__init__` (87) and `main` (78), `LibraryView._build_library_page` (85), `style.stylesheet` (121 — a
-  template, fine as is).
 
 ## Reader — first priority
 - [ ] **Highlights and notes exported to Obsidian.** Select a quote, add a comment; quotes are collected

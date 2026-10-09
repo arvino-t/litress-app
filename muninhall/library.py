@@ -36,7 +36,14 @@ class LibraryView:
         lay = QVBoxLayout(page)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
+        lay.addWidget(self._build_header())
+        lay.addWidget(self._build_search_bar())
+        lay.addWidget(self._build_filter_bar())
+        lay.addLayout(self._build_content(), 1)
+        return page
 
+    def _build_header(self) -> HeaderBar:
+        """Шапка: обновить, «сейчас играет», поиск, меню."""
         self.lib_header = HeaderBar(self.app.window, tr("Библиотека"), tr("Вход в ЛитРес не выполнен"))
         self.sync_btn = IconButton("view-refresh", tr("Обновить список книг с ЛитРес (F5)"))
         self.sync_btn.clicked.connect(self.app.litres_lib.sync)
@@ -50,7 +57,15 @@ class LibraryView:
         self.now_playing_btn.setVisible(False)
         self.now_playing_btn.clicked.connect(self.app.show_player)
         self.lib_header.pack_start(self.now_playing_btn)
+        self.lib_header.pack_end(self._build_menu())
+        self.search_btn = IconButton("system-search", tr("Поиск (Ctrl+F)"))
+        self.search_btn.setCheckable(True)
+        self.search_btn.toggled.connect(self._on_search_toggled)
+        self.lib_header.pack_end(self.search_btn)
+        return self.lib_header
 
+    def _build_menu(self):
+        """Кнопка главного меню."""
         menu_btn = IconButton("open-menu", tr("Меню"))
         self.menu = QMenu(menu_btn)
         self.menu.addAction(tr("Открыть файл…"), self.app.on_open_file)
@@ -60,8 +75,7 @@ class LibraryView:
         self.menu.addAction(self.only_action)
         self.last_action = QAction(tr("Открывать последнюю текстовую книгу при запуске"), self.menu, checkable=True)
         self.last_action.setChecked(bool(self.app.settings.get("openLastBook", True)))
-        self.last_action.toggled.connect(lambda on: (self.app.settings.__setitem__("openLastBook", on),
-                                                     self.app.save_settings()))
+        self.last_action.toggled.connect(lambda on: self.app.settings.update(openLastBook=on))
         self.menu.addSeparator()
         self.account_action = self.menu.addAction(tr("Войти в ЛитРес"), self.app.litres_lib.toggle_account)
         self.menu.addAction(tr("Настройки… (Ctrl+,)"), self.app.show_settings)
@@ -70,14 +84,10 @@ class LibraryView:
         self.menu.addSeparator()
         self.menu.addAction(tr("О приложении"), self.app.on_about)
         menu_btn.clicked.connect(lambda: self.menu.popup(menu_btn.mapToGlobal(QPoint(0, menu_btn.height() + 4))))
-        self.lib_header.pack_end(menu_btn)
-        self.search_btn = IconButton("system-search", tr("Поиск (Ctrl+F)"))
-        self.search_btn.setCheckable(True)
-        self.search_btn.toggled.connect(self._on_search_toggled)
-        self.lib_header.pack_end(self.search_btn)
-        lay.addWidget(self.lib_header)
+        return menu_btn
 
-        # Строка поиска (Gtk.SearchBar)
+    def _build_search_bar(self) -> QFrame:
+        """Строка поиска (Gtk.SearchBar)."""
         self.search_bar = QFrame()
         self.search_bar.setObjectName("headerbar")
         sl = QHBoxLayout(self.search_bar)
@@ -91,10 +101,10 @@ class LibraryView:
         sl.addWidget(self.search, 10)
         sl.addStretch()
         self.search_bar.setVisible(False)
-        lay.addWidget(self.search_bar)
+        return self.search_bar
 
-        lay.addWidget(self._build_filter_bar())
-
+    def _build_content(self) -> QHBoxLayout:
+        """Сетка карточек (или пустая страница) и справа — «Продолжить чтение»."""
         self.content = QStackedWidget()
         self.empty = self._build_empty_page()
         self.content.addWidget(self.empty)
@@ -114,8 +124,7 @@ class LibraryView:
         body.setSpacing(0)
         body.addWidget(self.content, 1)
         body.addWidget(self.recent_panel)
-        lay.addLayout(body, 1)
-        return page
+        return body
 
     def _update_recent_panel(self):
         books = self.app.library.recent(2, self.app.settings.get("lastBook"))

@@ -15,10 +15,10 @@ from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile, QWebEngi
                                      QWebEngineUrlScheme, QWebEngineUrlSchemeHandler)
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
-                               QListWidget, QListWidgetItem, QSlider, QVBoxLayout, QWidget)
+                               QListWidget, QListWidgetItem, QPushButton, QSlider, QVBoxLayout, QWidget)
 
 from . import core, style
-from .core import SAFE_LINK_SCHEMES, SCHEME, WEB_DIR, books_dir, log
+from .core import LOCAL_SUFFIX, SAFE_LINK_SCHEMES, SCHEME, WEB_DIR, books_dir, log
 from .litres import PREFIX
 from .widgets import HeaderBar, IconButton, Popover, SeekSlider, Switch, attach_popover, cls, label
 from .i18n import tr, web_strings
@@ -123,6 +123,22 @@ class _ReaderWebPage(QWebEnginePage):
 
 
 class ReaderPage(QWidget):
+    # тип сообщения из страницы читалки (web/reader.js) → обработчик
+    MESSAGES = {
+        "ready": "_msg_ready",
+        "opened": "_msg_opened",
+        "relocate": "_msg_relocate",
+        "toggle-ui": "_msg_toggle_ui",
+        "swipe-down": "_msg_toggle_ui",
+        "swipe-up": "_msg_swipe_up",
+        "pinch": "_msg_pinch",
+        "tts": "_msg_tts",
+        "tts-end": "_msg_tts_end",
+        "escape": "_msg_escape",
+        "external-link": "_msg_external_link",
+        "error": "_msg_error",
+    }
+
     def __init__(self, app, book, path: Path):
         super().__init__()
         self.setObjectName("page")
@@ -132,6 +148,14 @@ class ReaderPage(QWidget):
         self.toc: list[dict] = []
         self.ui_visible = True
         self._remote_checked = False
+        # Чтение вслух: очередь предложений текущего абзаца
+        self._tts = None
+        self.tts_active = False
+        self._tts_queue: list[dict] = []
+        # Автолистание: таймер; ручное листание его сбрасывает
+        self._flip_timer = QTimer(self)
+        self._flip_timer.timeout.connect(self._autoflip_turn)
+        self._auto_turn = False
 
         self.web = QWebEngineView(self)
         self.page = _ReaderWebPage(reader_profile(), self._on_message, self)
@@ -139,13 +163,25 @@ class ReaderPage(QWidget):
         self.web.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu if core.DEBUG
                                       else Qt.ContextMenuPolicy.NoContextMenu)
 
-        # Верхняя панель — заголовок окна
-        self.header = HeaderBar(app.window, book.get("title") or "")
+        # Обычная раскладка без наложения: поверх встроенного Chromium панели
+        # при фокусе на странице могут оказаться под ней и «исчезнуть»
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self._build_header())
+        lay.addWidget(self.web, 1)
+        lay.addWidget(self._build_bottom())
+
+        self.page.load(QUrl(f"{SCHEME}://app/reader.html"))
+
+    def _build_header(self) -> HeaderBar:
+        """Верхняя панель — заголовок окна: назад, во весь экран, вид, оглавление, автолистание, вслух."""
+        self.header = HeaderBar(self.app.window, self.book.get("title") or "")
         back = IconButton("go-previous", tr("Назад"))
-        back.clicked.connect(app.go_back)
+        back.clicked.connect(self.app.go_back)
         self.header.pack_start(back)
         full = IconButton("view-fullscreen", tr("Во весь экран (F11)"))
-        full.clicked.connect(app.toggle_fullscreen)
+        full.clicked.connect(self.app.toggle_fullscreen)
         self.header.pack_end(full)
         settings_btn = IconButton("font-select", tr("Вид текста"))
         attach_popover(settings_btn, Popover(self._build_settings()))
@@ -167,17 +203,10 @@ class ReaderPage(QWidget):
         self.tts_btn.setCheckable(True)
         self.tts_btn.toggled.connect(self._toggle_tts)
         self.header.pack_end(self.tts_btn)
+        return self.header
 
-        # Чтение вслух: очередь предложений текущего абзаца
-        self._tts = None
-        self.tts_active = False
-        self._tts_queue: list[dict] = []
-        # Автолистание: таймер; ручное листание его сбрасывает
-        self._flip_timer = QTimer(self)
-        self._flip_timer.timeout.connect(self._autoflip_turn)
-        self._auto_turn = False
-
-        # Нижняя панель: ползунок по книге и процент
+    def _build_bottom(self) -> QFrame:
+        """Нижняя панель: ползунок по книге и процент."""
         self.bottom = QFrame()
         self.bottom.setObjectName("headerbar")
         bl = QHBoxLayout(self.bottom)
@@ -191,17 +220,7 @@ class ReaderPage(QWidget):
         self.percent.setMinimumWidth(44)
         bl.addWidget(self.slider, 1)
         bl.addWidget(self.percent)
-
-        # Обычная раскладка без наложения: поверх встроенного Chromium панели
-        # при фокусе на странице могут оказаться под ней и «исчезнуть»
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-        lay.addWidget(self.header)
-        lay.addWidget(self.web, 1)
-        lay.addWidget(self.bottom)
-
-        self.page.load(QUrl(f"{SCHEME}://app/reader.html"))
+        return self.bottom
 
     # --- панели видны всегда; касание середины страницы прячет их для чтения без отвлечений
 
@@ -215,71 +234,21 @@ class ReaderPage(QWidget):
     # --- настройки вида
 
     def _build_settings(self):
+        """Панель «Вид»: размер, тема, шрифт, ползунки и переключатели."""
         st = self.app.settings
         box = QWidget()
         grid = QGridLayout(box)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(12)
-        row = 0
 
         def add(text, widget):
-            nonlocal row
-            grid.addWidget(label(text), row, 0)
-            grid.addWidget(widget, row, 1, Qt.AlignmentFlag.AlignRight)
-            row += 1
-
-        size_box = QWidget()
-        sl = QHBoxLayout(size_box)
-        sl.setContentsMargins(0, 0, 0, 0)
-        sl.setSpacing(0)
-        minus = IconButton("zoom-out", tr("Меньше"), flat=False)
-        plus = IconButton("zoom-in", tr("Больше"), flat=False)
-        cls(minus, "linked-first")
-        cls(plus, "linked-last")
-        size_label = QLabel(str(st["fontSize"]))
-        size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        size_label.setMinimumWidth(40)
-        cls(size_label, "heading")
-
-        def change_size(delta):
-            st["fontSize"] = max(12, min(40, st["fontSize"] + delta))
-            size_label.setText(str(st["fontSize"]))
-            self.app.save_settings()
-        minus.clicked.connect(lambda: change_size(-1))
-        plus.clicked.connect(lambda: change_size(+1))
-        sl.addWidget(minus)
-        sl.addWidget(size_label)
-        sl.addWidget(plus)
-        add(tr("Размер шрифта"), size_box)
-
-        grid.addWidget(label(tr("Тема")), row, 0, 1, 2)
-        row += 1
-        themes = QWidget()
-        tl = QHBoxLayout(themes)
-        tl.setContentsMargins(0, 0, 0, 0)
-        tl.setSpacing(0)
-        group = QButtonGroup(themes)
-        options = TEXT_THEMES
-        from PySide6.QtWidgets import QPushButton
-        for i, (key, text) in enumerate(options):
-            b = QPushButton(text)
-            b.setCheckable(True)
-            b.setChecked(st["theme"] == key)
-            b.setCursor(Qt.CursorShape.PointingHandCursor)
-            cls(b, "linked-first" if i == 0 else "linked-last" if i == len(options) - 1 else "linked")
-            b.toggled.connect(lambda on, k=key: on and self._set("theme", k))
-            group.addButton(b)
-            tl.addWidget(b)
-        grid.addWidget(themes, row, 0, 1, 2)
-        row += 1
-
-        fonts = QComboBox()
-        font_keys = [k for k, _t in FONTS]
-        fonts.addItems([t for _k, t in FONTS])
-        fonts.setCurrentIndex(font_keys.index(st["font"]) if st["font"] in font_keys else 0)
-        fonts.currentIndexChanged.connect(lambda i: self._set("font", font_keys[i]))
-        add(tr("Шрифт"), fonts)
+            row = grid.rowCount()
+            if text is None:                    # во всю ширину
+                grid.addWidget(widget, row, 0, 1, 2)
+            else:
+                grid.addWidget(label(text), row, 0)
+                grid.addWidget(widget, row, 1, Qt.AlignmentFlag.AlignRight)
 
         def slider(text, key, lo, hi, scale=1):
             s = QSlider(Qt.Orientation.Horizontal)
@@ -289,12 +258,20 @@ class ReaderPage(QWidget):
             s.valueChanged.connect(lambda v: self._set(key, round(v / scale, 2)))
             add(text, s)
 
+        add(tr("Размер шрифта"), self._font_size_box())
+        add(None, label(tr("Тема")))
+        add(None, self._theme_buttons())
+        fonts = QComboBox()
+        font_keys = [k for k, _t in FONTS]
+        fonts.addItems([t for _k, t in FONTS])
+        fonts.setCurrentIndex(font_keys.index(st["font"]) if st["font"] in font_keys else 0)
+        fonts.currentIndexChanged.connect(lambda i: self._set("font", font_keys[i]))
+        add(tr("Шрифт"), fonts)
         slider(tr("Межстрочный интервал"), "lineHeight", 1.1, 2.2, 10)
         slider(tr("Поля, %"), "margin", 0, 20)
         slider(tr("Ширина строки"), "lineWidth", 400, 1400)
         slider(tr("Скорость чтения вслух"), "ttsRate", -0.5, 0.8, 10)
         slider(tr("Автолистание, секунд"), "autoFlipSec", 5, 120)
-
         for key, text in (("twoColumns", tr("Две страницы в горизонтальном положении")),
                           ("justify", tr("Выравнивать по ширине")),
                           ("hyphenate", tr("Переносы слов"))):
@@ -302,6 +279,54 @@ class ReaderPage(QWidget):
             sw.toggled.connect(lambda on, k=key: self._set(k, on))
             add(text, sw)
         return box
+
+    def _font_size_box(self) -> QWidget:
+        """− размер +"""
+        box = QWidget()
+        sl = QHBoxLayout(box)
+        sl.setContentsMargins(0, 0, 0, 0)
+        sl.setSpacing(0)
+        minus = IconButton("zoom-out", tr("Меньше"), flat=False)
+        plus = IconButton("zoom-in", tr("Больше"), flat=False)
+        cls(minus, "linked-first")
+        cls(plus, "linked-last")
+        self.size_label = QLabel(str(self.app.settings["fontSize"]))
+        self.size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.size_label.setMinimumWidth(40)
+        cls(self.size_label, "heading")
+        minus.clicked.connect(lambda: self.change_font_size(-1))
+        plus.clicked.connect(lambda: self.change_font_size(+1))
+        sl.addWidget(minus)
+        sl.addWidget(self.size_label)
+        sl.addWidget(plus)
+        return box
+
+    def _theme_buttons(self) -> QWidget:
+        """Темы текста — сегментированные кнопки."""
+        themes = QWidget()
+        tl = QHBoxLayout(themes)
+        tl.setContentsMargins(0, 0, 0, 0)
+        tl.setSpacing(0)
+        group = QButtonGroup(themes)
+        for i, (key, text) in enumerate(TEXT_THEMES):
+            b = QPushButton(text)
+            b.setCheckable(True)
+            b.setChecked(self.app.settings["theme"] == key)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            cls(b, "linked-first" if i == 0 else "linked-last" if i == len(TEXT_THEMES) - 1 else "linked")
+            b.toggled.connect(lambda on, k=key: on and self._set("theme", k))
+            group.addButton(b)
+            tl.addWidget(b)
+        return themes
+
+    def change_font_size(self, delta) -> int:
+        """Размер шрифта ±delta в пределах 12–40 (кнопки панели и щипок на тачпаде)."""
+        st = self.app.settings
+        st["fontSize"] = max(12, min(40, st["fontSize"] + delta))
+        if getattr(self, "size_label", None) is not None:
+            self.size_label.setText(str(st["fontSize"]))
+        self.app.save_settings()
+        return st["fontSize"]
 
     def _set(self, key, value):
         self.app.settings[key] = value
@@ -326,78 +351,90 @@ class ReaderPage(QWidget):
         self.page.runJavaScript(code)
 
     def _on_message(self, msg):
+        """Сообщения из страницы читалки: тип → метод _msg_<тип>."""
         t = msg.get("type")
-        if t == "ready":
-            ext = self.book.get("format") or (self.path.name.split(".", 1)[1] if "." in self.path.name else "")
-            ext = {"ios.epub": "epub", "mobi.prc": "mobi", "a4.pdf": "pdf", "a6.pdf": "pdf"}.get(ext, ext)
-            token = uuid.uuid4().hex
-            OPEN_FILES[token] = self.path
-            saved = self.app.library.progress.get(self.book["id"], {})
-            params = {
-                "url": f"{SCHEME}://app/file/{token}/book.{ext}",
-                "name": f"book.{ext}",
-                "cfi": saved.get("cfi"),
-                # у PDF нет CFI — место восстанавливаем по доле прочитанного
-                "fraction": saved.get("fraction"),
-                "settings": self.resolved_settings(),
-                "i18n": web_strings(),
-            }
-            self.js(f"window.reader.open({json.dumps(params)})")
-        elif t == "opened":
-            self.set_ui_visible(self.ui_visible)
-            self._fill_toc(msg.get("toc") or [])
-            self.app.library_view.on_book_metadata(self.book["id"], msg.get("title"), msg.get("author"))
-        elif t == "relocate":
-            if msg.get("fraction") is None:
-                return
-            frac = float(msg["fraction"])
-            if not self.slider.isSliderDown():
-                self.slider.setValue(int(frac * 1000))
-            self.percent.setText(f"{round(frac * 100)}%")
-            self.header.set_title(self.book.get("title") or "", msg.get("chapter") or "")
-            if msg.get("cfi") or self.book.get("format", "").endswith("pdf"):
-                self.app.library.set_progress(self.book["id"], msg.get("cfi"), frac, msg.get("chapter"))
-                self.app.note_activity()
-            if msg.get("atEnd") and not self.book.get("finished"):
-                self.app.set_finished(self.book, True, auto=True)
-            if self._flip_timer.isActive():
-                if msg.get("atEnd"):
-                    self.flip_btn.setChecked(False)   # книга кончилась — автолистание выключаем
-                elif not self._auto_turn:
-                    self._flip_timer.start()           # листнули вручную — отсчёт заново
-                self._auto_turn = False
-            if not self._remote_checked:
-                # Книга встала на своё место — теперь можно подтянуть место с ЛитРес
-                self._remote_checked = True
-                self.app.apply_remote_position(self.book)
-        elif t == "toggle-ui" or t == "swipe-down":
-            self.set_ui_visible(not self.ui_visible)
-        elif t == "swipe-up":
-            if self.toc:
-                self.set_ui_visible(True)
-                self.toc_popover.popup_under(self.toc_btn)
-        elif t == "pinch":
-            step = 2 if float(msg.get("scale") or 1) > 1 else -2
-            st = self.app.settings
-            st["fontSize"] = max(12, min(40, st["fontSize"] + step))
-            self.app.save_settings()
-            self.app.toast(tr('Размер шрифта: {0}', st['fontSize']), timeout=1200)
-        elif t == "tts":
-            self._tts_queue = [x for x in msg.get("segments") or [] if x.get("text")]
-            self._tts_speak_next()
-        elif t == "tts-end":
-            self.tts_btn.setChecked(False)
-            self.app.toast(tr("Чтение вслух: книга дочитана до конца"))
-        elif t == "escape":
-            if self.app.window.isFullScreen():
-                self.app.toggle_fullscreen()
-            else:
-                self.app.go_back()
-        elif t == "external-link":
-            open_external(QUrl(msg.get("href") or ""))
-        elif t == "error":
-            self.app.toast(tr('Не удалось открыть книгу: {0}', msg.get('message')))
+        handler = self.MESSAGES.get(t)
+        if handler:
+            getattr(self, handler)(msg)
         log("reader:", t)
+
+    def _msg_ready(self, msg):
+        ext = self.book.get("format") or (self.path.name.split(".", 1)[1] if "." in self.path.name else "")
+        ext = LOCAL_SUFFIX.get(ext, ext)
+        token = uuid.uuid4().hex
+        OPEN_FILES[token] = self.path
+        saved = self.app.library.progress.get(self.book["id"], {})
+        params = {
+            "url": f"{SCHEME}://app/file/{token}/book.{ext}",
+            "name": f"book.{ext}",
+            "cfi": saved.get("cfi"),
+            # у PDF нет CFI — место восстанавливаем по доле прочитанного
+            "fraction": saved.get("fraction"),
+            "settings": self.resolved_settings(),
+            "i18n": web_strings(),
+        }
+        self.js(f"window.reader.open({json.dumps(params)})")
+
+    def _msg_opened(self, msg):
+        self.set_ui_visible(self.ui_visible)
+        self._fill_toc(msg.get("toc") or [])
+        self.app.library_view.on_book_metadata(self.book["id"], msg.get("title"), msg.get("author"))
+
+    def _msg_relocate(self, msg):
+        if msg.get("fraction") is None:
+            return
+        frac = float(msg["fraction"])
+        if not self.slider.isSliderDown():
+            self.slider.setValue(int(frac * 1000))
+        self.percent.setText(f"{round(frac * 100)}%")
+        self.header.set_title(self.book.get("title") or "", msg.get("chapter") or "")
+        if msg.get("cfi") or self.book.get("format", "").endswith("pdf"):
+            self.app.library.set_progress(self.book["id"], msg.get("cfi"), frac, msg.get("chapter"))
+            self.app.note_activity()
+        if msg.get("atEnd") and not self.book.get("finished"):
+            self.app.set_finished(self.book, True, auto=True)
+        if self._flip_timer.isActive():
+            if msg.get("atEnd"):
+                self.flip_btn.setChecked(False)   # книга кончилась — автолистание выключаем
+            elif not self._auto_turn:
+                self._flip_timer.start()           # листнули вручную — отсчёт заново
+            self._auto_turn = False
+        if not self._remote_checked:
+            # Книга встала на своё место — теперь можно подтянуть место с ЛитРес
+            self._remote_checked = True
+            self.app.apply_remote_position(self.book)
+
+    def _msg_toggle_ui(self, msg):
+        self.set_ui_visible(not self.ui_visible)
+
+    def _msg_swipe_up(self, msg):
+        if self.toc:
+            self.set_ui_visible(True)
+            self.toc_popover.popup_under(self.toc_btn)
+
+    def _msg_pinch(self, msg):
+        size = self.change_font_size(2 if float(msg.get("scale") or 1) > 1 else -2)
+        self.app.toast(tr('Размер шрифта: {0}', size), timeout=1200)
+
+    def _msg_tts(self, msg):
+        self._tts_queue = [x for x in msg.get("segments") or [] if x.get("text")]
+        self._tts_speak_next()
+
+    def _msg_tts_end(self, msg):
+        self.tts_btn.setChecked(False)
+        self.app.toast(tr("Чтение вслух: книга дочитана до конца"))
+
+    def _msg_escape(self, msg):
+        if self.app.window.isFullScreen():
+            self.app.toggle_fullscreen()
+        else:
+            self.app.go_back()
+
+    def _msg_external_link(self, msg):
+        open_external(QUrl(msg.get("href") or ""))
+
+    def _msg_error(self, msg):
+        self.app.toast(tr('Не удалось открыть книгу: {0}', msg.get('message')))
 
     def _fill_toc(self, toc):
         self.toc = toc

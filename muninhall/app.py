@@ -110,6 +110,16 @@ class App(QObject, Appearance):
         super().__init__()
         self.qapp = qapp
         self.library_view = LibraryView(self)      # страница библиотеки
+        self._init_data()
+        self._init_theme()
+        self._init_player()
+        self._init_integrations()
+        self._init_window()
+        self._init_shortcuts()
+        self._start()
+
+    def _init_data(self):
+        """Настройки, папка книг, модель библиотеки, автокопии, коннектор ЛитРес."""
         self.settings = Settings(parent=self)
         core.set_debug(self.settings.get("debugLog"))
         if libraries.ensure_registry(self.settings):      # первый запуск с библиотеками — перенос настроек
@@ -134,16 +144,19 @@ class App(QObject, Appearance):
         self.player_page: PlayerPage | None = None
         self.net = QNetworkAccessManager(self)
 
+    def _init_theme(self):
+        """Тема и акцент: системные (портал) или свои из настроек."""
         style.read_portal_scheme()
         style.set_overrides(self.settings.get("uiTheme"), self.settings.get("accent"))
-        style.apply_palette(qapp)
-        qapp.styleHints().colorSchemeChanged.connect(self._on_theme_changed)
+        style.apply_palette(self.qapp)
+        self.qapp.styleHints().colorSchemeChanged.connect(self._on_theme_changed)
         # Портал не шлёт сигнал в Qt — проверяем смену темы и акцента раз в 2 секунды
         self._scheme = (style.is_dark(), style.ACCENT)
         self._theme_timer = QTimer(self, interval=2000)
         self._theme_timer.timeout.connect(self._poll_theme)
         self._theme_timer.start()
 
+    def _init_player(self):
         self.player = AudioPlayer(self)
         self.player.finished.connect(self._on_audio_finished)
         self.player.error.connect(lambda msg: self.toast(tr('Ошибка воспроизведения: {0}', msg)))
@@ -153,6 +166,8 @@ class App(QObject, Appearance):
         self._audio_timer.timeout.connect(self.save_audio_progress)
         self._audio_timer.start()
 
+    def _init_integrations(self):
+        """Сессия ЛитРес и Singularity; учёт времени чтения."""
         self.litres = LitresSession(self)
         self.litres.state_changed.connect(self.litres_lib.on_login_state)
 
@@ -164,6 +179,7 @@ class App(QObject, Appearance):
         self._activity_timer.start()
         QTimer.singleShot(10_000, self.singularity.sync)
 
+    def _init_window(self):
         self.window = MainWindow(self)
         self.apply_app_icon(self.settings.get("appIcon"))
         self.stack = QStackedWidget()
@@ -174,6 +190,7 @@ class App(QObject, Appearance):
         self.login_page = self._build_login_page()
         self.push(self.library_page)
 
+    def _init_shortcuts(self):
         # горячие клавиши — настраиваются в «Настройки → Внешний вид»
         self.shortcuts: dict[str, QShortcut] = {}
         for action, _title, _keys, slot in SHORTCUTS:
@@ -182,6 +199,8 @@ class App(QObject, Appearance):
             self.shortcuts[action] = sc
         self.apply_shortcuts()
 
+    def _start(self):
+        """Первое заполнение библиотеки и отложенные задачи после показа окна."""
         self._apply_litres_ui()
         if self.has_litres():
             # встроенный Chromium для ЛитРес — когда окно уже на экране
@@ -744,29 +763,30 @@ def _old_version_running() -> bool:
     return False
 
 
-def main(argv=None):
-    argv = sys.argv if argv is None else argv
-    files = [Path(a).resolve() for a in argv[1:] if not a.startswith("-") and Path(a).exists()]
+def _wait_for_previous():
+    """Перезапуск: ждём, пока прежний экземпляр закроется (до 15 с)."""
+    for _ in range(50):
+        probe = QLocalSocket()
+        probe.connectToServer(_server_name())
+        if not probe.waitForConnected(100):
+            break
+        probe.abort()
+        time.sleep(0.3)
 
-    if "--restarted" in argv:
-        # Перезапуск: ждём, пока прежний экземпляр закроется (до 15 с)
-        for _ in range(50):
-            probe = QLocalSocket()
-            probe.connectToServer(_server_name())
-            if not probe.waitForConnected(100):
-                break
-            probe.abort()
-            time.sleep(0.3)
 
-    # Уже запущено — передаём файлы открытому окну и выходим
+def _hand_off(files) -> bool:
+    """Уже запущено — передаём файлы открытому окну."""
     sock = QLocalSocket()
     sock.connectToServer(_server_name())
-    if sock.waitForConnected(300):
-        sock.write(("\n".join(map(str, files)) or "\n").encode())
-        sock.flush()
-        sock.waitForBytesWritten(1000)
-        return 0
+    if not sock.waitForConnected(300):
+        return False
+    sock.write(("\n".join(map(str, files)) or "\n").encode())
+    sock.flush()
+    sock.waitForBytesWritten(1000)
+    return True
 
+
+def _create_qapp(argv) -> QApplication:
     from .reader import register_scheme
     register_scheme()
     QApplication.setApplicationName(APP_SLUG)
@@ -776,24 +796,27 @@ def main(argv=None):
     qapp.setStyle("Fusion")
     qapp.setFont(style.app_font())
     qapp.setWindowIcon(QIcon(str(APP_ICON)))
+    return qapp
 
-    # Переименование «Читалка ЛитРес» → Muninhall: данные переезжают в новые каталоги (один раз)
+
+def _migrate() -> bool:
+    """Переименование «Читалка ЛитРес» → Muninhall: данные переезжают в новые каталоги (один раз).
+    False — прежняя версия ещё открыта, запускаться нельзя."""
     if core.migration_needed() and _old_version_running():
         QMessageBox.information(None, APP_NAME, tr("Закройте прежнюю версию приложения («Читалка ЛитРес» "
                                                    "или Shelfwise) и запустите Muninhall снова: её данные "
                                                    "перенесутся."))
-        return 0
+        return False
     moved = core.migrate_old_dirs()
     backup.migrate_default_dir()
     if moved:
         log("данные прежней версии перенесены:", moved)
-    restored = backup.apply_pending()     # восстановление из копии — до чтения данных
-    app = App(qapp)
-    app.window.show()
-    if restored:
-        QTimer.singleShot(800, lambda: app.toast(tr("Данные восстановлены из резервной копии"), timeout=6000))
+    return True
 
-    server = QLocalServer()
+
+def _listen(app) -> QLocalServer:
+    """Файлы, открытые вторым запуском, приходят сюда."""
+    server = QLocalServer(app)
     QLocalServer.removeServer(_server_name())
     server.listen(_server_name())
 
@@ -809,17 +832,41 @@ def main(argv=None):
             app.window.activateWindow()
         conn.readyRead.connect(read)
     server.newConnection.connect(on_connection)
+    return server
 
+
+def _smoke_test(app, qapp):
+    """Проверка сборки (CI): окно поднялось, библиотека построена — выходим с кодом 0."""
+    def smoke():
+        line = f"MUNINHALL_SMOKE_TEST ok: {APP_NAME} {__version__}, books: {len(app.library.ordered())}"
+        print(line, flush=True)
+        if os.environ.get("MUNINHALL_SMOKE_TEST_FILE"):    # у оконной сборки Windows нет консоли
+            Path(os.environ["MUNINHALL_SMOKE_TEST_FILE"]).write_text(line + "\n", encoding="utf-8")
+        app.window.close()
+        qapp.quit()
+    QTimer.singleShot(int(os.environ.get("MUNINHALL_SMOKE_TEST_MS", "4000")), smoke)
+
+
+def main(argv=None):
+    argv = sys.argv if argv is None else argv
+    files = [Path(a).resolve() for a in argv[1:] if not a.startswith("-") and Path(a).exists()]
+    if "--restarted" in argv:
+        _wait_for_previous()
+    if _hand_off(files):
+        return 0
+    qapp = _create_qapp(argv)
+    if not _migrate():
+        return 0
+    restored = backup.apply_pending()     # восстановление из копии — до чтения данных
+    app = App(qapp)
+    app.window.show()
+    if restored:
+        QTimer.singleShot(800, lambda: app.toast(tr("Данные восстановлены из резервной копии"), timeout=6000))
+    server = _listen(app)
     for f in files:
         QTimer.singleShot(0, lambda f=f: app.import_and_open(f))
     if os.environ.get("MUNINHALL_SMOKE_TEST"):
-        # проверка сборки (CI): окно поднялось, библиотека построена — выходим с кодом 0
-        def smoke():
-            line = f"MUNINHALL_SMOKE_TEST ok: {APP_NAME} {__version__}, books: {len(app.library.ordered())}"
-            print(line, flush=True)
-            if os.environ.get("MUNINHALL_SMOKE_TEST_FILE"):    # у оконной сборки Windows нет консоли
-                Path(os.environ["MUNINHALL_SMOKE_TEST_FILE"]).write_text(line + "\n", encoding="utf-8")
-            app.window.close()
-            qapp.quit()
-        QTimer.singleShot(int(os.environ.get("MUNINHALL_SMOKE_TEST_MS", "4000")), smoke)
-    return qapp.exec()
+        _smoke_test(app, qapp)
+    code = qapp.exec()
+    server.close()
+    return code
