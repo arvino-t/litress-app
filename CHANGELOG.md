@@ -6,6 +6,13 @@ All notable changes to LitRes Reader. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- New app icon: a bookshelf in the GNOME style instead of the LitRes logo (SVG for Linux, a
+  multi-size `.ico` for Windows).
+- About: describes the app as your own library manager with LitRes as a pluggable library, shows the
+  number of libraries and books, credits pdf.js, d3-force and Adwaita, and has an "Open on GitHub"
+  button; Settings → Advanced → About shows the icon, a "More…" button and a link to the docs.
+
 ## [0.15.0] — 2026-10-09
 
 The app is now a manager for **your own library**: you add libraries (folders on disk), read and

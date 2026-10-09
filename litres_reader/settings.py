@@ -201,7 +201,7 @@ class SettingsPage(QWidget):
         self.col.addWidget(box)
         return rows
 
-    def row(self, rows, title, widget=None, hint="", service=None, icon=None):
+    def row(self, rows, title, widget=None, hint="", service=None, icon=None, icon_path=None):
         r = QWidget()
         if rows.count():
             cls(r, "row-top")
@@ -214,6 +214,11 @@ class SettingsPage(QWidget):
             ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
             h.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
             service_icon(ic, service)
+        elif icon_path:
+            ic = QLabel()
+            ic.setFixedSize(ICON_SIZE, ICON_SIZE)
+            ic.setPixmap(QIcon(icon_path).pixmap(QSize(ICON_SIZE, ICON_SIZE), ic.devicePixelRatioF() or 1.0))
+            h.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
         elif icon:
             ic = QLabel()
             ic.setFixedSize(ICON_SIZE, ICON_SIZE)
@@ -459,7 +464,13 @@ class SettingsPage(QWidget):
                     "Папки, вход и библиотека не меняются"), style="destructive")
 
         g = self.group(tr("О приложении"))
-        self.row(g, tr("Читалка ЛитРес"), label(tr('версия {0}', __version__), "dim"))
+        about = QPushButton(tr("Подробнее…"))
+        about.clicked.connect(app.on_about)
+        self.row(g, core.APP_NAME, about, tr("версия {0} · своя библиотека книг и статей; ЛитРес — подключаемая "
+                                             "библиотека", __version__), icon_path=str(core.APP_ICON))
+        self.button(g, tr("Документация и исходный код"), tr("Открыть"),
+                    lambda: QDesktopServices.openUrl(QUrl("https://github.com/arvino-t/litress-app")),
+                    "github.com/arvino-t/litress-app")
         self.col.addStretch()
 
         self.show_tab(st.get("settingsTab") or "general")

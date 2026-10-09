@@ -1390,9 +1390,21 @@ class App(QObject):
         box.setWindowTitle(tr("О приложении"))
         box.setIconPixmap(QIcon(str(APP_ICON)).pixmap(96, 96))
         box.setText(tr('<h3>{0}</h3><p>Версия {1}</p>', APP_NAME, __version__))
-        box.setInformativeText(tr("Чтение и прослушивание книг, купленных на ЛитРес.<br>"
-                               "Вход выполняется на сайте ЛитРес; приложение не хранит пароль.<br><br>"
-                               "Лицензия MIT. Движок чтения — foliate-js (MIT)."))
+        libs = libraries.all_libraries(self.settings)
+        box.setInformativeText(
+            tr("Своя библиотека книг и статей: создавайте, читайте, организуйте и обслуживайте её. "
+               "Библиотеки — папки на диске; у каждой свой граф и свои резервные копии, а все вместе "
+               "они просматриваются как одна большая.<br><br>"
+               "ЛитРес — подключаемая библиотека купленных книг и аудиокниг; вход выполняется на сайте "
+               "ЛитРес, приложение не хранит пароль.")
+            + "<br><br>" + tr("Библиотек: {0} · книг: {1}", len(libs), len(self.library.ordered()))
+            + "<br><br>" + tr("Лицензия MIT. Движок чтения — foliate-js (MIT), PDF — pdf.js (Apache 2.0), "
+                              "граф — d3-force (ISC), значки — Adwaita.")
+            + "<br>" + tr("Документация и исходный код: {0}", "github.com/arvino-t/litress-app"))
+        site = box.addButton(tr("Открыть на GitHub"), QMessageBox.ButtonRole.ActionRole)
+        site.clicked.disconnect()          # кнопка не закрывает окно
+        site.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://github.com/arvino-t/litress-app")))
+        box.addButton(QMessageBox.StandardButton.Close)
         box.exec()
 
     # --- резервные копии

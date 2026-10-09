@@ -63,10 +63,6 @@ EN = {
     "Отключить": "Disconnect",
     "Проверить и синхронизировать": "Check and sync",
     "<h3>{0}</h3><p>Версия {1}</p>": "<h3>{0}</h3><p>Version {1}</p>",
-    "Чтение и прослушивание книг, купленных на ЛитРес.<br>Вход выполняется на сайте ЛитРес; "
-    "приложение не хранит пароль.<br><br>Лицензия MIT. Движок чтения — foliate-js (MIT).":
-        "Read and listen to books bought on LitRes.<br>You sign in on the LitRes website; "
-        "the app does not store your password.<br><br>MIT License. Reading engine: foliate-js (MIT).",
     "Книг пока нет": "No books yet",
     "Открыть файл с компьютера": "Open a file from this computer",
     "Скачиваю книги: {0} из {1}": "Downloading books: {0} of {1}",
@@ -370,7 +366,6 @@ EN = {
     "Кэш": "Cache",
     "Можно удалить — приложение создаст заново": "Safe to delete — the app recreates it",
     "Открыть папку": "Open folder",
-    "версия {0}": "version {0}",
     "Убрать": "Remove",
     "Последняя: ": "Last: ",
     "Копий ещё не было": "No backups yet",
@@ -483,4 +478,24 @@ EN = {
     "сохранятся в отдельную копию. Приложение перезапустится.":
         "Marks, reading positions and the graph of the \"{0}\" library will be replaced with the backup; "
         "the current data is backed up first. The app will restart.",
+
+    # --- о приложении
+    "Своя библиотека книг и статей: создавайте, читайте, организуйте и обслуживайте её. Библиотеки — "
+    "папки на диске; у каждой свой граф и свои резервные копии, а все вместе они просматриваются как "
+    "одна большая.<br><br>ЛитРес — подключаемая библиотека купленных книг и аудиокниг; вход выполняется "
+    "на сайте ЛитРес, приложение не хранит пароль.":
+        "Your own library of books and articles: build it, read it, organize it and look after it. Libraries "
+        "are folders on disk; each has its own graph and backups, and together they can be browsed as one "
+        "big library.<br><br>LitRes is a pluggable library of purchased books and audiobooks; you sign in on "
+        "the LitRes website, and the app doesn't store your password.",
+    "Лицензия MIT. Движок чтения — foliate-js (MIT), PDF — pdf.js (Apache 2.0), граф — d3-force (ISC), "
+    "значки — Adwaita.":
+        "MIT License. Reading engine: foliate-js (MIT), PDF: pdf.js (Apache 2.0), graph: d3-force (ISC), "
+        "icons: Adwaita.",
+    "Документация и исходный код: {0}": "Documentation and source code: {0}",
+    "Открыть на GitHub": "Open on GitHub",
+    "Подробнее…": "More…",
+    "версия {0} · своя библиотека книг и статей; ЛитРес — подключаемая библиотека":
+        "version {0} · your own library of books and articles; LitRes is a pluggable library",
+    "Документация и исходный код": "Documentation and source code",
 }
