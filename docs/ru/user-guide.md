@@ -38,7 +38,8 @@ Muninhall — приложение для Linux и Windows, чтобы созд�
   пользователя, без прав администратора; Python не нужен. Ярлыки — в меню «Пуск» (и по желанию на
   рабочем столе), EPUB/FB2/MOBI/PDF — в «Открыть с помощью». Удаление — через «Параметры → Приложения».
 - **`Muninhall.flatpak`** — для любого Linux с Flatpak: `flatpak install --user Muninhall.flatpak`.
-  Данные общие с обычной установкой (`~/.local/share/muninhall` и т. д.).
+  Данные общие с обычной установкой (`~/.local/share/muninhall` и т. д.). Чтение вслух во Flatpak
+  пока недоступно (нет доступа к speech-dispatcher системы).
 
 ### Linux из исходников (Fedora, Ubuntu/Debian, Arch)
 

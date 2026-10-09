@@ -6,6 +6,8 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-10-09
+
 ### Changed
 - New default app icon: the letter "M" formed by two raven wings (SVG and a multi-size `.ico`).
 
@@ -288,7 +290,8 @@ library. The interface stays the same — "Source" is now the name of a library.
   pitch and a sleep timer.
 - VPN bypass for LitRes (`vpn-bypass/`).
 
-[Unreleased]: https://github.com/arvino-t/muninhall/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/arvino-t/muninhall/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/arvino-t/muninhall/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/arvino-t/muninhall/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/arvino-t/muninhall/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/arvino-t/muninhall/compare/v0.14.0...v0.15.0

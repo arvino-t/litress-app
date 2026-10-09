@@ -38,7 +38,8 @@ Each version on the [releases page](https://github.com/arvino-t/muninhall/releas
   without administrator rights; no Python needed. Shortcuts go to the Start menu (and optionally the
   desktop), EPUB/FB2/MOBI/PDF are added to "Open with". Uninstall via "Settings → Apps".
 - **`Muninhall.flatpak`** — for any Linux with Flatpak: `flatpak install --user Muninhall.flatpak`.
-  Data is shared with the native install (`~/.local/share/muninhall` etc.).
+  Data is shared with the native install (`~/.local/share/muninhall` etc.). Read aloud is not available
+  in the Flatpak yet (no access to the system's speech-dispatcher).
 
 ### Linux from source (Fedora, Ubuntu/Debian, Arch)
 

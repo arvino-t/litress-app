@@ -129,7 +129,8 @@ Test features against the installed package (`bash install.sh`), not only the so
 
 `packaging/windows` — PyInstaller spec and Inno Setup script (one per-user installer);
 `packaging/flatpak` — Flatpak manifest (freedesktop 24.08 runtime + PySide6 wheels), desktop entry and
-metainfo. Both are built by `.github/workflows/build.yml` (manually or on a `v*` tag), which runs the tests,
+metainfo (the runtime lacks Kerberos, so `krb5` is built; read aloud is unavailable in the Flatpak — no
+speech-dispatcher). Both are built by `.github/workflows/build.yml` (manually or on a `v*` tag), which runs the tests,
 smoke-tests each build (`MUNINHALL_SMOKE_TEST=1` starts the app, builds the library and exits) and attaches
 the installers to the release.
 
