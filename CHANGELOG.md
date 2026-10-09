@@ -6,46 +6,46 @@ All notable changes to LitRes Reader. The format is based on
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-10-09
+
+The app is now a manager for **your own library**: you add libraries (folders on disk), read and
+organize them, and browse them together as one big library. LitRes becomes a pluggable commercial
+library. The interface stays the same — "Source" is now the name of a library.
+
 ### Added
-- User guide in Russian and English in `docs/ru/` and `docs/en/`.
-
-- Test suite (`tests/`, pytest): library model and folder scanning, backups, translation coverage,
-  package data.
-
-### Changed
-- Project documentation (README, CHANGELOG, TODO) is now in English.
-- Your folders become **libraries**: a registry of libraries (`libraries` setting) replaces
-  `localFolders`; existing folders and LitRes are migrated automatically on first start.
-- A library's data (read marks, reading positions) is stored in its own folder, `<root>/.library/`,
-  keyed by the path inside the library — it travels with the books (cloud sync, another computer).
-  Data of your books is moved there from the app's shared files on first start.
-- Backups include the data of all your libraries (`libraries/<id>/…` in the archive).
+- **Libraries**: a registry of libraries (`libraries` setting) replaces `localFolders`; existing
+  folders and LitRes are migrated automatically on first start.
+- A library's data (read marks, reading positions, graph state) is stored in its own folder,
+  `<root>/.library/`, keyed by the path inside the library — it travels with the books (cloud sync,
+  another computer). Data of your books is moved there from the app's shared files on first start.
 - Settings → **Libraries** tab: your libraries (folder, book count, Rename, Remove from the app) and
   LitRes (sign in/out, books folder, Disconnect); "Add library…" adds a folder library or connects
   LitRes. The Folders group moved here from General.
-- The Source filter lists libraries from the registry: All, LitRes (Books, Audiobooks) and each of
-  your libraries; Subfolder shows the folders of the selected library.
-- LitRes is optional: when disconnected, its books, sign-in, sync and "Download all" disappear from
-  the app (data and session are kept); F5 then rescans your folders.
 - **Graph per library:** a library selector in the graph header (All libraries, LitRes, each of your
-  libraries), defaulting to the library chosen in the Source filter. Each library keeps its own graph
-  state (tag kinds, filters): your library in `.library/graph.json` (also backed up), LitRes and All in
-  the settings. The All / LitRes / Mine toggle is hidden for a single library.
-- **Backups per library:** the Backups tab has a library selector; "Back up" and the restore list
-  apply to the chosen library. An "All libraries" backup (also the automatic one) holds settings,
-  statistics, Singularity and every library's data; a library backup holds only its marks, positions
-  and graph (`-lib-<id>` / `-litres` in the file name, `scope` in the manifest). Each library keeps its
-  own number of backups; restoring one library doesn't touch the others.
-- **Statistics by library:** the statistics window has a library selector (All libraries by default).
-  Reading time is now also recorded per library (`lib_days` in `stats.json`); earlier time is
-  attributed to LitRes when only LitRes books were read in the app.
-- **Singularity by library:** the Singularity window lets you choose whose books become tasks
-  (all libraries by default; "Want to read" stays LitRes-only).
-- LitRes is now a connector (`litres_connector.py`): sign-in, sync, downloads (single and all),
-  LitRes folders, the position from the phone and genre loading moved out of the main window class.
+  libraries), defaulting to the library chosen in the Source filter; graph state is kept per library.
+- **Backups per library:** a library selector on the Backups tab; an "All libraries" backup (also the
+  automatic one) holds settings, statistics, Singularity and every library's data; a library backup
+  holds only its marks, positions and graph. Retention is counted per library; restoring one library
+  doesn't touch the others.
+- **Statistics by library:** a library selector in the statistics window; reading time is also
+  recorded per library (earlier time is attributed to LitRes when only LitRes books were read).
+- **Singularity by library:** choose whose books become tasks ("Want to read" stays LitRes-only).
+- User guide in Russian and English in `docs/ru/` and `docs/en/`.
+- Test suite (`tests/`, pytest): library model, folder scanning and stores, migration, backups,
+  graph scope, statistics, Singularity filter, translation coverage, package data.
+
+### Changed
+- The Source filter lists libraries: All, LitRes (Books, Audiobooks) and each of your libraries;
+  Subfolder shows the folders of the selected library.
+- LitRes is optional: when disconnected, its books, sign-in, sync and "Download all" disappear from the
+  app (data and session are kept); F5 then rescans your folders.
+- LitRes is a connector (`litres_connector.py`): sign-in, sync, downloads, LitRes folders, the position
+  from the phone and genre loading moved out of the main window class.
+- Project documentation (README, CHANGELOG, TODO) and GitHub texts are in English.
 
 ### Fixed
 - Backups made within the same second could be pruned in the wrong order, deleting the newest one.
+- Switching the graph between libraries carried over the previous library's filters.
 
 ## [0.14.0] — 2026-10-09
 
@@ -224,7 +224,8 @@ All notable changes to LitRes Reader. The format is based on
   pitch and a sleep timer.
 - VPN bypass for LitRes (`vpn-bypass/`).
 
-[Unreleased]: https://github.com/arvino-t/litress-app/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/arvino-t/litress-app/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/arvino-t/litress-app/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/arvino-t/litress-app/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/arvino-t/litress-app/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/arvino-t/litress-app/compare/v0.11.0...v0.12.0

@@ -2,18 +2,19 @@
 
 [Русская версия](../ru/user-guide.md)
 
-LitRes Reader is a Linux and Windows app for the books and audiobooks you bought on
-[LitRes](https://www.litres.ru). It downloads them and opens them in a built-in reader and audio
-player. It also opens your own books and articles (EPUB, FB2, MOBI, PDF) straight from folders on
-disk. The look follows GNOME; light and dark themes follow the system. The interface is available
+LitRes Reader is a Linux and Windows app to build, read and organize **your own library**. A library
+is a folder on disk with books and articles (EPUB, FB2, MOBI, PDF); you can have several, and together
+they can be browsed as one big library. **[LitRes](https://www.litres.ru)** is a pluggable commercial
+library: purchased books and audiobooks are downloaded and opened in the built-in reader and audio
+player. The look follows GNOME; light and dark themes follow the system. The interface is available
 in Russian and English.
 
 ## Contents
 
 - [Installation](#installation)
-- [Signing in to LitRes](#signing-in-to-litres)
-- [Library](#library)
-- [Your own books and articles](#your-own-books-and-articles)
+- [Libraries](#libraries)
+- [LitRes](#litres)
+- [The library view](#the-library-view)
 - [Reading](#reading)
 - [Audiobooks](#audiobooks)
 - [Continue reading and auto-resume](#continue-reading-and-auto-resume)
@@ -53,27 +54,56 @@ Uninstall via "Settings → Apps".
 
 The first installation takes a while: PySide6 (Qt with the built-in Chromium) is about 600 MB.
 
-## Signing in to LitRes
+## Libraries
 
-Menu → "Sign in to LitRes". The LitRes website opens — sign in as usual: with a password, an SMS
-code or a social account. The app never sees or stores your password; after you sign in it uses
-the session of its built-in browser. "Sign out of LitRes" (in the menu or in Settings →
-Integrations) erases the session; downloaded books and progress stay.
+The libraries added to the app are in Settings → Libraries.
 
-## Library
+- **Your own library** is a root folder on disk. Its subfolders become subfolders in the filter.
+  Files open in place: the app doesn't copy, rename or delete them.
+- **A library's data** (read marks, reading positions, graph state) is stored inside it, in the
+  hidden `.library` folder. If the folder syncs to the cloud, the data moves to another computer
+  together with the books.
+- "Add library…" → "Your own library — a folder on disk…": choose a folder and give it a name.
+  "Rename…" changes the name, "Remove" removes the library from the app (the folder and its
+  `.library` stay). "Rescan" (or F5) looks through the folders again.
+- On first start, three folders in Documents are added if they exist:
 
-After you sign in, the books from your account load automatically. Refresh with F5 or the button
-at the top left; while the window is open the library also refreshes by itself (every 15 minutes
-by default). Search by title and author with Ctrl+F.
+  | Folder | Library |
+  |---|---|
+  | `Documents/Books/others` | Other books |
+  | `Documents/articles` | Articles |
+  | `Documents/trainings` | Trainings and presentations |
+
+- Each library has its own graph and its own backups; statistics are shared but can be viewed per
+  library.
+
+## LitRes
+
+LitRes is connected as a library: Settings → Libraries → Add library… → LitRes. Without it, nothing
+about LitRes appears in the app. "Disconnect" in the LitRes row hides its books, sign-in and sync;
+downloaded files, marks and the sign-in are kept — you can connect it again.
+
+**Signing in.** "Sign in" in the LitRes row (or menu → "Sign in to LitRes") opens the LitRes website —
+sign in as usual: with a password, an SMS code or a social account. The app never sees or stores your
+password; after you sign in it uses the session of its built-in browser. "Sign out" erases the
+session; downloaded books and progress stay. The same row has "Books folder…" — where LitRes books
+are downloaded.
+
+After you sign in, the books from your account load automatically; while the window is open the list
+also refreshes by itself (every 15 minutes by default), or press F5.
+
+## The library view
+
+Search by title and author with Ctrl+F.
 
 **Filters** above the list:
 
 - **Status** — All, Reading, Unread, Read. The numbers on the buttons count the books of the
   selected source and subfolder.
-- **Source** — All, LitRes (with Books and Audiobooks under it) and My books and articles (with
-  the sections of your folders under it).
-- **Subfolder** — for LitRes, your LitRes folders (and No folder); for your own books, the folders
-  on disk inside the section. Choosing a folder also shows the books in its subfolders.
+- **Source** — All (all libraries together), LitRes (with Books and Audiobooks under it) and each of
+  your libraries by name.
+- **Subfolder** — for LitRes, your LitRes folders (and No folder); for your own library, its folders
+  on disk. Choosing a folder also shows the books in its subfolders.
 - **Sort by** — recent, as on LitRes, title, author, series, progress, purchase date.
 
 **Book card.** Click a cover — the book is downloaded (EPUB, otherwise FB2 or MOBI) and opened.
@@ -89,24 +119,6 @@ sync if you are offline.
 books together with audiobooks. Books are downloaded one at a time with progress in the header;
 stop with the same menu item. At the end you see a summary; books that failed and the reasons go to
 the log.
-
-## Your own books and articles
-
-The app finds EPUB, FB2, MOBI and PDF files in folders by itself. By default these are three
-folders in Documents:
-
-| Folder | Section |
-|---|---|
-| `Documents/Books/others` | Other books |
-| `Documents/articles` | Articles |
-| `Documents/trainings` | Trainings and presentations |
-
-Set up folders in Settings → General → Folders: "Add folder…" (the app asks for a section name),
-"Rename…", "Remove", "Rescan" (F5 rescans too). The section is shown on cards and as its own item
-in the Source filter; subfolders appear in the Subfolder filter.
-
-Files open in place: the app doesn't copy, rename or delete them. The reading position is saved;
-a PDF's cover is its first page.
 
 ## Reading
 
@@ -154,7 +166,9 @@ player.
 ## Book graph
 
 Menu → "Book graph" or Ctrl+G. The graph works like the one in Obsidian: books and tags are nodes,
-and each book–tag link is an edge.
+and each book–tag link is an edge. Each library has its own graph: choose the library in the header
+(the one selected in the Source filter by default); "All libraries" shows the combined graph. Graph
+settings (tag kinds, filters) are remembered per library.
 
 - Tags: LitRes genres and tags, your LitRes folders, series, authors, topics of your own books and
   articles. Turn tag kinds on in the panel on the left; it also has search and an All / LitRes /
@@ -168,7 +182,8 @@ and each book–tag link is an edge.
 ## Reading statistics
 
 Menu → "Reading statistics". Minutes today and this week, day streak, finished books, a two-week
-chart and the books you spent the most time on.
+chart and the books you spent the most time on. The selector on the left of the header shows one
+library (all by default).
 
 Reading on your phone or the LitRes website counts too: on sync, the progress gained is converted
 into time (text — about 1300 characters per minute based on the book's length, audio — by duration)
@@ -181,9 +196,10 @@ Menu → "Settings" or Ctrl+,. Changes apply immediately.
 
 | Tab | What's there |
 |---|---|
-| **General** | interface language (system default, Русский, English — after restart); open the last book on startup; downloaded only; download all books; folders (downloaded LitRes books, your folders and sections); statistics |
+| **General** | interface language (system default, Русский, English — after restart); open the last book on startup; downloaded only; download all books (if LitRes is connected); statistics |
+| **Libraries** | your libraries and LitRes — see [Libraries](#libraries) and [LitRes](#litres) |
 | **Reading** | text appearance, read aloud, auto page turn, audiobook speed |
-| **Integrations** | LitRes (sign in and out) and Singularity |
+| **Integrations** | Singularity |
 | **Backups** | see [Backups](#backups) |
 | **Advanced** | how often to refresh the library from LitRes and "Refresh now"; reading speed for estimating phone reading; verbose log; data, settings and cache folders; reset settings |
 
@@ -194,15 +210,18 @@ the LitRes sign-in and the library are kept.
 
 Settings → Backups.
 
-- **What's in a backup:** settings, the library (folders, marks, paths to downloaded books), reading
-  positions and bookmarks, statistics, Singularity settings. Books, covers and the LitRes sign-in
-  are not included. The Singularity token is included only if "Include the Singularity token" is on.
-- **When:** with the "Back up" button and automatically — daily or weekly (weekly by default). Old
-  backups beyond the set number are deleted.
+- **Library:** the selector at the top sets which library "Back up" and the backup list apply to.
+- **What's in a backup:** an "All libraries" backup holds settings, statistics, Singularity settings
+  and the data of every library; a single-library backup holds its marks, reading positions and
+  graph. Books, covers and the LitRes sign-in are not included. The Singularity token goes into an
+  "All libraries" backup only if "Include the Singularity token" is on.
+- **When:** with the "Back up" button and automatically — an all-libraries backup daily or weekly
+  (weekly by default). Old backups beyond the set number are deleted, counted per library.
 - **Where:** `Documents/Backups/litres-reader` by default; you can change the folder. If your
   Documents folder syncs to the cloud, the backups end up there too.
 - **Restore:** from the list of recent backups or from a file (for example, from another computer).
-  Before restoring, the current data is backed up separately, and the app restarts. The books and
+  A single-library backup restores only that library. Before restoring, the current data is backed
+  up separately, and the app restarts. The books and
   backup folders stay as they are on this computer.
 - Backup files are accessible only to your user account.
 
@@ -219,6 +238,7 @@ projects and habits) and choose what to sync:
   "Книги" as the same task.
 - **Daily reading** — the "Чтение N минут" habit is checked automatically once you reach N minutes
   of reading or listening in a day.
+- **Libraries** — whose books become tasks (all libraries by default; "Want to read" is LitRes-only).
 
 Sync runs after the LitRes sync, when you mark a book as read and every couple of minutes while you
 read. The app finds its own tasks by `externalId`, so there are no duplicates. Project and habit
@@ -240,19 +260,20 @@ sudo bash vpn-bypass/install.sh --remove  # remove (and restore the original kil
 
 | What | Linux | Windows |
 |---|---|---|
-| Books, covers, library, progress | `~/.local/share/litres-reader/` | `%LOCALAPPDATA%\litres-reader\` |
+| Your library's data (marks, positions, graph) | `<library folder>/.library/` | `<library folder>\.library\` |
+| LitRes books, covers, LitRes data | `~/.local/share/litres-reader/` | `%LOCALAPPDATA%\litres-reader\` |
 | LitRes session | `~/.local/share/litres-reader/webengine/` | `%LOCALAPPDATA%\litres-reader\webengine\` |
 | Settings, Singularity token | `~/.config/litres-reader/` | `%APPDATA%\litres-reader\` |
 | Cache (service icons) | `~/.cache/litres-reader/` | `%LOCALAPPDATA%\litres-reader\cache\` |
 
-You can change the folder for downloaded books in Settings → General → Folders. Data files are
+You can change the folder for LitRes books in Settings → Libraries. Data files are
 created with owner-only access. Downloaded books and progress remain after uninstalling the app.
 
 ## Keyboard shortcuts
 
 | Keys | Action |
 |---|---|
-| F5, Ctrl+R | refresh the library from LitRes |
+| F5, Ctrl+R | refresh the library (LitRes and your folders) |
 | Ctrl+F | search |
 | Ctrl+O | open a file |
 | Ctrl+G | book graph |

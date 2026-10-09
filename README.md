@@ -1,19 +1,22 @@
 # LitRes Reader
 
-A desktop app for Linux and Windows to read and listen to the books and audiobooks you bought on
-[LitRes](https://www.litres.ru), plus your own e-books and articles from folders on disk.
-It signs in on the LitRes website in a built-in browser, downloads books, and opens them in a
-built-in reader (EPUB, FB2, MOBI, PDF) and audiobook player (M4B, MP3). The UI follows GNOME's
-libadwaita style on both systems and is available in Russian and English.
+A desktop app for Linux and Windows to build, read and organize **your own library** of e-books and
+articles, and to look after it with extra features. A library is a folder on disk (EPUB, FB2, MOBI,
+PDF); you can add several and browse them together as one big library. Each library keeps its data
+(marks, reading positions, graph) inside its folder, has its own graph and its own backups.
+[LitRes](https://www.litres.ru) is a pluggable commercial library: the app signs in on the LitRes
+website in a built-in browser and downloads purchased books and audiobooks. Books open in a built-in
+reader and audiobook player (M4B, MP3). The UI follows GNOME's libadwaita style on both systems and
+is available in Russian and English.
 
 **User guide:** [English](docs/en/user-guide.md) · [Русский](docs/ru/user-guide.md)
 
 ## Features
 
-- **LitRes library** — purchased books and audiobooks, LitRes folders, "read" marks synced both
-  ways, download one book or all of them at once.
-- **Your own books and articles** — EPUB, FB2, MOBI and PDF found in your folders, grouped into
-  named sections with subfolder filtering; files are opened in place.
+- **Libraries** — named folder libraries with subfolder filtering; files are opened in place, data
+  lives in `<library>/.library/` and travels with the folder (e.g. via cloud sync).
+- **LitRes (optional)** — purchased books and audiobooks, LitRes folders, "read" marks synced both
+  ways, download one book or all of them at once; can be disconnected.
 - **Reader** — page turning by tap, swipe and keys; themes, fonts and layout; contents; gestures;
   auto page turn; read aloud with sentence highlighting; PDF via pdf.js.
 - **Audiobook player** — M4B chapters, speed 0.75–2× without pitch change, sleep timer, background
@@ -21,10 +24,10 @@ libadwaita style on both systems and is available in Russian and English.
 - **Continue reading** — resumes the last book on startup and picks up the position from your phone
   or the LitRes website.
 - **Book graph** — an Obsidian-style graph of books and tags (genres, folders, series, authors,
-  topics).
-- **Reading statistics** — minutes per day, streaks, finished books, including reading on the phone.
-- **Backups** — manual and scheduled backups of settings, library, progress and statistics;
-  restore from a list or a file.
+  topics), per library or for all of them.
+- **Reading statistics** — minutes per day, streaks, finished books, including reading on the phone;
+  for all libraries or one.
+- **Backups** — manual and scheduled backups for all libraries or one; restore from a list or a file.
 - **Singularity integration** — "Reading" tasks, progress notes and a daily reading habit in
   [SingularityApp](https://singularity-app.com).
 
@@ -67,7 +70,8 @@ Requires Python 3.10+ and `PySide6>=6.10,<6.12` (Qt 6 with QtWebEngine).
 ```
 
 The tests use the source tree and a temporary data directory (never your real data). They cover
-the library model and folder scanning, backups, translation coverage and package data.
+the library model and folder scanning, library stores and migration, backups (all and per library),
+the graph scope, per-library statistics, the Singularity filter, translation coverage and package data.
 
 Environment variables:
 
@@ -80,13 +84,15 @@ Environment variables:
 
 | Path | Contents |
 |---|---|
-| `litres_reader/app.py` | main window, library page, LitRes sync, downloads, dialogs, app startup |
-| `litres_reader/core.py` | paths, default settings, the `Library` model (books, progress, statistics) |
+| `litres_reader/app.py` | main window, library page and filters, own libraries, dialogs, app startup |
+| `litres_reader/core.py` | paths, default settings, the `Library` model (books, progress, statistics, per-library stores) |
+| `litres_reader/libraries.py` | the registry of libraries (`libraries` setting) and its migration |
+| `litres_reader/litres_connector.py` | the LitRes connector: sign-in, sync, downloads, LitRes folders, remote position |
 | `litres_reader/litres.py` | LitRes session and API inside the built-in Chromium (QtWebEngine) |
 | `litres_reader/reader.py` | reader page (foliate-js in QtWebEngine), `litreader://` scheme |
 | `litres_reader/player.py` | audiobook player (QtMultimedia), M4B chapter parsing |
 | `litres_reader/settings.py` | settings page (tabs: General, Reading, Integrations, Backups, Advanced) |
-| `litres_reader/backup.py` | backup archives and two-step restore |
+| `litres_reader/backup.py` | backup archives (all libraries or one) and two-step restore |
 | `litres_reader/graph.py` | book graph data and page |
 | `litres_reader/stats.py` | reading statistics dialog |
 | `litres_reader/singularity.py` | SingularityApp sync |
@@ -99,6 +105,7 @@ Environment variables:
 | `install.sh`, `install.cmd`, `windows/` | installers |
 | `vpn-bypass/` | Linux scripts to reach LitRes directly while a VPN is on |
 | `docs/en/`, `docs/ru/` | user guide in English and Russian |
+| `tests/` | pytest suite |
 
 ### Translations
 
