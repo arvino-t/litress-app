@@ -5,9 +5,9 @@ import datetime as dt
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QDialog, QFrame, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
 
-from . import style
+from . import libraries, style
 from .i18n import plural, tr
 from .widgets import HeaderBar, IconButton, cls, label
 
@@ -100,31 +100,26 @@ def tile(value: str, caption: str) -> QFrame:
     return f
 
 
-def show_stats(app):
-    lib = app.library
-    days = lib.stats.get("days", {})
-    remote = lib.stats.get("remote_days", {})
-    week_remote = sum(remote.get((dt.date.today() - dt.timedelta(days=i)).isoformat(), 0) for i in range(7)) // 60
-    today_remote = remote.get(dt.date.today().isoformat(), 0) // 60
+def stats_body(lib, scope: str) -> QWidget:
+    """Плитки, график и книги с наибольшим временем — по всем библиотекам или по одной."""
+    if scope == "all":
+        def in_scope(_bid):
+            return True
+        days, remote = lib.stats.get("days", {}), lib.stats.get("remote_days", {})
+    else:
+        def in_scope(bid):
+            return lib.library_key(lib.books.get(bid)) == scope
+        days = lib.stats.get("lib_days", {}).get(scope, {})
+        remote = lib.stats.get("lib_remote_days", {}).get(scope, {})
     today = dt.date.today()
+    week_remote = sum(remote.get((today - dt.timedelta(days=i)).isoformat(), 0) for i in range(7)) // 60
+    today_remote = remote.get(today.isoformat(), 0) // 60
     week = sum(days.get((today - dt.timedelta(days=i)).isoformat(), 0) for i in range(7)) // 60
     today_min = days.get(today.isoformat(), 0) // 60
     month = today.strftime("%Y-%m")
-    finished_month = sum(1 for d in lib.stats.get("finished", {}).values() if d.startswith(month))
-    total_finished = len(lib.stats.get("finished", {}))
+    finished = [d for bid, d in lib.stats.get("finished", {}).items() if in_scope(bid)]
+    finished_month = sum(1 for d in finished if d.startswith(month))
     st = streak(days)
-
-    dlg = QDialog(app.window, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
-    dlg.setMinimumWidth(620)
-    outer = QVBoxLayout(dlg)
-    outer.setContentsMargins(0, 0, 0, 0)
-    outer.setSpacing(0)
-    header = HeaderBar(dlg, tr("Статистика чтения"), show_controls=False)
-    close = IconButton("window-close", tr("Закрыть"), flat=False)
-    cls(close, "wincontrol")
-    close.clicked.connect(dlg.accept)
-    header.pack_end(close)
-    outer.addWidget(header)
 
     body = QWidget()
     b = QVBoxLayout(body)
@@ -136,7 +131,7 @@ def show_stats(app):
     tiles.addWidget(tile(f"{today_min}", tr('{0} сегодня{1}', minutes_word(today_min), phone(today_remote))), 0, 0)
     tiles.addWidget(tile(f"{week}", tr('{0} за неделю{1}', minutes_word(week), phone(week_remote))), 0, 1)
     tiles.addWidget(tile(f"{st}", tr('{0} подряд', days_word(st))), 0, 2)
-    tiles.addWidget(tile(f"{finished_month}", tr('дочитано в этом месяце · всего {0}', total_finished)), 0, 3)
+    tiles.addWidget(tile(f"{finished_month}", tr('дочитано в этом месяце · всего {0}', len(finished))), 0, 3)
     b.addLayout(tiles)
 
     b.addWidget(label(tr("Последние две недели, минут в день"), "heading"))
@@ -146,7 +141,8 @@ def show_stats(app):
                           "Оценка по приросту процента: текст — ~1300 знаков в минуту, аудио — по длительности."),
                           "dim", "caption", wrap=True))
 
-    top = sorted(lib.stats.get("books", {}).items(), key=lambda kv: -kv[1])[:5]
+    top = sorted(((bid, sec) for bid, sec in lib.stats.get("books", {}).items() if in_scope(bid)),
+                 key=lambda kv: -kv[1])[:5]
     top = [(lib.books[bid], sec) for bid, sec in top if bid in lib.books]
     if top:
         b.addWidget(label(tr("Больше всего времени"), "heading"))
@@ -168,7 +164,42 @@ def show_stats(app):
         b.addWidget(box)
     else:
         b.addWidget(label(tr("Пока пусто — статистика копится, пока вы читаете и слушаете."), "dim", wrap=True))
-    outer.addWidget(body)
+    return body
+
+
+def show_stats(app):
+    dlg = QDialog(app.window, Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+    dlg.setMinimumWidth(620)
+    outer = QVBoxLayout(dlg)
+    outer.setContentsMargins(0, 0, 0, 0)
+    outer.setSpacing(0)
+    header = HeaderBar(dlg, tr("Статистика чтения"), show_controls=False)
+    close = IconButton("window-close", tr("Закрыть"), flat=False)
+    cls(close, "wincontrol")
+    close.clicked.connect(dlg.accept)
+    header.pack_end(close)
+    # статистика общая, но её можно посмотреть по одной библиотеке
+    libs = libraries.all_libraries(app.settings)
+    scopes = ["all"] + [lib["id"] for lib in libs]
+    scope_combo = QComboBox()
+    scope_combo.addItems([tr("Все библиотеки")] + [lib["name"] for lib in libs])
+    scope_combo.setVisible(len(scopes) > 2)
+    header.pack_start(scope_combo)
+    outer.addWidget(header)
+
+    holder = QVBoxLayout()
+    outer.addLayout(holder)
+    current = [None]
+
+    def show(idx):
+        if current[0] is not None:
+            holder.removeWidget(current[0])
+            current[0].deleteLater()
+        current[0] = stats_body(app.library, scopes[idx])
+        holder.addWidget(current[0])
+        dlg.adjustSize()
+    scope_combo.currentIndexChanged.connect(show)
+    show(0)
 
     frame = QFrame(dlg)
     frame.setObjectName("popover")

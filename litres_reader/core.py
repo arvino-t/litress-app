@@ -264,6 +264,13 @@ class Library:
         self.hidden_sources: set[str] = set()
         # Статистика: секунды чтения по дням и по книгам, даты дочитывания
         self.stats: dict = {"days": {}, "books": {}, "finished": {}, **load_json(STATS_FILE, {})}
+        if "lib_days" not in self.stats:
+            # по библиотекам время пишется с версии 0.15; раньше в приложении читали только книги ЛитРес —
+            # если в статистике нет других книг, прошлое время целиком относим к ЛитРес
+            only_litres = all(str(b).isdigit() for b in self.stats["books"])
+            self.stats["lib_days"] = {"litres": dict(self.stats["days"])} if only_litres and self.stats["days"] else {}
+            self.stats["lib_remote_days"] = ({"litres": dict(self.stats.get("remote_days", {}))}
+                                             if only_litres and self.stats.get("remote_days") else {})
         for d in (books_dir(), COVERS_DIR, SESSION_DIR):
             d.mkdir(parents=True, exist_ok=True)
         # Пишем прогресс на диск не чаще раза в 2 секунды — при листании событий много
@@ -579,11 +586,23 @@ class Library:
 
     # --- статистика чтения
 
+    def library_key(self, book) -> str:
+        """К какой библиотеке относится книга: "litres", id своей библиотеки или "local" (открытый файл)."""
+        if not book:
+            return "local"
+        return "litres" if book.get("source") == "litres" else book.get("library") or "local"
+
+    def _add_lib_day(self, key, bid, day, seconds):
+        lib = self.library_key(self.books.get(bid))
+        days = self.stats.setdefault(key, {}).setdefault(lib, {})
+        days[day] = days.get(day, 0) + seconds
+
     def add_reading_time(self, bid, seconds):
         day = time.strftime("%Y-%m-%d")
         self.stats["days"][day] = self.stats["days"].get(day, 0) + seconds
         if bid:
             self.stats["books"][bid] = self.stats["books"].get(bid, 0) + seconds
+            self._add_lib_day("lib_days", bid, day, seconds)
         save_json(STATS_FILE, self.stats)
 
     def add_remote_reading(self, book, percent_delta: float, when: float):
@@ -602,6 +621,8 @@ class Library:
             self.stats[key][k] = self.stats[key].get(k, 0) + seconds
         remote = self.stats.setdefault("remote_days", {})
         remote[day] = remote.get(day, 0) + seconds
+        self._add_lib_day("lib_days", book["id"], day, seconds)
+        self._add_lib_day("lib_remote_days", book["id"], day, seconds)
         save_json(STATS_FILE, self.stats)
         log(f"чтение вне приложения: {book.get('title')} +{percent_delta:g}% ≈ {seconds // 60} мин ({day})")
 

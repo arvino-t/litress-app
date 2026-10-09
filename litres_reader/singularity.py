@@ -36,6 +36,7 @@ DEFAULTS = {
     "wishlist": False,    # «Хочу прочитать»
     "daily": False,       # привычка «Чтение N минут»
     "dailyMinutes": 20,
+    "libraries": None,    # книги каких библиотек ведём задачами (id; "litres"); None — всех
 }
 
 
@@ -279,7 +280,10 @@ class SingularitySync(QObject):
     def _plan(self, lib, ours, books_pid, wish_pid):
         """Что поменять в Singularity: список (метод, путь, тело, id книги, отметка отправленного)."""
         ops = []
+        allowed = self.state.get("libraries")
         for book in lib.ordered():
+            if allowed is not None and lib.library_key(book) not in allowed:
+                continue
             bid = book["id"]
             ext = TASK_EXT + bid
             status = lib.status(book)

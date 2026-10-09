@@ -89,3 +89,39 @@ def test_graph_scope(clean_data, tmp_path):
     assert books("litres") == {"1"}
     assert len(books("folder-0123456789")) == 3 and "1" not in books("folder-0123456789")
     assert build_graph(lib, "all")["single"] is False and build_graph(lib, "litres")["single"] is True
+
+
+def test_stats_per_library(clean_data, tmp_path):
+    make_tree(tmp_path / "articles")
+    lib = Library()
+    lib.merge_litres([art(1)])
+    lib.scan_folders([{"id": "folder-0123456789", "path": str(tmp_path / "articles"), "name": "Статьи"}])
+    own = next(b["id"] for b in lib.books.values() if b.get("source") == "folder")
+    lib.add_reading_time("1", 120)
+    lib.add_reading_time(own, 60)
+    day = next(iter(lib.stats["days"]))
+    assert lib.stats["days"][day] == 180
+    assert lib.stats["lib_days"]["litres"][day] == 120
+    assert lib.stats["lib_days"]["folder-0123456789"][day] == 60
+
+
+def test_old_stats_attributed_to_litres(clean_data):
+    from litres_reader import core
+    core.save_json(core.STATS_FILE, {"days": {"2026-10-01": 600}, "books": {"5": 600}, "finished": {}})
+    assert Library().stats["lib_days"] == {"litres": {"2026-10-01": 600}}
+
+
+def test_singularity_library_filter(clean_data, tmp_path):
+    from litres_reader.singularity import SingularitySync
+    make_tree(tmp_path / "articles")
+    lib = Library()
+    lib.merge_litres([art(1, read_percent=30)])
+    lib.scan_folders([{"id": "folder-0123456789", "path": str(tmp_path / "articles"), "name": "Статьи"}])
+    own = next(b["id"] for b in lib.books.values() if b.get("source") == "folder")
+    lib.progress[own] = {"fraction": 0.4}
+    sync = SingularitySync.__new__(SingularitySync)
+    sync.state = {"reading": True, "progress": False, "wishlist": False, "sent": {}, "libraries": None}
+    planned = lambda: {op[3] for op in sync._plan(lib, {}, "P", None)}
+    assert planned() == {"1", own}
+    sync.state["libraries"] = ["litres"]
+    assert planned() == {"1"}

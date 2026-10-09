@@ -36,6 +36,11 @@ All notable changes to LitRes Reader. The format is based on
   statistics, Singularity and every library's data; a library backup holds only its marks, positions
   and graph (`-lib-<id>` / `-litres` in the file name, `scope` in the manifest). Each library keeps its
   own number of backups; restoring one library doesn't touch the others.
+- **Statistics by library:** the statistics window has a library selector (All libraries by default).
+  Reading time is now also recorded per library (`lib_days` in `stats.json`); earlier time is
+  attributed to LitRes when only LitRes books were read in the app.
+- **Singularity by library:** the Singularity window lets you choose whose books become tasks
+  (all libraries by default; "Want to read" stays LitRes-only).
 - LitRes is now a connector (`litres_connector.py`): sign-in, sync, downloads (single and all),
   LitRes folders, the position from the phone and genre loading moved out of the main window class.
 

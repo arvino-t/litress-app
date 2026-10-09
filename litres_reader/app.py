@@ -1250,6 +1250,28 @@ class App(QObject):
             switches[key] = sw
         b.addWidget(boxed)
 
+        # книги каких библиотек ведутся задачами («Хочу прочитать» — только ЛитРес)
+        libs = libraries.all_libraries(self.settings)
+        allowed = s.state.get("libraries")
+        lib_switches = {}
+        if len(libs) > 1:
+            b.addWidget(label(tr("Библиотеки"), "heading"))
+            lib_box = QFrame()
+            cls(lib_box, "boxed")
+            lrows = QVBoxLayout(lib_box)
+            lrows.setContentsMargins(0, 0, 0, 0)
+            lrows.setSpacing(0)
+            for lib in libs:
+                row = QWidget()
+                h = QHBoxLayout(row)
+                h.setContentsMargins(14, 6, 14, 6)
+                h.addWidget(label(lib["name"]), 1)
+                sw = Switch(allowed is None or lib["id"] in allowed)
+                h.addWidget(sw)
+                lrows.addWidget(row)
+                lib_switches[lib["id"]] = sw
+            b.addWidget(lib_box)
+
         goal_row = QHBoxLayout()
         goal_row.addWidget(label(tr("Цель чтения в день, минут")), 1)
         goal = QSpinBox()
@@ -1275,7 +1297,9 @@ class App(QObject):
         v.addWidget(body)
 
         def apply():
+            chosen = [lid for lid, sw in lib_switches.items() if sw.isChecked()]
             s.configure(token=token.text().strip(), dailyMinutes=goal.value(),
+                        libraries=None if len(chosen) == len(lib_switches) else chosen,
                         **{k: sw.isChecked() for k, sw in switches.items()})
 
         def check_and_sync():
