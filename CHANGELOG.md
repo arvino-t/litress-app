@@ -20,6 +20,13 @@ All notable changes to LitRes Reader. The format is based on
   keyed by the path inside the library — it travels with the books (cloud sync, another computer).
   Data of your books is moved there from the app's shared files on first start.
 - Backups include the data of all your libraries (`libraries/<id>/…` in the archive).
+- Settings → **Libraries** tab: your libraries (folder, book count, Rename, Remove from the app) and
+  LitRes (sign in/out, books folder, Disconnect); "Add library…" adds a folder library or connects
+  LitRes. The Folders group moved here from General.
+- The Source filter lists libraries from the registry: All, LitRes (Books, Audiobooks) and each of
+  your libraries; Subfolder shows the folders of the selected library.
+- LitRes is optional: when disconnected, its books, sign-in, sync and "Download all" disappear from
+  the app (data and session are kept); F5 then rescans your folders.
 - LitRes is now a connector (`litres_connector.py`): sign-in, sync, downloads (single and all),
   LitRes folders, the position from the phone and genre loading moved out of the main window class.
 

@@ -17,8 +17,8 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
 from . import __version__, backup, core, libraries, style
 from .i18n import tr
 from .core import (APP_ICON, APP_ID, APP_NAME, AUDIO_FORMATS, CONFIG_FILE, COVERS_DIR, DEFAULT_SETTINGS,
-                   NO_FOLDER, READABLE, SORT_MODES, STATUS_FILTERS, TYPE_FILTERS, Library, books_dir,
-                   load_json, log, save_json, set_books_dir)
+                   NO_FOLDER, READABLE, SORT_MODES, STATUS_FILTERS, Library, books_dir, load_json, log,
+                   save_json, set_books_dir)
 from .graph import GraphPage
 from .settings import SettingsPage
 from .litres import LitresSession
@@ -213,6 +213,7 @@ class App(QObject):
                            ("Alt+Left", self.go_back)):
             QShortcut(QKeySequence(keys), self.window, activated=slot)
 
+        self._apply_litres_ui()
         self.library.scan_folders(self.local_folders())
         self.refresh_library()
         QTimer.singleShot(0, self._open_last_book)
@@ -400,12 +401,15 @@ class App(QObject):
         v.addWidget(icon)
         v.addSpacing(12)
         v.addWidget(label(tr("Книг пока нет"), "title1", align=Qt.AlignmentFlag.AlignCenter))
-        v.addWidget(label(tr("Войдите в аккаунт ЛитРес, чтобы увидеть купленные книги,\n"
+        v.addWidget(label(tr("Добавьте папку со своими книгами, подключите ЛитРес\n"
                           "или откройте файл EPUB/FB2."), align=Qt.AlignmentFlag.AlignCenter))
         v.addSpacing(18)
         for text, slot, suggested in ((tr("Войти в ЛитРес"), self.litres_lib.show_login, True),
+                                      (tr("Добавить папку с книгами…"), self.add_local_folder, False),
                                       (tr("Открыть файл с компьютера"), self.on_open_file, False)):
             b = QPushButton(text)
+            if slot == self.litres_lib.show_login:
+                self.empty_login_btn = b
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             cls(b, "pill", *(("suggested",) if suggested else ()))
             b.clicked.connect(slot)
@@ -531,9 +535,8 @@ class App(QObject):
         self._apply_filter()
 
     def _fs_mode(self) -> bool:
-        """Выбраны свои книги (все или раздел) — подкаталоги берутся с диска."""
-        kind = self.settings.get("libraryType", "all")
-        return kind == "mine" or kind.startswith("section:")
+        """Выбрана своя библиотека — подкаталоги берутся с диска."""
+        return self.settings.get("libraryType", "all").startswith("lib:")
 
     def _on_folder_selected(self, idx):
         if getattr(self, "_filling_folders", False) or idx < 0:
@@ -547,22 +550,18 @@ class App(QObject):
     def _fill_folder_combo(self):
         """Список подкаталогов под выбранный источник."""
         if self._fs_mode():
-            kind = self.settings.get("libraryType", "all")
-            section = kind[len("section:"):] if kind.startswith("section:") else None
-            paths = set()
+            lib_id = self.settings["libraryType"][len("lib:"):]
+            dirs = set()
             for b in self.library.books.values():
-                if b.get("source") != "folder" or (section and b.get("section") != section):
+                if b.get("library") != lib_id or not b.get("rel"):
                     continue
-                coll = b.get("collection") or ""
-                sec, _sep, rel = coll.partition(" / ")
-                parts = rel.split("/") if rel else []
+                parts = b["rel"].split("/")[:-1]
                 for i in range(1, len(parts) + 1):          # и родительские папки тоже
-                    paths.add(f"{sec} / {'/'.join(parts[:i])}")
-            paths = sorted(paths, key=str.lower)
-            prefix = f"{section} / " if section else ""
-            ids = [None] + paths
-            texts = [tr("Все подкаталоги")] + [p[len(prefix):] if prefix else p for p in paths]
-            key, tip, visible = "librarySubdir", tr("Папка на диске"), bool(paths)
+                    dirs.add("/".join(parts[:i]))
+            dirs = sorted(dirs, key=str.lower)
+            ids = [None] + [f"{lib_id}:{d}" for d in dirs]
+            texts = [tr("Все подкаталоги")] + dirs
+            key, tip, visible = "librarySubdir", tr("Папка на диске"), bool(dirs)
         else:
             folders = self.library.folders
             ids = [None, NO_FOLDER] + list(folders)
@@ -620,9 +619,13 @@ class App(QObject):
                                              or (1 if b["id"] == last else 0)))
 
     def _fill_type_combo(self):
-        """Книги / аудио / свои — и отдельно каждый раздел своих книг и статей."""
-        sections = list(dict.fromkeys(f["name"] for f in self.local_folders()))
-        options = list(TYPE_FILTERS) + [("section:" + s, "— " + s) for s in sections]
+        """«Все» и библиотеки по реестру; у ЛитРес — ещё «Книги» и «Аудиокниги»."""
+        options = [("all", tr("Все"))]
+        for lib in libraries.all_libraries(self.settings):
+            if lib["kind"] == "litres":
+                options += [("litres", lib["name"]), ("text", "— " + tr("Книги")), ("audio", "— " + tr("Аудиокниги"))]
+            else:
+                options.append(("lib:" + lib["id"], lib["name"]))
         self._type_keys = [k for k, _t in options]
         cur = self.settings.get("libraryType", "all")
         if cur not in self._type_keys:
@@ -634,6 +637,7 @@ class App(QObject):
         self.type_combo.setCurrentIndex(self._type_keys.index(cur))
         self._fit_popup(self.type_combo)
         self.type_combo.blockSignals(False)
+        self.type_box.setVisible(len(self._type_keys) > 2)
         self._fill_folder_combo()
 
     def _on_type_selected(self, idx):
@@ -664,20 +668,19 @@ class App(QObject):
         if self.only_downloaded and not self.library.file_path(book):
             return False
         kind = self.settings.get("libraryType", "all")
-        mine = book.get("source") == "folder"
-        if kind == "litres" and book.get("source") != "litres":
+        source = book.get("source")
+        if kind in ("litres", "text", "audio") and source != "litres":
             return False
-        if kind == "mine" and not mine:
+        if kind in ("text", "audio") and bool(book.get("is_audio")) != (kind == "audio"):
             return False
-        if kind.startswith("section:") and not (mine and book.get("section") == kind[len("section:"):]):
-            return False
-        if kind in ("text", "audio") and (mine or bool(book.get("is_audio")) != (kind == "audio")):
+        if kind.startswith("lib:") and book.get("library") != kind[len("lib:"):]:
             return False
         if self._fs_mode():
             sub = self.settings.get("librarySubdir")
-            coll = book.get("collection") or ""
-            if sub and not (coll == sub or coll.startswith(sub + "/")):
-                return False
+            if sub:
+                _lib, _sep, folder = sub.partition(":")
+                if not (book.get("rel") or "").startswith(folder + "/"):
+                    return False
         else:
             folder = self.settings.get("libraryFolder")
             if folder == NO_FOLDER:
@@ -706,10 +709,9 @@ class App(QObject):
         self.grid_widget.adjustSize()
 
     def _update_filter_bar(self):
-        books = self.library.ordered()
         self._fill_folder_combo()
         self._update_status_counts()
-        self.type_box.setVisible(any(b.get("is_audio") or b.get("source") == "folder" for b in books))
+        self.type_box.setVisible(len(self._type_keys) > 2)
 
     # --- сетка книг
 
@@ -789,8 +791,60 @@ class App(QObject):
 
     # --- аккаунт
 
+    def has_litres(self) -> bool:
+        return any(lib["kind"] == "litres" for lib in libraries.all_libraries(self.settings))
+
+    def connect_litres(self):
+        if self.has_litres():
+            return
+        libraries.set_litres(self.settings, True)
+        self.save_settings()
+        self.apply_libraries()
+        if self.litres.logged_in:
+            self.litres_lib.sync()
+        else:
+            self.litres_lib.show_login()
+
+    def disconnect_litres(self):
+        box = QMessageBox(self.window)
+        box.setWindowTitle(tr("Отключить ЛитРес?"))
+        box.setText(tr("<b>Отключить библиотеку ЛитРес?</b>"))
+        box.setInformativeText(tr("Книги ЛитРес пропадут из программы. Скачанные файлы, отметки и вход "
+                                  "сохранятся — библиотеку можно подключить снова."))
+        cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
+        off = box.addButton(tr("Отключить"), QMessageBox.ButtonRole.DestructiveRole)
+        cls(off, "destructive")
+        box.setDefaultButton(cancel)
+        box.exec()
+        if box.clickedButton() is not off:
+            return
+        libraries.set_litres(self.settings, False)
+        self.save_settings()
+        self.apply_libraries()
+
+    def apply_libraries(self):
+        """Реестр библиотек изменился: что показывать про ЛитРес, фильтры, сетка, настройки."""
+        self._apply_litres_ui()
+        self.rescan_local()
+        if self.settings_page is not None:
+            self.settings_page.rebuild_later()
+
+    def _apply_litres_ui(self):
+        """ЛитРес отключён — в интерфейсе нет ничего про него (данные и вход сохраняются)."""
+        on = self.has_litres()
+        self.library.hidden_sources = set() if on else {"litres"}
+        self.account_action.setVisible(on)
+        self.download_all_action.setVisible(on)
+        self.sync_btn.setToolTip(tr("Обновить список книг с ЛитРес (F5)") if on else tr("Обновить список книг (F5)"))
+        self.empty_login_btn.setVisible(on)
+        self._update_account_ui()
+
     def _update_account_ui(self):
-        if self.litres_lib.bulk:
+        if not self.has_litres():
+            libs = libraries.all_libraries(self.settings)
+            self.lib_header.set_title(tr("Библиотека"), tr("Библиотек: {0} · книг: {1}", len(libs),
+                                                           len(self.library.ordered())))
+        elif self.litres_lib.bulk:
             b = self.litres_lib.bulk
             self.lib_header.set_title(tr("Библиотека"), tr('Скачиваю книги: {0} из {1}', b['done'] + b['failed'], b['total']))
         elif self.litres.logged_in:
@@ -1253,6 +1307,8 @@ class App(QObject):
     # --- ЛитРес: подключаемая библиотека (litres_connector.py); делегаты для других модулей
 
     def sync(self, *args, **kwargs):
+        if not self.has_litres():
+            return self.rescan_local(report=not kwargs.get("quiet"))
         return self.litres_lib.sync(*args, **kwargs)
 
     def download_book(self, *args, **kwargs):

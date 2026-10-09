@@ -70,6 +70,13 @@ def folder_libraries(settings) -> list[dict]:
     return [lib for lib in all_libraries(settings) if lib["kind"] == "folder"]
 
 
+def set_litres(settings, on: bool):
+    """Подключить или отключить библиотеку ЛитРес (данные и вход при отключении не стираются)."""
+    ensure_registry(settings)
+    rest = [lib for lib in settings["libraries"] if not (isinstance(lib, dict) and lib.get("kind") == "litres")]
+    settings["libraries"] = ([{"id": LITRES_ID, "kind": "litres"}] if on else []) + rest
+
+
 def set_folder_libraries(settings, folders: list[dict]):
     """Заменяет свои библиотеки, сохраняя подключаемые и их порядок впереди."""
     others = [lib for lib in settings.get("libraries") or [] if isinstance(lib, dict) and lib.get("kind") != "folder"]

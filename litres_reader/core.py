@@ -167,10 +167,6 @@ STATUS_FILTERS = (("all", tr("Все")), ("reading", tr("Читаю")), ("unread
 SORT_MODES = (("recent", tr("Недавние")), ("litres", tr("Как на ЛитРес")), ("title", tr("По названию")),
               ("author", tr("По автору")), ("series", tr("По сериям")), ("progress", tr("По прогрессу")),
               ("purchased", tr("По дате покупки")))
-# Фильтр по источнику: ЛитРес (книги и аудиокниги) и свои папки (их разделы добавляет app)
-TYPE_FILTERS = (("all", tr("Все")),
-                ("litres", tr("ЛитРес")), ("text", "— " + tr("Книги")), ("audio", "— " + tr("Аудиокниги")),
-                ("mine", tr("Мои книги и статьи")))
 
 
 # Какие ссылки из книг можно отдавать системе. Остальные схемы (file:, smb:, \\сервер\…,
@@ -263,6 +259,8 @@ class Library:
         # Свои библиотеки: {id: {"root", "name", "store"}}; последнее записанное — чтобы не писать зря
         self.folder_libs: dict[str, dict] = {}
         self._written: dict[Path, str] = {}
+        # Источники книг, скрытые из библиотеки (например, отключённый ЛитРес) — данные сохраняются
+        self.hidden_sources: set[str] = set()
         # Статистика: секунды чтения по дням и по книгам, даты дочитывания
         self.stats: dict = {"days": {}, "books": {}, "finished": {}, **load_json(STATS_FILE, {})}
         for d in (books_dir(), COVERS_DIR, SESSION_DIR):
@@ -295,7 +293,8 @@ class Library:
             log("хранилище библиотеки недоступно:", path, e)
 
     def ordered(self):
-        return [self.books[i] for i in self.order if i in self.books]
+        return [self.books[i] for i in self.order if i in self.books
+                and self.books[i].get("source") not in self.hidden_sources]
 
     def merge_litres(self, arts: list[dict]):
         """Добавляет/обновляет книги из аккаунта, не трогая скачанные файлы."""
@@ -631,11 +630,15 @@ class Library:
             book = self.books.get(bid)
             if not book or book.get("finished") or (p.get("fraction") or 0) >= 0.999:
                 continue
+            if book.get("source") in self.hidden_sources:
+                continue
             if (p.get("fraction") or 0) <= 0.001 and not p.get("cfi") and not p.get("pos"):
                 continue
             when[bid] = p.get("ts") or (1 if bid == last_book else 0)
         # Чтение на ЛитРес (телефон, сайт): начатые там книги тоже здесь, по времени чтения
         for bid, book in self.books.items():
+            if book.get("source") in self.hidden_sources:
+                continue
             remote_at = book.get("remote_read_at")
             if remote_at and not book.get("finished") and 0 < (book.get("remote_percent") or 0) < 100:
                 when[bid] = max(when.get(bid, 0), remote_at)

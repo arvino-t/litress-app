@@ -68,8 +68,6 @@ EN = {
         "Read and listen to books bought on LitRes.<br>You sign in on the LitRes website; "
         "the app does not store your password.<br><br>MIT License. Reading engine: foliate-js (MIT).",
     "Книг пока нет": "No books yet",
-    "Войдите в аккаунт ЛитРес, чтобы увидеть купленные книги,\nили откройте файл EPUB/FB2.":
-        "Sign in to your LitRes account to see the books you bought,\nor open an EPUB/FB2 file.",
     "Открыть файл с компьютера": "Open a file from this computer",
     "Скачиваю книги: {0} из {1}": "Downloading books: {0} of {1}",
     "Книга дочитана — отмечена прочитанной": "Book finished — marked as read",
@@ -184,7 +182,6 @@ EN = {
     "По прогрессу": "By progress",
     "По дате покупки": "By purchase date",
     "Аудиокниги": "Audiobooks",
-    "Мои книги и статьи": "My books and articles",
     "Глава {0}": "Chapter {0}",
     "{0}: в новой папке уже есть файл с таким именем": "{0}: a file with this name already exists in the new folder",
 
@@ -294,14 +291,7 @@ EN = {
     "Скачать все книги": "Download all books",
     "Скачать…": "Download…",
     "Все купленные книги ЛитРес — в папку для скачанных книг": "All purchased LitRes books, to the downloads folder",
-    "Где хранятся скачанные книги и где искать свои книги и статьи. У каждой своей папки — раздел: "
-    "он виден на карточках и в фильтре библиотеки. Свои файлы открываются на месте, "
-    "приложение их не копирует и не удаляет.":
-        "Where downloaded books are stored and where to look for your own books and articles. "
-        "Each of your folders has a section name shown on cards and in the library filter. "
-        "Your files open in place; the app doesn't copy or delete them.",
     "Переименовать…": "Rename…",
-    "Скачанные книги ЛитРес": "Downloaded LitRes books",
     "Изменить…": "Change…",
     "Статистика": "Statistics",
     "Минуты по дням, серия дней подряд, дочитанные книги": "Minutes per day, day streak, finished books",
@@ -360,9 +350,7 @@ EN = {
     "Сбросить…": "Reset…",
     "Вид текста, чтение, обновление, журнал. Папки, вход и библиотека не меняются":
         "Text appearance, reading, refresh, log. Folders, sign-in and library are kept",
-    "Добавить папку…": "Add folder…",
     "Обновить список": "Rescan",
-    "Найдено своих книг и статей": "Own books and articles found",
     "Восстановить из файла": "Restore from file",
     "Выбрать…": "Choose…",
     "Например, копия с другого компьютера": "For example, a backup from another computer",
@@ -455,4 +443,32 @@ EN = {
     "Развернуть": "Maximize",
     "Новая": "New",
     "Прослушано": "Listened",
+
+    # --- библиотеки
+    "Библиотеки": "Libraries",
+    "Библиотек: {0} · книг: {1}": "Libraries: {0} · books: {1}",
+    "Добавить библиотеку…": "Add library…",
+    "Добавить папку с книгами…": "Add a folder with books…",
+    "Добавьте папку со своими книгами, подключите ЛитРес\nили откройте файл EPUB/FB2.":
+        "Add a folder with your books, connect LitRes\nor open an EPUB/FB2 file.",
+    "Книг во всех библиотеках": "Books in all libraries",
+    "Книги: {0}": "Books: {0}",
+    "книг: {0}": "books: {0}",
+    "ЛитРес — купленные книги": "LitRes — purchased books",
+    "Обновить список книг (F5)": "Refresh the book list (F5)",
+    "Отключить ЛитРес?": "Disconnect LitRes?",
+    "<b>Отключить библиотеку ЛитРес?</b>": "<b>Disconnect the LitRes library?</b>",
+    "Книги ЛитРес пропадут из программы. Скачанные файлы, отметки и вход сохранятся — "
+    "библиотеку можно подключить снова.":
+        "LitRes books will disappear from the app. Downloaded files, marks and the sign-in are kept — "
+        "you can connect the library again.",
+    "Папка для книг…": "Books folder…",
+    "Своя библиотека — папка на диске: её подпапки видны в фильтре «Подкаталог», данные (отметки, "
+    "место чтения) хранятся в ней же, в скрытой папке .library. Файлы открываются на месте, "
+    "приложение их не копирует и не удаляет. ЛитРес — подключаемая библиотека купленных книг.":
+        "Your own library is a folder on disk: its subfolders appear in the Subfolder filter, and its data "
+        "(marks, reading positions) is stored inside it, in the hidden .library folder. Files open in place; "
+        "the app doesn't copy or delete them. LitRes is a pluggable library of purchased books.",
+    "Своя библиотека — папка на диске…": "Your own library — a folder on disk…",
+    "Убрать из программы — файлы и данные в папке останутся": "Remove from the app — files and data in the folder stay",
 }

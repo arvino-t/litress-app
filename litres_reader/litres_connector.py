@@ -36,6 +36,9 @@ class LitresConnector(QObject):
         self._startup_synced = False
 
     def on_login_state(self):
+        if not self.app.has_litres():          # ЛитРес отключён — только заголовок
+            self.app._update_account_ui()
+            return
         self.app._update_account_ui()
         if self.app.litres.logged_in:
             if self.app.current() is self.app.login_page:
@@ -530,6 +533,8 @@ class LitresConnector(QObject):
         step(0)
 
     def _periodic_sync(self):
+        if not self.app.has_litres():
+            return
         if self.app.litres.logged_in and not self.syncing and self.app.window.isVisible():
             self.sync(quiet=True)
 

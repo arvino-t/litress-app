@@ -1,6 +1,6 @@
 """Страница «Настройки» — в духе Adw.PreferencesWindow: вкладки, на них группы со строками.
 
-Вкладки: «Общие» (запуск, библиотека, папки, статистика), «Чтение» (вид текста, чтение
+Вкладки: «Общие» (язык, запуск, статистика), «Библиотеки» (свои папки и ЛитРес), «Чтение» (вид текста, чтение
 вслух, автолистание, аудиокниги), «Интеграции» (ЛитРес, Singularity — со значками сервисов),
 «Резервные копии» (создание, расписание, восстановление) и «Дополнительно» (обновление
 с ЛитРес, оценка чтения на телефоне, журнал, данные, сброс).
@@ -11,13 +11,13 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QUrl
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
-from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSlider, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, backup, core, i18n, style
+from . import __version__, backup, core, i18n, libraries, style
 from .i18n import tr
 from .core import CACHE_DIR, CONFIG_DIR, DATA_DIR, DEFAULT_SETTINGS, SITE, books_dir
 from .player import SPEEDS
@@ -27,8 +27,8 @@ THEMES = (("auto", tr("Как в системе")), ("light", tr("Светлая
           ("dark", tr("Тёмная")), ("black", tr("Чёрная")))
 FONTS = (("book", tr("Как в книге")), ("serif", tr("С засечками")), ("sans", tr("Без засечек")))
 
-TABS = (("general", tr("Общие")), ("reading", tr("Чтение")), ("integrations", tr("Интеграции")),
-        ("backup", tr("Резервные копии")), ("advanced", tr("Дополнительно")))
+TABS = (("general", tr("Общие")), ("libraries", tr("Библиотеки")), ("reading", tr("Чтение")),
+        ("integrations", tr("Интеграции")), ("backup", tr("Резервные копии")), ("advanced", tr("Дополнительно")))
 BACKUP_AUTO = (("off", tr("Выключено")), ("daily", tr("Раз в день")), ("weekly", tr("Раз в неделю")))
 MONTHS = ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
           "сентября", "октября", "ноября", "декабря")
@@ -201,7 +201,7 @@ class SettingsPage(QWidget):
         self.col.addWidget(box)
         return rows
 
-    def row(self, rows, title, widget=None, hint="", service=None):
+    def row(self, rows, title, widget=None, hint="", service=None, icon=None):
         r = QWidget()
         if rows.count():
             cls(r, "row-top")
@@ -214,6 +214,12 @@ class SettingsPage(QWidget):
             ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
             h.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
             service_icon(ic, service)
+        elif icon:
+            ic = QLabel()
+            ic.setFixedSize(ICON_SIZE, ICON_SIZE)
+            ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ic.setPixmap(style.icon(icon, size=24).pixmap(24, 24))
+            h.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
         texts = QVBoxLayout()
         texts.setSpacing(0)
         texts.addWidget(label(title, wrap=True))
@@ -325,21 +331,25 @@ class SettingsPage(QWidget):
         only = Switch(app.only_downloaded)
         only.toggled.connect(app.only_action.setChecked)
         self.row(g, tr("Показывать только скачанные книги"), only)
-        self.button(g, tr("Скачать все книги"), tr("Скачать…"), app.download_all,
-                    tr("Все купленные книги ЛитРес — в папку для скачанных книг"))
-
-        g = self.group(tr("Папки"), tr("Где хранятся скачанные книги и где искать свои книги и статьи. "
-                                "У каждой своей папки — раздел: он виден на карточках и в фильтре библиотеки. "
-                                "Свои файлы открываются на месте, приложение их не копирует и не удаляет."))
-        self.books_row = self.button(g, tr("Скачанные книги ЛитРес"), tr("Изменить…"), self._choose_books_dir,
-                                     hint=str(books_dir()))
-        self.folders_group = g
-        self._folder_rows = []
-        self._fill_folders()
+        if app.has_litres():
+            self.button(g, tr("Скачать все книги"), tr("Скачать…"), app.download_all,
+                        tr("Все купленные книги ЛитРес — в папку для скачанных книг"))
 
         g = self.group(tr("Статистика"))
         self.button(g, tr("Статистика чтения"), tr("Открыть"), app.show_stats_dialog,
                     tr("Минуты по дням, серия дней подряд, дочитанные книги"))
+        self.col.addStretch()
+
+        # --- Библиотеки
+        self.page("libraries")
+        self.account_btn = None
+        self.libraries_group = self.group(
+            tr("Библиотеки"), tr("Своя библиотека — папка на диске: её подпапки видны в фильтре «Подкаталог», "
+                                 "данные (отметки, место чтения) хранятся в ней же, в скрытой папке .library. "
+                                 "Файлы открываются на месте, приложение их не копирует и не удаляет. "
+                                 "ЛитРес — подключаемая библиотека купленных книг."))
+        self._library_rows = []
+        self._fill_libraries()
         self.col.addStretch()
 
         # --- Чтение
@@ -377,8 +387,6 @@ class SettingsPage(QWidget):
         # --- Интеграции
         self.page("integrations")
         g = self.group(tr("Сервисы"), tr("Сторонние сервисы, с которыми работает приложение."))
-        self.account_btn = self.button(g, tr("ЛитРес"), "", self._account, hint="", service="litres")
-        self._sync_account()
         self.button(g, "Singularity", tr("Настроить…"), app.show_singularity_dialog,
                     tr("Задачи «Читаю», прогресс в заметках, привычка ежедневного чтения"), service="singularity")
         self.col.addStretch()
@@ -450,39 +458,62 @@ class SettingsPage(QWidget):
 
     def _choose_books_dir(self):
         self.app.choose_books_dir()
-        self._set_hint(self.books_row, str(books_dir()))
+        self._sync_account()
 
-    def _fill_folders(self):
-        g = self.folders_group
-        for w in self._folder_rows:
+    def _fill_libraries(self):
+        g = self.libraries_group
+        for w in self._library_rows:
             g.removeWidget(w)
             w.deleteLater()
-        self._folder_rows = []
         before = g.count()
-        for folder in self.app.local_folders():
-            path = folder["path"]
+        app = self.app
+        self.account_btn = None
+        for lib in libraries.all_libraries(app.settings):
             box = QWidget()
             bh = QHBoxLayout(box)
             bh.setContentsMargins(0, 0, 0, 0)
-            rename = QPushButton(tr("Переименовать…"))
-            rename.clicked.connect(lambda _=False, p=path: (self.app.rename_local_folder(p), self._fill_folders()))
-            remove = QPushButton(tr("Убрать"))
-            remove.clicked.connect(lambda _=False, p=path: (self.app.remove_local_folder(p), self._fill_folders()))
-            bh.addWidget(rename)
-            bh.addWidget(remove)
-            self.row(g, folder["name"], box, path)
-        add = QPushButton(tr("Добавить папку…"))
-        add.clicked.connect(lambda: (self.app.add_local_folder(), self._fill_folders()))
+            if lib["kind"] == "litres":
+                self.account_btn = QPushButton()
+                self.account_btn.clicked.connect(self._account)
+                folder = QPushButton(tr("Папка для книг…"))
+                folder.setToolTip(str(books_dir()))
+                folder.clicked.connect(self._choose_books_dir)
+                off = QPushButton(tr("Отключить"))
+                off.clicked.connect(app.disconnect_litres)
+                for b in (self.account_btn, folder, off):
+                    bh.addWidget(b)
+                self.litres_row = self.row(g, lib["name"], box, "", service="litres")
+                self._sync_account()
+            else:
+                path = lib["path"]
+                rename = QPushButton(tr("Переименовать…"))
+                rename.clicked.connect(lambda _=False, p=path: (app.rename_local_folder(p), self._fill_libraries()))
+                remove = QPushButton(tr("Убрать"))
+                remove.setToolTip(tr("Убрать из программы — файлы и данные в папке останутся"))
+                remove.clicked.connect(lambda _=False, p=path: (app.remove_local_folder(p), self._fill_libraries()))
+                bh.addWidget(rename)
+                bh.addWidget(remove)
+                count = sum(1 for b in app.library.books.values() if b.get("library") == lib["id"])
+                self.row(g, lib["name"], box, f"{path} · {tr('книг: {0}', count)}", icon="accessories-dictionary")
+        add = QPushButton(tr("Добавить библиотеку…"))
+        add.clicked.connect(lambda: self._add_library(add))
         rescan = QPushButton(tr("Обновить список"))
-        rescan.clicked.connect(lambda: self.app.rescan_local(report=True))
+        rescan.clicked.connect(lambda: (app.rescan_local(report=True), self._fill_libraries()))
         box = QWidget()
         h = QHBoxLayout(box)
         h.setContentsMargins(0, 0, 0, 0)
         h.addWidget(rescan)
         h.addWidget(add)
-        mine = sum(1 for b in self.app.library.books.values() if b.get("source") == "folder")
-        self.row(g, tr("Найдено своих книг и статей"), box, str(mine))
-        self._folder_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
+        self.row(g, tr("Книг во всех библиотеках"), box, str(len(app.library.ordered())))
+        self._library_rows = [g.itemAt(i).widget() for i in range(before, g.count())]
+
+    def _add_library(self, button):
+        menu = QMenu(button)
+        menu.addAction(tr("Своя библиотека — папка на диске…"),
+                       lambda: (self.app.add_local_folder(), self._fill_libraries()))
+        if not self.app.has_litres():
+            menu.addAction(tr("ЛитРес — купленные книги"), self.app.connect_litres)
+        menu.popup(button.mapToGlobal(button.rect().bottomLeft()))
 
     # --- резервные копии
 
@@ -634,12 +665,19 @@ class SettingsPage(QWidget):
         self.app.toggle_account()
 
     def _sync_account(self):
-        if not hasattr(self, "account_btn"):
+        if getattr(self, "account_btn", None) is None:
             return
         lit = self.app.litres
         self.account_btn.setText(tr("Выйти") if lit.logged_in else tr("Войти"))
-        self._set_hint(self.account_btn, tr('Вход выполнен: {0}', lit.user_name) if lit.logged_in and lit.user_name
-                       else tr("Вход выполнен") if lit.logged_in else tr("Вход не выполнен"))
+        state = (tr('Вход выполнен: {0}', lit.user_name) if lit.logged_in and lit.user_name
+                 else tr("Вход выполнен") if lit.logged_in else tr("Вход не выполнен"))
+        hint = self.litres_row.findChild(QLabel, "row-hint")
+        hint.setText(f"{state}\n{tr('Книги: {0}', books_dir())}")
+        hint.setVisible(True)
+
+    def rebuild_later(self):
+        """Перестроить вкладки после смены библиотек (не из обработчика удаляемой кнопки)."""
+        QTimer.singleShot(0, self._rebuild)
 
     @staticmethod
     def _set_hint(widget, text):
