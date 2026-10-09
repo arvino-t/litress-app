@@ -26,9 +26,9 @@ PKG_DIR = Path(__file__).resolve().parent
 WEB_DIR = PKG_DIR / "web"
 ICONS_DIR = PKG_DIR / "data" / "sym"
 APP_ICON = PKG_DIR / "data" / f"{APP_ID}.svg"
-# Значки приложения на выбор («Настройки → Внешний вид»); по умолчанию — ворон в чертоге
+# Значки приложения на выбор («Настройки → Внешний вид»); по умолчанию — крылья-«М»
 APP_ICONS_DIR = PKG_DIR / "data" / "icons"
-APP_ICON_NAMES = ("raven-hall", "moon", "flight", "twins", "runestone", "hall", "quill", "eye", "wings")
+APP_ICON_NAMES = ("wings", "raven-hall", "moon", "flight", "twins", "runestone", "hall", "quill", "eye")
 
 
 def app_icon_path(name: str | None) -> Path:
@@ -225,7 +225,7 @@ DEFAULT_SETTINGS = {
     # Внешний вид: тема интерфейса (auto / light / dark), цвет акцента (auto или #rrggbb), значок приложения
     "uiTheme": "auto",
     "accent": "auto",
-    "appIcon": "raven-hall",
+    "appIcon": "wings",
     # Горячие клавиши, изменённые пользователем: {действие: [клавиши]}; None — все по умолчанию
     "shortcuts": None,
     # Резервные копии: папка (None — Документы/Backups/muninhall), off / daily / weekly,
