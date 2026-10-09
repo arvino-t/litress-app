@@ -55,7 +55,20 @@ class LitresSession(QObject):
         # Метка ответов API: запросы выполняются в изолированном мире JavaScript, где скрипты
         # сайта (реклама, счётчики) её не видят и не могут подделать ответ
         self._token = secrets.token_hex(16)
+        # Встроенный Chromium поднимается не сразу, а когда он нужен (start): без подключённого
+        # ЛитРес — никогда, с ЛитРес — после того как окно приложения уже показано
+        self.started = False
+        self.profile = self.page = self.view = None
+        self.view_holder: list = []        # куда положить страницу входа, когда она появится
 
+        self._check_timer = QTimer(self, singleShot=True)
+        self._check_timer.timeout.connect(self.check_login)
+
+    def start(self):
+        """Создаёт профиль и страницу ЛитРес (один раз). Можно звать сколько угодно."""
+        if self.started:
+            return
+        self.started = True
         self.profile = QWebEngineProfile("litres", self)
         self.profile.setPersistentStoragePath(str(SESSION_DIR / "storage"))
         self.profile.setCachePath(str(CACHE_DIR / "webengine"))
@@ -77,10 +90,9 @@ class LitresSession(QObject):
         self.page.loadStarted.connect(self._on_load_started)
         self.view = QWebEngineView()
         self.view.setPage(self.page)
+        for attach in self.view_holder:        # страница входа ждала браузер
+            attach(self.view)
         self.page.load(QUrl(SITE + "/"))
-
-        self._check_timer = QTimer(self, singleShot=True)
-        self._check_timer.timeout.connect(self.check_login)
 
     # --- состояние страницы
 
@@ -145,6 +157,7 @@ class LitresSession(QObject):
             QTimer.singleShot(1000 * 2 ** (_attempt + 1),
                               lambda: self.api_get(url, callback, _attempt + 1, method, body))
 
+        self.start()
         if not self.page_ready:
             self._pending.append((url, method, body, retry_or_done))
             return
@@ -290,6 +303,7 @@ class LitresSession(QObject):
         """on_progress(доля 0..1), on_done(ok, текст ошибки)."""
         self._downloads.append({"url": url, "dest": dest, "progress": on_progress, "done": on_done,
                                 "started": False})
+        self.start()
         self.page.download(QUrl(url), dest.name + ".part")
 
     def _on_download(self, req: QWebEngineDownloadRequest):
@@ -333,6 +347,8 @@ class LitresSession(QObject):
 
     def shutdown(self):
         """Страницу удаляем раньше профиля — иначе WebEngine ругается при выходе."""
+        if not self.started:
+            return
         self.view.setPage(None)
         self.page.deleteLater()
 
@@ -342,6 +358,7 @@ class LitresSession(QObject):
         self.user_id = None
         self.headers = {}
         HEADERS_FILE.unlink(missing_ok=True)
+        self.start()
         self.profile.cookieStore().deleteAllCookies()
         self.profile.clearHttpCache()
         self.page.load(QUrl(SITE + "/"))

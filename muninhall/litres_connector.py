@@ -54,6 +54,7 @@ class LitresConnector(QObject):
         self.on_logout() if self.app.litres.logged_in else self.show_login()
 
     def show_login(self):
+        self.app.litres.start()
         self.app.push(self.app.login_page)
         if not self.app.litres.logged_in:
             self.app.litres.page.load(QUrl(LOGIN_URL))

@@ -230,6 +230,9 @@ class App(QObject):
         self.apply_shortcuts()
 
         self._apply_litres_ui()
+        if self.has_litres():
+            # встроенный Chromium для ЛитРес — когда окно уже на экране
+            QTimer.singleShot(400, self.litres.start)
         self.library.scan_folders(self.local_folders())
         self.refresh_library()
         QTimer.singleShot(0, self._open_last_book)
@@ -527,10 +530,11 @@ class App(QObject):
         back.clicked.connect(self.go_back)
         self.login_header.pack_start(back)
         reload_btn = IconButton("view-refresh", tr("Обновить страницу"))
-        reload_btn.clicked.connect(lambda: self.litres.view.reload())
+        reload_btn.clicked.connect(lambda: self.litres.view and self.litres.view.reload())
         self.login_header.pack_end(reload_btn)
         lay.addWidget(self.login_header)
-        lay.addWidget(self.litres.view, 1)
+        # браузер ЛитРес создаётся по требованию — страница входа получит его, когда он появится
+        self.litres.view_holder.append(lambda view: lay.addWidget(view, 1))
         return page
 
     # --- фильтры
@@ -731,6 +735,23 @@ class App(QObject):
 
     # --- сетка книг
 
+    CARDS_FIRST = 60          # столько карточек — сразу, остальные — порциями, пока приложение простаивает
+    CARDS_BATCH = 40
+
+    def _make_card(self, book):
+        card = BookCard(book["id"])
+        card.activated.connect(self.on_book_activated)
+        card.menu_requested.connect(self.show_book_menu)
+        self.cards[book["id"]] = card
+        return card
+
+    def _place_card(self, card, book):
+        card.setParent(self.grid_widget)
+        self.grid.addWidget(card)
+        card.update_book(book, self.library)
+        if book.get("cover_url") and not self.library.cover_path(book):
+            self._queue_cover(book["id"])
+
     def refresh_library(self):
         ordered = self._sorted(self.library.ordered())
         ids = [b["id"] for b in ordered]
@@ -742,22 +763,45 @@ class App(QObject):
         # Пересобираем порядок: FlowLayout раскладывает в порядке добавления
         while self.grid.count():
             self.grid.takeAt(0)
+        created, pending, reorder = 0, [], False
         for book in ordered:
             card = self.cards.get(book["id"])
             if card is None:
-                card = BookCard(book["id"])
-                card.activated.connect(self.on_book_activated)
-                card.menu_requested.connect(self.show_book_menu)
-                self.cards[book["id"]] = card
-            card.setParent(self.grid_widget)
-            self.grid.addWidget(card)
-            card.update_book(book, self.library)
-            if book.get("cover_url") and not self.library.cover_path(book):
-                self._queue_cover(book["id"])
-        self.content.setCurrentIndex(1 if self.cards else 0)
+                if created >= self.CARDS_FIRST:
+                    pending.append(book)            # создадим позже, по порциям
+                    continue
+                card = self._make_card(book)
+                created += 1
+            elif pending:
+                reorder = True                      # готовая карточка стоит после отложенных
+            self._place_card(card, book)
+        self._card_queue = pending
+        self._card_reorder = reorder
+        if pending:
+            QTimer.singleShot(0, self._create_more_cards)
+        self.content.setCurrentIndex(1 if self.cards or pending else 0)
         self._update_filter_bar()
         self._apply_filter()
         self._update_recent_panel()
+
+    def _create_more_cards(self):
+        """Следующая порция отложенных карточек; в конце — порядок, если он нарушился."""
+        queue = getattr(self, "_card_queue", [])
+        if not queue:
+            return
+        batch, self._card_queue = queue[:self.CARDS_BATCH], queue[self.CARDS_BATCH:]
+        for book in batch:
+            if book["id"] in self.cards or book["id"] not in self.library.books:
+                continue
+            card = self._make_card(book)
+            self._place_card(card, book)
+            card.setVisible(self._visible(book))
+        self.grid.invalidate()
+        self.grid_widget.adjustSize()
+        if self._card_queue:
+            QTimer.singleShot(0, self._create_more_cards)
+        elif self._card_reorder:
+            self.refresh_library()
 
     def refresh_card(self, bid):
         card = self.cards.get(bid)
@@ -815,6 +859,7 @@ class App(QObject):
             return
         libraries.set_litres(self.settings, True)
         self.save_settings()
+        self.litres.start()
         self.apply_libraries()
         if self.litres.logged_in:
             self.litres_lib.sync()

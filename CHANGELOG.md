@@ -24,6 +24,11 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
   1.5 GB. Covers are decoded already scaled to the card size (instead of full size and rescaling on
   every repaint), cached in memory and on disk (`<cache>/thumbs`, ~5 MB), and unchanged covers and
   titles are not redrawn; recolored symbolic icons are cached; title eliding uses a binary search.
+- The built-in Chromium for LitRes starts only when needed: never without a connected LitRes library,
+  otherwise right after the window is shown (and on sign-in, download or sync). Without LitRes the app
+  opens in about 0.5 s and uses about 250 MB.
+- Book cards are created in batches: the first 60 at once, the rest while the app is idle — the window
+  is ready in about 1.3 s with LitRes.
 
 ### Fixed
 - Linux installer: the user icon cache was not refreshed (no `index.theme` in `~/.local/share/icons/hicolor`),
