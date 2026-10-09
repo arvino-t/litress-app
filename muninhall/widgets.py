@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QAbstractButton, QComboBox, QFrame, QGraphicsOpac
                                QToolButton, QVBoxLayout, QWidget)
 
 from . import style
+from .core import CACHE_DIR
 from .i18n import tr
 
 
@@ -341,7 +342,7 @@ class IconBadge(Badge):
 # Обложка декодируется сразу уменьшенной (JPEG это умеет) — быстрее и в разы меньше памяти,
 # чем держать оригинал и сжимать его при каждой отрисовке.
 _THUMBS: dict[tuple, QPixmap] = {}
-THUMBS_DIR = None        # задаёт App: <кэш>/thumbs
+THUMBS_DIR = CACHE_DIR / "thumbs"
 
 
 def cover_thumb(path, size: QSize, dpr: float) -> QPixmap | None:

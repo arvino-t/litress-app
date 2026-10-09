@@ -118,7 +118,7 @@ def create(settings, reason: str = "", scope: str = "all") -> Path:
             if scope != "all" and not (scope == "litres" and arc in LITRES_FILES):
                 continue
             if arc == "settings.json":
-                data = json.dumps(settings, ensure_ascii=False, indent=1).encode()   # текущие, даже не сохранённые
+                data = json.dumps(dict(settings), ensure_ascii=False, indent=1).encode()   # текущие, даже не сохранённые
             elif path.exists():
                 data = path.read_bytes()
                 if arc == "singularity.json" and not include_token:

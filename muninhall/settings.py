@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer, QUrl
+from PySide6.QtCore import QObject, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon, QKeySequence, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (QButtonGroup, QComboBox, QFileDialog, QFrame, QHBoxLayout, QKeySequenceEdit,
@@ -72,11 +72,21 @@ KEEP_ON_RESET = {"booksDir", "libraries", "appIcon", "shortcuts", "lastBook", "g
                  "libraryStatus", "libraryFolder", "librarySubdir", "libraryType", "librarySort",
                  "backupDir", "backupAuto", "backupKeep", "backupLast", "backupToken", "language"}
 
-_net = None
+class ServiceIcons(QObject):
+    """Значки сторонних сервисов: из темы системы, из кэша или скачанный favicon сайта."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._net: QNetworkAccessManager | None = None
+
+    def load(self, target: QLabel, key: str):
+        """Ставит значок сервиса в target (сразу из кэша или темы, иначе — когда скачается)."""
+        if self._net is None:
+            self._net = QNetworkAccessManager(self)
+        _load_service_icon(self._net, target, key)
 
 
-def service_icon(target: QLabel, key: str):
-    """Ставит значок сервиса в target (сразу из кэша или темы, иначе — когда скачается)."""
+def _load_service_icon(net, target: QLabel, key: str):
     info = SERVICES[key]
     dpr = target.devicePixelRatioF() or 1.0
 
@@ -92,10 +102,7 @@ def service_icon(target: QLabel, key: str):
         show(QIcon(str(cached)))
         return
     show(style.icon(info["fallback"], size=ICON_SIZE))     # пока не скачался
-    global _net
-    if _net is None:
-        _net = QNetworkAccessManager()
-    reply = _net.get(QNetworkRequest(QUrl(info["favicon"])))
+    reply = net.get(QNetworkRequest(QUrl(info["favicon"])))
 
     def done():
         reply.deleteLater()
@@ -118,6 +125,7 @@ class SettingsPage(QWidget):
         super().__init__()
         self.setObjectName("page")
         self.app = app
+        self.service_icons = ServiceIcons(self)
 
         header = HeaderBar(app.window, tr("Настройки"))
         back = IconButton("go-previous", tr("Назад"))
@@ -219,7 +227,7 @@ class SettingsPage(QWidget):
             ic.setFixedSize(ICON_SIZE, ICON_SIZE)
             ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
             h.addWidget(ic, 0, Qt.AlignmentFlag.AlignVCenter)
-            service_icon(ic, service)
+            self.service_icons.load(ic, service)
         elif icon_path:
             ic = QLabel()
             ic.setFixedSize(ICON_SIZE, ICON_SIZE)

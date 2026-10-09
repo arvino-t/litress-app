@@ -13,10 +13,10 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket, QNetworkAccessManager
 from PySide6.QtWidgets import (QApplication, QFileDialog, QInputDialog, QMainWindow, QMessageBox,
                                QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, backup, core, folder_scan, libraries, singularity, style, widgets
+from . import __version__, backup, core, folder_scan, libraries, singularity, style
 from .i18n import tr
-from .core import (APP_ICON, APP_ID, APP_NAME, APP_SLUG, OLD_APP_IDS, AUDIO_FORMATS, CONFIG_FILE,
-                   DEFAULT_SETTINGS, READABLE, books_dir, load_json, log, save_json, set_books_dir)
+from .core import (APP_ICON, APP_ID, APP_NAME, APP_SLUG, OLD_APP_IDS, AUDIO_FORMATS, READABLE, books_dir,
+                   log, set_books_dir)
 from .graph import GraphPage
 from .settings import SettingsPage
 from .litres import LitresSession
@@ -25,6 +25,7 @@ from .reader import ReaderPage
 from .litres_connector import LitresConnector
 from .singularity import SingularitySync
 from .appearance import SHORTCUTS, Appearance
+from .config import Settings
 from .library import LibraryPage
 from .model import Library
 from .widgets import BookCard, confirm, HeaderBar, IconButton, Toast
@@ -108,10 +109,10 @@ class App(QObject, LibraryPage, Appearance):
     def __init__(self, qapp: QApplication):
         super().__init__()
         self.qapp = qapp
-        self.settings = {**DEFAULT_SETTINGS, **load_json(CONFIG_FILE, {})}
+        self.settings = Settings(parent=self)
         core.set_debug(self.settings.get("debugLog"))
         if libraries.ensure_registry(self.settings):      # первый запуск с библиотеками — перенос настроек
-            save_json(CONFIG_FILE, self.settings)
+            self.settings.save_now()
         try:
             set_books_dir(self.settings.get("booksDir"))
         except OSError:
@@ -119,8 +120,6 @@ class App(QObject, LibraryPage, Appearance):
             set_books_dir(None)
         self.library = Library()
         self.library.chars_per_min = int(self.settings.get("readingCharsPerMin") or 1300)
-        self._settings_timer = QTimer(self, singleShot=True, interval=500)
-        self._settings_timer.timeout.connect(lambda: save_json(CONFIG_FILE, self.settings))
         # Автоматические резервные копии: проверка через минуту после запуска и раз в час
         self._backup_timer = QTimer(self, interval=3600_000)
         self._backup_timer.timeout.connect(self.auto_backup)
@@ -134,7 +133,6 @@ class App(QObject, LibraryPage, Appearance):
         self.settings_page: SettingsPage | None = None
         self._details_running = False
         self.player_page: PlayerPage | None = None
-        widgets.THUMBS_DIR = core.CACHE_DIR / "thumbs"      # миниатюры обложек
         self.net = QNetworkAccessManager(self)
         self._covers_running = 0
         self._cover_queue: list[str] = []
@@ -660,9 +658,10 @@ class App(QObject, LibraryPage, Appearance):
         return self.litres_lib.toggle_account(*args, **kwargs)
 
     def save_settings(self):
+        """Настройки сохраняются сами (config.Settings); здесь — применить их к открытой книге."""
         if self.reader:
             self.reader.apply_settings()
-        self._settings_timer.start()
+        self.settings.schedule_save()
 
     # --- внешний вид: тема, акцент, значок, горячие клавиши
 
@@ -722,7 +721,7 @@ class App(QObject, LibraryPage, Appearance):
         self.save_audio_progress()
         self.player.unload()
         self.library.flush()
-        save_json(CONFIG_FILE, self.settings)
+        self.settings.save_now()
         if self.reader:
             self.reader.close_page()
         self.litres.shutdown()

@@ -60,9 +60,7 @@ def test_scope_from_filter():
 
 
 def test_library_scope_combo(tmp_path):
-    from PySide6.QtWidgets import QApplication
     from muninhall.widgets import LibraryScopeCombo
-    app = QApplication.instance() or QApplication([])
     settings = {"libraries": [{"id": "litres", "kind": "litres"},
                               {"id": "folder-0123456789", "kind": "folder", "name": "Статьи", "path": str(tmp_path)}]}
     combo = LibraryScopeCombo(settings, "folder-0123456789")
@@ -73,3 +71,22 @@ def test_library_scope_combo(tmp_path):
     assert seen == ["litres"]
     combo.refill("missing")                         # неизвестная — остаётся текущая
     assert combo.scope() == "litres"
+
+
+def test_settings_autosave_and_signal(tmp_path):
+    import json
+    from PySide6.QtCore import QCoreApplication
+    from muninhall.config import Settings
+    path = tmp_path / "settings.json"
+    st = Settings(path, defaults={"fontSize": 19})
+    seen = []
+    st.changed.connect(seen.append)
+    st["fontSize"] = 24
+    assert seen == ["fontSize"] and st.get("fontSize") == 24 and dict(st) == {"fontSize": 24}
+    assert not path.exists()                         # запись — пачкой, через полсекунды
+    st.save_now()
+    assert json.loads(path.read_text()) == {"fontSize": 24}
+    assert Settings(path, defaults={"fontSize": 19, "theme": "auto"}).as_dict() == {"fontSize": 24, "theme": "auto"}
+    st.pop("fontSize")
+    assert "fontSize" not in st and seen[-1] == "fontSize"
+    QCoreApplication.processEvents()
