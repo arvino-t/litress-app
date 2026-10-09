@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.arvino_t.Muninhall</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Muninhall</name>
+  <summary>Your own library of e-books and articles</summary>
+  <summary xml:lang="ru">Своя библиотека электронных книг и статей</summary>
+  <description>
+    <p>Build, read and organize your own library: folders on disk with books and articles (EPUB, FB2,
+      MOBI, PDF), each with its own graph and backups, browsed together as one big library.
+      LitRes is a pluggable library of purchased books and audiobooks.</p>
+    <p xml:lang="ru">Создавайте, читайте и организуйте свою библиотеку: папки с книгами и статьями (EPUB,
+      FB2, MOBI, PDF), у каждой свой граф и резервные копии, все вместе — одна большая библиотека.
+      ЛитРес — подключаемая библиотека купленных книг и аудиокниг.</p>
+  </description>
+  <launchable type="desktop-id">io.github.arvino_t.Muninhall.desktop</launchable>
+  <url type="homepage">https://github.com/arvino-t/muninhall</url>
+  <url type="bugtracker">https://github.com/arvino-t/muninhall/issues</url>
+  <developer id="io.github.arvino_t">
+    <name>arvino-t</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.18.0" date="2026-10-09"/>
+  </releases>
+</component>

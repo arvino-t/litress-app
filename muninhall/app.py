@@ -1531,7 +1531,10 @@ class App(QObject):
 
     def restart(self):
         """Перезапуск приложения (после восстановления из копии)."""
-        QProcess.startDetached(sys.executable, ["-m", "muninhall", "--restarted"])
+        if getattr(sys, "frozen", False):          # собранная программа (Windows): сама себя
+            QProcess.startDetached(sys.executable, ["--restarted"])
+        else:
+            QProcess.startDetached(sys.executable, ["-m", "muninhall", "--restarted"])
         self.window.close()
         self.qapp.quit()
 
@@ -1631,4 +1634,14 @@ def main(argv=None):
 
     for f in files:
         QTimer.singleShot(0, lambda f=f: app.import_and_open(f))
+    if os.environ.get("MUNINHALL_SMOKE_TEST"):
+        # проверка сборки (CI): окно поднялось, библиотека построена — выходим с кодом 0
+        def smoke():
+            line = f"MUNINHALL_SMOKE_TEST ok: {APP_NAME} {__version__}, books: {len(app.library.ordered())}"
+            print(line, flush=True)
+            if os.environ.get("MUNINHALL_SMOKE_TEST_FILE"):    # у оконной сборки Windows нет консоли
+                Path(os.environ["MUNINHALL_SMOKE_TEST_FILE"]).write_text(line + "\n", encoding="utf-8")
+            app.window.close()
+            qapp.quit()
+        QTimer.singleShot(int(os.environ.get("MUNINHALL_SMOKE_TEST_MS", "4000")), smoke)
     return qapp.exec()

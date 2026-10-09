@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Muninhall
+GenericName=Personal library
+GenericName[ru]=Своя библиотека книг
+Comment=Build, read and organize your own library of books and articles; LitRes as a pluggable library
+Comment[ru]=Своя библиотека книг и статей: читать, организовывать, обслуживать; ЛитРес — подключаемая библиотека
+Exec=muninhall %F
+Icon=io.github.arvino_t.Muninhall
+Terminal=false
+Categories=Office;Viewer;Qt;
+Keywords=books;library;epub;fb2;pdf;audiobooks;litres;книги;библиотека;статьи;литрес;
+MimeType=application/epub+zip;application/x-fictionbook+xml;application/x-zip-compressed-fb2;application/x-mobipocket-ebook;application/pdf;
+StartupWMClass=muninhall

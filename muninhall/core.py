@@ -43,9 +43,14 @@ def _dirs(slug=APP_SLUG):
         local = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
         roaming = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
         return local / slug, roaming / slug, local / slug / "cache"
-    data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
-    config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
-    cache = Path(os.environ.get("XDG_CACHE_HOME") or home / ".cache")
+    if os.environ.get("FLATPAK_ID"):
+        # во Flatpak — те же каталоги, что у обычной установки (доступ к домашней папке дан в манифесте),
+        # а не ~/.var/app/…: данные общие, переход между установками ничего не теряет
+        data, config, cache = home / ".local" / "share", home / ".config", home / ".cache"
+    else:
+        data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
+        config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
+        cache = Path(os.environ.get("XDG_CACHE_HOME") or home / ".cache")
     return data / slug, config / slug, cache / slug
 
 

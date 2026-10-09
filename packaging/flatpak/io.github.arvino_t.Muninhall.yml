@@ -1,0 +1,55 @@
+# Flatpak Muninhall. Сборка из корня репозитория:
+#   flatpak-builder --user --install --force-clean build packaging/flatpak/io.github.arvino_t.Muninhall.yml
+id: io.github.arvino_t.Muninhall
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: muninhall
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  # свои библиотеки — папки где угодно в домашней папке; данные — в ~/.local/share|.config|.cache/muninhall,
+  # общие с обычной установкой
+  - --filesystem=home
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.secrets
+  - --env=QTWEBENGINE_DISABLE_SANDBOX=1
+  - --env=QT_QPA_PLATFORM=wayland;xcb
+modules:
+  # PySide6 — готовые колёса с PyPI (Qt и Chromium внутри)
+  - name: pyside6
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-index --no-deps --prefix=/app *.whl
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/a5/9a/f41bea4316d0c1bec4800842dcb4bd8fd3e29d6a79c496bc32e1aec42583/shiboken6-6.11.2-cp310-abi3-manylinux_2_34_x86_64.whl
+        sha256: 7a7a0a72a9ed26c9bf77d42246b1c736486befb8f31aa2fb29957ea4cdd1c1c2
+      - type: file
+        url: https://files.pythonhosted.org/packages/0e/1a/84a84bbc75835ee88abdcb66eb875b8e1a21834af9b833bc1893f2c1bfaf/pyside6_essentials-6.11.2-cp310-abi3-manylinux_2_34_x86_64.whl
+        sha256: aaf9f25f0f324874085fa5b26a610318db8a8e243cf85bb3e5400595191c7778
+      - type: file
+        url: https://files.pythonhosted.org/packages/28/cd/ce470e20f68901f4dfa5f742d6a3a58ba865684a232e4b87d5a1a2179cc0/pyside6_addons-6.11.2-cp310-abi3-manylinux_2_34_x86_64.whl
+        sha256: a8b00956925fbdeffc7052cf933506391289f35ac4f3f71a0a167ec195cd47b4
+
+  - name: muninhall
+    buildsystem: simple
+    build-commands:
+      - PURELIB=$(python3 -c "import sysconfig; print(sysconfig.get_path('purelib', vars=dict(base='/app')))") && cp -r muninhall "$PURELIB/"
+      - install -Dm755 packaging/flatpak/muninhall.sh /app/bin/muninhall
+      - install -Dm644 packaging/flatpak/io.github.arvino_t.Muninhall.desktop -t /app/share/applications
+      - install -Dm644 packaging/flatpak/io.github.arvino_t.Muninhall.metainfo.xml -t /app/share/metainfo
+      - install -Dm644 muninhall/data/io.github.arvino_t.Muninhall.svg -t /app/share/icons/hicolor/scalable/apps
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .venv
+          - build
+          - dist
+          - .git
