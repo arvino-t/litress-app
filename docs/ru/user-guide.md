@@ -30,7 +30,17 @@ Muninhall — приложение для Linux и Windows, чтобы созд�
 
 ## Установка
 
-### Linux (Fedora, Ubuntu/Debian, Arch)
+### Готовые установщики
+
+На странице [релизов](https://github.com/arvino-t/muninhall/releases) к каждой версии приложены:
+
+- **`Muninhall-Setup-<версия>.exe`** — установщик для Windows 10/11. Ставит программу для текущего
+  пользователя, без прав администратора; Python не нужен. Ярлыки — в меню «Пуск» (и по желанию на
+  рабочем столе), EPUB/FB2/MOBI/PDF — в «Открыть с помощью». Удаление — через «Параметры → Приложения».
+- **`Muninhall.flatpak`** — для любого Linux с Flatpak: `flatpak install --user Muninhall.flatpak`.
+  Данные общие с обычной установкой (`~/.local/share/muninhall` и т. д.).
+
+### Linux из исходников (Fedora, Ubuntu/Debian, Arch)
 
 ```
 bash install.sh              # установить или обновить
@@ -42,7 +52,7 @@ bash install.sh --uninstall  # удалить
 `~/.local/opt/muninhall`, команда — `muninhall`, в меню появляется «Muninhall»,
 файлы EPUB, FB2 и MOBI открываются через неё.
 
-### Windows 10/11
+### Windows из исходников
 
 Дважды щёлкните `install.cmd` (или выполните
 `powershell -ExecutionPolicy Bypass -File windows\install.ps1`).

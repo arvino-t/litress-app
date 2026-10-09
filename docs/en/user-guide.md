@@ -30,7 +30,17 @@ in Russian and English.
 
 ## Installation
 
-### Linux (Fedora, Ubuntu/Debian, Arch)
+### Ready-made installers
+
+Each version on the [releases page](https://github.com/arvino-t/muninhall/releases) comes with:
+
+- **`Muninhall-Setup-<version>.exe`** — an installer for Windows 10/11. Installs for the current user,
+  without administrator rights; no Python needed. Shortcuts go to the Start menu (and optionally the
+  desktop), EPUB/FB2/MOBI/PDF are added to "Open with". Uninstall via "Settings → Apps".
+- **`Muninhall.flatpak`** — for any Linux with Flatpak: `flatpak install --user Muninhall.flatpak`.
+  Data is shared with the native install (`~/.local/share/muninhall` etc.).
+
+### Linux from source (Fedora, Ubuntu/Debian, Arch)
 
 ```
 bash install.sh              # install or update
@@ -42,7 +52,7 @@ missing (Python 3.10+, venv, libraries for Qt and Chromium). The app lives in
 `~/.local/opt/muninhall`, the command is `muninhall`, and "Muninhall" appears in the
 app menu; EPUB, FB2 and MOBI files open with it.
 
-### Windows 10/11
+### Windows from source
 
 Double-click `install.cmd` (or run
 `powershell -ExecutionPolicy Bypass -File windows\install.ps1`).

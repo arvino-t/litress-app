@@ -19,6 +19,11 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
   - keyboard shortcuts for refresh, search, open file, graph, statistics, settings, full screen and
     back; conflicts are pointed out; "Reset shortcuts" restores the defaults.
 
+### Packaging
+- Ready-made installers built in GitHub Actions and attached to releases: **`Muninhall-Setup-<version>.exe`**
+  for Windows (PyInstaller + Inno Setup, per-user, no Python needed) and **`Muninhall.flatpak`** for Linux
+  (freedesktop 24.08 runtime with PySide6; data shared with the native install). Each build is smoke-tested.
+
 ### Performance
 - Startup with ~470 books: about 1.9 s instead of 4.2 s to a ready window, memory 485 MB instead of
   1.5 GB. Covers are decoded already scaled to the card size (instead of full size and rescaling on

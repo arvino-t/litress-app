@@ -36,6 +36,9 @@ Reader), briefly *Shelfwise* in 0.16; data from the previous versions is migrate
 
 ## Installation
 
+Ready-made installers are attached to every [release](https://github.com/arvino-t/muninhall/releases):
+`Muninhall-Setup-<version>.exe` for Windows (per-user, no Python needed) and `Muninhall.flatpak` for Linux.
+
 ### Linux (Fedora, Ubuntu/Debian, Arch)
 
 ```
@@ -121,6 +124,14 @@ When adding a string, add its English translation too — a missing one falls ba
 
 Every asset folder must be listed in `[tool.setuptools.package-data]` in `pyproject.toml`.
 Test features against the installed package (`bash install.sh`), not only the source tree.
+
+### Packaging
+
+`packaging/windows` — PyInstaller spec and Inno Setup script (one per-user installer);
+`packaging/flatpak` — Flatpak manifest (freedesktop 24.08 runtime + PySide6 wheels), desktop entry and
+metainfo. Both are built by `.github/workflows/build.yml` (manually or on a `v*` tag), which runs the tests,
+smoke-tests each build (`MUNINHALL_SMOKE_TEST=1` starts the app, builds the library and exits) and attaches
+the installers to the release.
 
 ### Releases
 
