@@ -40,9 +40,9 @@ Behaviour doesn't change; after each step, check the installed version.
 - [ ] **Dictionary and translation of the selected word** — for books and articles in English.
 
 ## Library and sync
-- [ ] **Rework the backup logic** (Backups tab, `backup.py`). To revisit: backup contents and
-  format, schedule and retention (how many to keep, which to delete), restoring without a restart,
-  how it relates to the future cloud sync (so that backups and sync don't duplicate each other).
+- [ ] **Rework the backup logic** (Backups tab, `backup.py`) — per-library backups are done. Still to
+  revisit: restoring a single library without a restart, automatic backups per library, how backups
+  relate to the future cloud sync (so that they don't duplicate each other).
 - [ ] **Sync app data directly with the cloud** — Google Drive or Yandex Disk, chosen and signed in
   to in the app settings (not via the `~/Documents` folder). What to sync: highlights, notes,
   bookmarks, reading positions of your own books and PDFs, statistics and settings, so everything

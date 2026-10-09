@@ -1373,14 +1373,18 @@ class App(QObject):
 
     # --- резервные копии
 
-    def make_backup(self, reason="") -> Path | None:
+    def make_backup(self, reason="", scope="all") -> Path | None:
+        """Копия всех библиотек (scope="all") или одной: "litres" / id своей."""
+        self.library.save()
+        self.library.flush()
         try:
-            path = backup.create(self.settings, reason)
+            path = backup.create(self.settings, reason, scope)
         except (OSError, ValueError) as e:
             print(f"litres-reader: резервная копия не создана: {e}", file=sys.stderr, flush=True)
             return None
-        self.settings["backupLast"] = datetime.now().isoformat(timespec="seconds")
-        self.save_settings()
+        if scope == "all":
+            self.settings["backupLast"] = datetime.now().isoformat(timespec="seconds")
+            self.save_settings()
         log("backup", path)
         return path
 

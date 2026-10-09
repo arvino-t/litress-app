@@ -63,12 +63,26 @@ def backup_dir(settings) -> Path:
     return Path(settings.get("backupDir") or default_dir())
 
 
-def create(settings, reason: str = "") -> Path:
-    """Создаёт копию и удаляет лишние старые. Возвращает путь к архиву."""
+def scope_tag(scope: str) -> str:
+    """Часть имени файла по библиотеке: «Все» — без пометки (как раньше)."""
+    return "" if scope == "all" else "-litres" if scope == "litres" else f"-lib-{scope}"
+
+
+def scope_of(path: Path) -> str:
+    m = re.search(r"-lib-(folder-[0-9a-f]{10})", path.name)
+    return m.group(1) if m else "litres" if "-litres" in path.name else "all"
+
+
+# Что входит в копию ЛитРес: её книги и место чтения (свои книги лежат в .library своих библиотек)
+LITRES_FILES = ("library.json", "progress.json")
+
+
+def create(settings, reason: str = "", scope: str = "all") -> Path:
+    """Создаёт копию библиотеки (scope: "all", "litres" или id своей) и удаляет лишние старые."""
     folder = backup_dir(settings)
     folder.mkdir(parents=True, exist_ok=True)
     now = datetime.now()
-    stem = PREFIX + now.strftime("%Y-%m-%d_%H%M%S") + (f"-{reason}" if reason else "")
+    stem = PREFIX + now.strftime("%Y-%m-%d_%H%M%S") + scope_tag(scope) + (f"-{reason}" if reason else "")
     dest = folder / f"{stem}.zip"
     n = 2
     while dest.exists():                    # две копии в одну секунду
@@ -79,6 +93,8 @@ def create(settings, reason: str = "") -> Path:
     stored = []
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
         for arc, path in FILES.items():
+            if scope != "all" and not (scope == "litres" and arc in LITRES_FILES):
+                continue
             if arc == "settings.json":
                 data = json.dumps(settings, ensure_ascii=False, indent=1).encode()   # текущие, даже не сохранённые
             elif path.exists():
@@ -92,6 +108,8 @@ def create(settings, reason: str = "") -> Path:
             z.writestr(arc, data)
             stored.append(arc)
         for lib_id, store in _folder_stores(settings).items():
+            if scope not in ("all", lib_id):
+                continue
             for name in STORE_FILES:
                 if (store / name).exists():
                     arc = f"libraries/{lib_id}/{name}"
@@ -99,20 +117,22 @@ def create(settings, reason: str = "") -> Path:
                     stored.append(arc)
         z.writestr("manifest.json", json.dumps({
             "app": "litres-reader", "version": __version__, "created": now.isoformat(timespec="seconds"),
-            "files": stored, "token": include_token, "reason": reason,
+            "files": stored, "token": include_token and scope == "all", "reason": reason, "scope": scope,
         }, ensure_ascii=False, indent=1))
     if sys.platform != "win32":
         tmp.chmod(0o600)      # история чтения, пути к книгам, возможно токен — только для владельца
     tmp.replace(dest)
-    prune(folder, int(settings.get("backupKeep") or 10))
+    prune(folder, int(settings.get("backupKeep") or 10), scope)
     return dest
 
 
-def list_backups(folder: Path) -> list[tuple[Path, datetime]]:
-    """Копии в папке, новые первыми (в одну секунду — по времени записи файла)."""
+def list_backups(folder: Path, scope: str | None = None) -> list[tuple[Path, datetime]]:
+    """Копии в папке (scope — только этой библиотеки), новые первыми; в одну секунду — по времени записи."""
     out = []
     try:
         for p in folder.glob(PREFIX + "*.zip"):
+            if scope is not None and scope_of(p) != scope:
+                continue
             st = p.stat()
             try:
                 when = datetime.strptime(p.stem[len(PREFIX):len(PREFIX) + 17], "%Y-%m-%d_%H%M%S")
@@ -125,8 +145,9 @@ def list_backups(folder: Path) -> list[tuple[Path, datetime]]:
     return [(p, when) for p, when, _ns in out]
 
 
-def prune(folder: Path, keep: int):
-    for p, _when in list_backups(folder)[max(1, keep):]:
+def prune(folder: Path, keep: int, scope: str = "all"):
+    """Оставляет keep последних копий этой библиотеки (у каждой библиотеки — свой счёт)."""
+    for p, _when in list_backups(folder, scope)[max(1, keep):]:
         p.unlink(missing_ok=True)
 
 

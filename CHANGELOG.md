@@ -31,6 +31,11 @@ All notable changes to LitRes Reader. The format is based on
   libraries), defaulting to the library chosen in the Source filter. Each library keeps its own graph
   state (tag kinds, filters): your library in `.library/graph.json` (also backed up), LitRes and All in
   the settings. The All / LitRes / Mine toggle is hidden for a single library.
+- **Backups per library:** the Backups tab has a library selector; "Back up" and the restore list
+  apply to the chosen library. An "All libraries" backup (also the automatic one) holds settings,
+  statistics, Singularity and every library's data; a library backup holds only its marks, positions
+  and graph (`-lib-<id>` / `-litres` in the file name, `scope` in the manifest). Each library keeps its
+  own number of backups; restoring one library doesn't touch the others.
 - LitRes is now a connector (`litres_connector.py`): sign-in, sync, downloads (single and all),
   LitRes folders, the position from the phone and genre loading moved out of the main window class.
 

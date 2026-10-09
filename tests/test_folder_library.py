@@ -99,3 +99,36 @@ def test_backup_includes_library_store(clean_data, tmp_path):
     backup.stage_restore(path)
     assert backup.apply_pending() is True
     assert json.loads(store.read_text())["a.epub"]["fraction"] == 0.3
+
+
+def test_backup_per_library(clean_data, tmp_path):
+    a, b = make_lib(tmp_path / "a"), make_lib(tmp_path / "b")
+    settings = {"backupDir": str(tmp_path / "bk"), "backupKeep": 2,
+                "libraries": [{"kind": "litres", "id": "litres"}, {"kind": "folder", **a}, {"kind": "folder", **b}]}
+    core.save_json(core.CONFIG_FILE, settings)
+    core.save_json(core.LIBRARY_FILE, {"books": {"1": {"id": "1", "source": "litres"}}, "order": ["1"]})
+    lib = Library()
+    lib.scan_folders([a, b])
+    lib.set_progress(bid_of(lib, "a.epub"), "cfi", 0.5)
+    lib.flush()
+    import zipfile
+    one = backup.create(settings, scope=a["id"])
+    names = set(zipfile.ZipFile(one).namelist())
+    assert names == {"manifest.json", f"libraries/{a['id']}/books.json", f"libraries/{a['id']}/progress.json"}
+    assert backup.scope_of(one) == a["id"]
+    lit = backup.create(settings, scope="litres")
+    assert set(zipfile.ZipFile(lit).namelist()) == {"manifest.json", "library.json", "progress.json"}
+    # у каждой библиотеки свой счёт копий
+    for _ in range(3):
+        backup.create(settings, scope=b["id"])
+    folder = backup.backup_dir(settings)
+    assert len(backup.list_backups(folder, b["id"])) == 2
+    assert len(backup.list_backups(folder, a["id"])) == 1 and len(backup.list_backups(folder, "litres")) == 1
+    # восстановление одной библиотеки не трогает другие
+    store_a = tmp_path / "a" / ".library" / "progress.json"
+    store_a.write_text(json.dumps({"a.epub": {"fraction": 0.9}}))
+    other = (tmp_path / "b" / ".library" / "progress.json").read_text()
+    backup.stage_restore(one)
+    backup.apply_pending()
+    assert json.loads(store_a.read_text())["a.epub"]["fraction"] == 0.5
+    assert (tmp_path / "b" / ".library" / "progress.json").read_text() == other

@@ -306,16 +306,9 @@ EN = {
     "Настроить…": "Set up…",
     "Задачи «Читаю», прогресс в заметках, привычка ежедневного чтения":
         "“Reading” tasks, progress in notes, daily reading habit",
-    "Настройки, библиотека (папки, отметки, пути к скачанным книгам), место чтения и закладки, статистика, "
-    "настройки Singularity. Книги и обложки в копию не входят, вход в ЛитРес — тоже. "
-    "Папку с копиями удобно держать в облаке.":
-        "Settings, library (folders, marks, paths to downloaded books), reading positions and bookmarks, "
-        "statistics, Singularity settings. Books, covers and the LitRes sign-in are not included. "
-        "Keeping the backup folder in the cloud is handy.",
     "Создать копию сейчас": "Back up now",
     "Создать": "Back up",
     "Создавать автоматически": "Back up automatically",
-    "При запуске и пока приложение открыто": "On startup and while the app is open",
     "Хранить копий": "Backups to keep",
     "Папка для копий": "Backup folder",
     "Сохранять токен Singularity": "Include the Singularity token",
@@ -372,7 +365,6 @@ EN = {
         "Folders, the LitRes sign-in and the library won't change.",
     "Сбросить": "Reset",
     "Настройки сброшены": "Settings reset",
-    "Более старые удаляются": "Older ones are deleted",
     "Данные": "Data",
     "Библиотека, прогресс, статистика, обложки": "Library, progress, statistics, covers",
     "Кэш": "Cache",
@@ -473,4 +465,22 @@ EN = {
         "the app doesn't copy or delete them. LitRes is a pluggable library of purchased books.",
     "Своя библиотека — папка на диске…": "Your own library — a folder on disk…",
     "Убрать из программы — файлы и данные в папке останутся": "Remove from the app — files and data in the folder stay",
+
+    # --- резервные копии по библиотекам
+    "Копия «Все библиотеки» — настройки, статистика, Singularity и данные всех библиотек; копия одной "
+    "библиотеки — её отметки, место чтения и граф. Книги и обложки в копию не входят, вход в ЛитРес — "
+    "тоже. Папку с копиями удобно держать в облаке.":
+        "An \"All libraries\" backup holds settings, statistics, Singularity and the data of every library; "
+        "a single-library backup holds its marks, reading positions and graph. Books, covers and the LitRes "
+        "sign-in are not included. Keeping the backup folder in the cloud is handy.",
+    "К ней относятся «Создать» и список копий ниже": "\"Back up\" and the list of backups below apply to it",
+    "Копию всех библиотек — при запуске и пока приложение открыто":
+        "An all-libraries backup — on startup and while the app is open",
+    "У каждой библиотеки; более старые удаляются": "Per library; older ones are deleted",
+    "Это копия библиотеки, которой нет в программе. Добавьте библиотеку и повторите.":
+        "This is a backup of a library that isn't in the app. Add the library and try again.",
+    "Отметки, место чтения и граф библиотеки «{0}» заменятся данными из копии; текущие сначала "
+    "сохранятся в отдельную копию. Приложение перезапустится.":
+        "Marks, reading positions and the graph of the \"{0}\" library will be replaced with the backup; "
+        "the current data is backed up first. The app will restart.",
 }

@@ -393,14 +393,24 @@ class SettingsPage(QWidget):
 
         # --- Резервные копии
         self.page("backup")
-        g = self.group(tr("Резервные копии"), tr("Настройки, библиотека (папки, отметки, пути к скачанным книгам), "
-                       "место чтения и закладки, статистика, настройки Singularity. Книги и обложки в копию "
-                       "не входят, вход в ЛитРес — тоже. Папку с копиями удобно держать в облаке."))
+        g = self.group(tr("Резервные копии"), tr("Копия «Все библиотеки» — настройки, статистика, Singularity и данные "
+                       "всех библиотек; копия одной библиотеки — её отметки, место чтения и граф. Книги и обложки "
+                       "в копию не входят, вход в ЛитРес — тоже. Папку с копиями удобно держать в облаке."))
+        libs = libraries.all_libraries(st)
+        self._backup_scopes = ["all"] + [lib["id"] for lib in libs]
+        self.backup_scope = getattr(self, "backup_scope", "all")
+        if self.backup_scope not in self._backup_scopes:
+            self.backup_scope = "all"
+        scope_combo = QComboBox()
+        scope_combo.addItems([tr("Все библиотеки")] + [lib["name"] for lib in libs])
+        scope_combo.setCurrentIndex(self._backup_scopes.index(self.backup_scope))
+        scope_combo.currentIndexChanged.connect(self._on_backup_scope)
+        self.row(g, tr("Библиотека"), scope_combo, tr("К ней относятся «Создать» и список копий ниже"))
         self.backup_now = self.button(g, tr("Создать копию сейчас"), tr("Создать"), self._backup_now)
         self.combo(g, tr("Создавать автоматически"), "backupAuto", BACKUP_AUTO,
-                   tr("При запуске и пока приложение открыто"))
-        self.spin(g, tr("Хранить копий"), "backupKeep", 1, 100, hint=tr("Более старые удаляются"),
-                  on_change=lambda v: backup.prune(backup.backup_dir(st), v))
+                   tr("Копию всех библиотек — при запуске и пока приложение открыто"))
+        self.spin(g, tr("Хранить копий"), "backupKeep", 1, 100, hint=tr("У каждой библиотеки; более старые удаляются"),
+                  on_change=lambda v: [backup.prune(backup.backup_dir(st), v, sc) for sc in self._backup_scopes])
         dir_box = QWidget()
         dh = QHBoxLayout(dir_box)
         dh.setContentsMargins(0, 0, 0, 0)
@@ -517,12 +527,14 @@ class SettingsPage(QWidget):
 
     # --- резервные копии
 
+    def _on_backup_scope(self, idx):
+        if 0 <= idx < len(self._backup_scopes):
+            self.backup_scope = self._backup_scopes[idx]
+            self._fill_backups()
+
     def _sync_backup_hint(self):
-        last = self.app.settings.get("backupLast")
-        try:
-            text = tr("Последняя: ") + human_time(datetime.fromisoformat(last))
-        except (TypeError, ValueError):
-            text = tr("Копий ещё не было")
+        items = backup.list_backups(backup.backup_dir(self.app.settings), self.backup_scope)
+        text = tr("Последняя: ") + human_time(items[0][1]) if items else tr("Копий ещё не было")
         self._set_hint(self.backup_now, text)
 
     def _fill_backups(self):
@@ -531,7 +543,7 @@ class SettingsPage(QWidget):
             g.removeWidget(w)
             w.deleteLater()
         before = g.count()
-        items = backup.list_backups(backup.backup_dir(self.app.settings))
+        items = backup.list_backups(backup.backup_dir(self.app.settings), self.backup_scope)
         for path, when in items[:SHOWN_BACKUPS]:
             b = QPushButton(tr("Восстановить"))
             b.clicked.connect(lambda _=False, p=path: self._restore(p))
@@ -551,7 +563,7 @@ class SettingsPage(QWidget):
         self._sync_backup_hint()
 
     def _backup_now(self):
-        path = self.app.make_backup()
+        path = self.app.make_backup(scope=self.backup_scope)
         if path:
             self.app.toast(tr('Копия создана: {0}', path.name))
         else:
@@ -593,11 +605,22 @@ class SettingsPage(QWidget):
             when = human_time(datetime.fromisoformat(manifest.get("created", "")))
         except ValueError:
             when = path.name
+        scope = manifest.get("scope") or backup.scope_of(path)
+        names = {lib["id"]: lib["name"] for lib in libraries.all_libraries(self.app.settings)}
+        if scope != "all" and scope not in names:
+            QMessageBox.warning(self.app.window, tr("Не удалось восстановить"),
+                                tr("Это копия библиотеки, которой нет в программе. Добавьте библиотеку и повторите."))
+            return
         box = QMessageBox(self.app.window)
         box.setWindowTitle(tr("Восстановить из копии?"))
         box.setText(tr('<b>Восстановить данные из копии ({0})?</b>', when))
-        box.setInformativeText(
-            tr('Копия версии {0}. Библиотека, место чтения, статистика и настройки заменятся данными из копии; текущие сначала сохранятся в отдельную копию. Приложение перезапустится.', manifest.get('version', '?')))
+        if scope == "all":
+            box.setInformativeText(
+                tr('Копия версии {0}. Библиотека, место чтения, статистика и настройки заменятся данными из копии; текущие сначала сохранятся в отдельную копию. Приложение перезапустится.', manifest.get('version', '?')))
+        else:
+            box.setInformativeText(tr("Отметки, место чтения и граф библиотеки «{0}» заменятся данными из копии; "
+                                      "текущие сначала сохранятся в отдельную копию. Приложение перезапустится.",
+                                      names[scope]))
         cancel = box.addButton(tr("Отмена"), QMessageBox.ButtonRole.RejectRole)
         ok = box.addButton(tr("Восстановить и перезапустить"), QMessageBox.ButtonRole.DestructiveRole)
         cls(ok, "destructive")
@@ -611,7 +634,7 @@ class SettingsPage(QWidget):
         except (OSError, ValueError) as e:
             QMessageBox.warning(self.app.window, tr("Не удалось восстановить"), str(e).capitalize())
             return
-        if not self.app.make_backup("before-restore"):
+        if not self.app.make_backup("before-restore", scope):
             backup.cancel_pending()
             QMessageBox.warning(self.app.window, tr("Восстановление отменено"),
                                 tr("Не удалось сохранить текущие данные в копию — подробности в журнале."))
