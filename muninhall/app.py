@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QDialog, Q
                                QHBoxLayout, QInputDialog, QLineEdit, QMainWindow, QMenu, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, backup, core, libraries, style
+from . import __version__, backup, core, libraries, style, widgets
 from .i18n import tr
 from .core import (APP_ICON, APP_ID, APP_NAME, APP_SLUG, OLD_APP_IDS, AUDIO_FORMATS, CONFIG_FILE, COVERS_DIR, DEFAULT_SETTINGS,
                    NO_FOLDER, READABLE, SORT_MODES, STATUS_FILTERS, Library, books_dir, load_json, log,
@@ -176,6 +176,7 @@ class App(QObject):
         self.settings_page: SettingsPage | None = None
         self._details_running = False
         self.player_page: PlayerPage | None = None
+        widgets.THUMBS_DIR = core.CACHE_DIR / "thumbs"      # миниатюры обложек
         self.net = QNetworkAccessManager(self)
         self._covers_running = 0
         self._cover_queue: list[str] = []

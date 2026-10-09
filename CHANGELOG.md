@@ -19,6 +19,12 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
   - keyboard shortcuts for refresh, search, open file, graph, statistics, settings, full screen and
     back; conflicts are pointed out; "Reset shortcuts" restores the defaults.
 
+### Performance
+- Startup with ~470 books: about 1.9 s instead of 4.2 s to a ready window, memory 485 MB instead of
+  1.5 GB. Covers are decoded already scaled to the card size (instead of full size and rescaling on
+  every repaint), cached in memory and on disk (`<cache>/thumbs`, ~5 MB), and unchanged covers and
+  titles are not redrawn; recolored symbolic icons are cached; title eliding uses a binary search.
+
 ### Fixed
 - Linux installer: the user icon cache was not refreshed (no `index.theme` in `~/.local/share/icons/hicolor`),
   so a stale cache hid the new app icon; the cache is now rebuilt with `gtk-update-icon-cache -f -t`.

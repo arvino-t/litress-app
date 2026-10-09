@@ -130,9 +130,21 @@ def _svg(name: str) -> str:
     return (ICONS_DIR / f"{name}.svg").read_text(encoding="utf-8")
 
 
+_ICON_CACHE: dict[tuple, QIcon] = {}
+
+
 def icon(name: str, color: QColor | str | None = None, size: int = 16) -> QIcon:
-    """Символьный значок Adwaita, перекрашенный в нужный цвет (как делает GTK)."""
+    """Символьный значок Adwaita, перекрашенный в нужный цвет (как делает GTK); готовые — из кэша."""
     c = QColor(color) if color is not None else solid_fg()
+    key = (name, c.name(QColor.NameFormat.HexArgb), size)
+    cached = _ICON_CACHE.get(key)
+    if cached is not None:
+        return cached
+    _ICON_CACHE[key] = result = _render_icon(name, c, size)
+    return result
+
+
+def _render_icon(name: str, c: QColor, size: int) -> QIcon:
     hex_color = c.name(QColor.NameFormat.HexRgb)
     svg = re.sub(r'fill="#[0-9a-fA-F]{3,6}"', f'fill="{hex_color}"', _svg(name))
     svg = svg.replace("currentColor", hex_color)

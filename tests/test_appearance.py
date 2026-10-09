@@ -23,3 +23,31 @@ def test_default_shortcuts_unique():
     keys = [k for _a, _t, ks, _s in SHORTCUTS for k in ks]
     assert len(keys) == len(set(keys))
     assert len({a for a, *_ in SHORTCUTS}) == len(SHORTCUTS)
+
+
+def test_cover_thumb_downscales_and_caches(tmp_path):
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QImage, QColor
+    from muninhall import widgets
+    src = tmp_path / "cover.jpg"
+    img = QImage(900, 1300, QImage.Format.Format_RGB32)
+    img.fill(QColor("#3584e4"))
+    img.save(str(src), "JPG")
+    widgets.THUMBS_DIR = tmp_path / "thumbs"
+    widgets._THUMBS.clear()
+    pm = widgets.cover_thumb(src, QSize(132, 192), 1.0)
+    assert pm is not None and pm.width() <= 140 and pm.height() >= 192        # декодирована уменьшенной
+    assert widgets.cover_thumb(src, QSize(132, 192), 1.0) is pm               # из памяти
+    widgets._THUMBS.clear()
+    assert len(list((tmp_path / "thumbs").iterdir())) == 1                    # и на диске
+    assert widgets.cover_thumb(src, QSize(132, 192), 1.0).height() == pm.height()
+
+
+def test_elide_lines():
+    from PySide6.QtGui import QFont, QFontMetrics
+    from muninhall.widgets import elide_lines
+    fm = QFontMetrics(QFont())
+    assert elide_lines(fm, "Короткое", 132, 2) == "Короткое"
+    long = "Очень длинное название книги " * 10
+    out = elide_lines(fm, long, 132, 2)
+    assert out.endswith("…") and len(out) < len(long)

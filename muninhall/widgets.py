@@ -1,9 +1,12 @@
 """Элементы интерфейса в стиле libadwaita: заголовок окна, уведомления, карточки книг и т.п."""
 from __future__ import annotations
 
+import hashlib
+import os
+
 from PySide6.QtCore import (QEasingCurve, QPoint, QPropertyAnimation, QRect, QSize, Qt, QTimer,
                             Signal, Property)
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QGuiApplication, QImageReader, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
                                QLayout, QProgressBar, QPushButton, QSizePolicy, QSlider, QStyle,
                                QStyleOptionSlider,
@@ -334,6 +337,70 @@ class IconBadge(Badge):
         self.setPixmap(style.icon(self._icon_name, "#ffffff", 14).pixmap(14, 14))
 
 
+# Миниатюры обложек: (путь, время изменения, размер, масштаб экрана) → картинка нужного размера.
+# Обложка декодируется сразу уменьшенной (JPEG это умеет) — быстрее и в разы меньше памяти,
+# чем держать оригинал и сжимать его при каждой отрисовке.
+_THUMBS: dict[tuple, QPixmap] = {}
+THUMBS_DIR = None        # задаёт App: <кэш>/thumbs
+
+
+def cover_thumb(path, size: QSize, dpr: float) -> QPixmap | None:
+    try:
+        mtime = os.stat(path).st_mtime_ns
+    except OSError:
+        return None
+    key = (str(path), mtime, size.width(), size.height(), dpr)
+    pm = _THUMBS.get(key)
+    if pm is not None:
+        return pm
+    # готовая миниатюра на диске (кэш приложения) — со второго запуска обложки не декодируются заново
+    disk = THUMBS_DIR / (hashlib.sha1(repr(key).encode()).hexdigest() + ".jpg") if THUMBS_DIR else None
+    if disk is not None and disk.exists():
+        pm = QPixmap(str(disk))
+        if not pm.isNull():
+            pm.setDevicePixelRatio(dpr)
+            _THUMBS[key] = pm
+            return pm
+    if pm is None:
+        reader = QImageReader(str(path))
+        reader.setAutoTransform(True)
+        src = reader.size()
+        if src.isValid() and not src.isEmpty():
+            target = src.scaled(QSize(round(size.width() * dpr), round(size.height() * dpr)),
+                                Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+            if target.width() < src.width():          # только уменьшаем
+                reader.setScaledSize(target)
+        img = reader.read()
+        if img.isNull():
+            return None
+        if disk is not None:
+            try:
+                disk.parent.mkdir(parents=True, exist_ok=True)
+                img.save(str(disk), "JPG", 92)
+            except OSError:
+                pass
+        pm = QPixmap.fromImage(img)
+        pm.setDevicePixelRatio(dpr)
+        _THUMBS[key] = pm
+    return pm
+
+
+def elide_lines(fm, text: str, width: int, lines: int) -> str:
+    """Текст не длиннее lines строк по ширине width (двоичный поиск — быстро и для длинных названий)."""
+    limit = fm.lineSpacing() * lines + 2
+    fits = lambda t: fm.boundingRect(QRect(0, 0, width, 1000), Qt.TextFlag.TextWordWrap, t).height() <= limit
+    if fits(text):
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if fits(text[:mid].rstrip() + "…"):
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "…"
+
+
 class Cover(QWidget):
     """Обложка со скруглёнными углами; без картинки — название на цветном фоне."""
 
@@ -343,13 +410,18 @@ class Cover(QWidget):
         super().__init__(parent)
         self.setFixedSize(size or QSize(self.W, self.H))
         self._pix: QPixmap | None = None
+        self._key = None
         self._text = ""
         self._progress: float | None = None
 
     def set_cover(self, path, text):
-        self._pix = QPixmap(str(path)) if path else None
-        if self._pix is not None and self._pix.isNull():
-            self._pix = None
+        dpr = max(self.devicePixelRatioF(), QGuiApplication.instance().devicePixelRatio())
+        pix = cover_thumb(path, self.size(), dpr) if path else None
+        key = (id(pix) if pix is not None else None, text)
+        if key == self._key:
+            return                       # та же обложка и подпись — перерисовывать нечего
+        self._key = key
+        self._pix = pix
         self._text = text
         self.update()
 
@@ -365,10 +437,13 @@ class Cover(QWidget):
         path.addRoundedRect(self.rect(), 8, 8)
         p.setClipPath(path)
         if self._pix:
-            scaled = self._pix.scaled(self.size() * self.devicePixelRatioF(),
-                                      Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                                      Qt.TransformationMode.SmoothTransformation)
-            scaled.setDevicePixelRatio(self.devicePixelRatioF())
+            scaled = self._pix
+            dpr = self.devicePixelRatioF()
+            if abs(scaled.devicePixelRatio() - dpr) > 0.01 or scaled.width() < self.width() * dpr - 1:
+                # экран с другим масштабом — досжимаем (обычно миниатюра уже нужного размера)
+                scaled = self._pix.scaled(self.size() * dpr, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                          Qt.TransformationMode.SmoothTransformation)
+                scaled.setDevicePixelRatio(dpr)
             sw = scaled.width() / scaled.devicePixelRatio()
             sh = scaled.height() / scaled.devicePixelRatio()
             p.drawPixmap(QPoint(int((self.width() - sw) / 2), int((self.height() - sh) / 2)), scaled)
@@ -434,16 +509,11 @@ class BookCard(QFrame):
 
     def update_book(self, book, lib):
         title = book.get("title") or ""
-        fm = self.title.fontMetrics()
-        # Не больше двух строк, как в GTK-версии
-        elided = title
-        if fm.boundingRect(QRect(0, 0, Cover.W, 1000), Qt.TextFlag.TextWordWrap, title).height() > fm.lineSpacing() * 2 + 2:
-            while elided and fm.boundingRect(QRect(0, 0, Cover.W, 1000), Qt.TextFlag.TextWordWrap,
-                                             elided + "…").height() > fm.lineSpacing() * 2 + 2:
-                elided = elided[:-1]
-            elided = elided.rstrip() + "…"
-        self.title.setText(elided)
-        self.title.setToolTip(title if elided != title else "")
+        if title != getattr(self, "_title_src", None):
+            self._title_src = title
+            elided = elide_lines(self.title.fontMetrics(), title, Cover.W, 2)
+            self.title.setText(elided)
+            self.title.setToolTip(title if elided != title else "")
         authors = ", ".join(book.get("authors") or [])
         self.author.setText(self.author.fontMetrics().elidedText(authors, Qt.TextElideMode.ElideRight, Cover.W))
         s = book.get("series")
