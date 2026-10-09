@@ -564,7 +564,8 @@ class LibraryView:
                 menu.addAction(tr("Открыть на сайте ЛитРес"), lambda: QDesktopServices.openUrl(QUrl(book["url"])))
         nxt = self.app.library.next_in_series(book)
         if nxt:
-            menu.addAction(tr('Следующая в серии: {0}', nxt.get('title')), lambda: self.app.on_book_activated(nxt["id"]))
+            menu.addAction(tr('Следующая в серии: {0}', nxt.get('title')),
+                           lambda: self.app.on_book_activated(nxt["id"]))
         if book.get("source") == "folder":
             # своя книга: файл остаётся на месте, удалять его из читалки не даём
             menu.addAction(tr("Показать файл в папке"), lambda: QDesktopServices.openUrl(

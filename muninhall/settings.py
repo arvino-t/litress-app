@@ -335,10 +335,19 @@ class SettingsPage(QWidget):
     # --- содержимое
 
     def build(self):
-        app = self.app
-        st = app.settings
+        """Все вкладки: каждая строится своим методом _build_<вкладка>."""
+        self._build_general()
+        self._build_libraries()
+        self._build_appearance()
+        self._build_reading()
+        self._build_integrations()
+        self._build_backup()
+        self._build_advanced()
+        self.show_tab(self.app.settings.get("settingsTab") or "general")
 
-        # --- Общие
+    def _build_general(self):
+        """Вкладка «Общие»."""
+        app = self.app
         self.page("general")
         g = self.group(tr("Язык"))
         self.combo(g, tr("Язык интерфейса"), "language",
@@ -359,7 +368,8 @@ class SettingsPage(QWidget):
                     tr("Минуты по дням, серия дней подряд, дочитанные книги"))
         self.col.addStretch()
 
-        # --- Библиотеки
+    def _build_libraries(self):
+        """Вкладка «Библиотеки»."""
         self.page("libraries")
         self.account_btn = None
         self.libraries_group = self.group(
@@ -371,7 +381,9 @@ class SettingsPage(QWidget):
         self._fill_libraries()
         self.col.addStretch()
 
-        # --- Внешний вид
+    def _build_appearance(self):
+        """Вкладка «Внешний вид»."""
+        app = self.app
         self.page("appearance")
         g = self.group(tr("Оформление"))
         self.combo(g, tr("Тема интерфейса"), "uiTheme", UI_THEMES, tr("Светлая или тёмная — независимо от системы"),
@@ -387,7 +399,10 @@ class SettingsPage(QWidget):
         self._fill_shortcuts()
         self.col.addStretch()
 
-        # --- Чтение
+    def _build_reading(self):
+        """Вкладка «Чтение»."""
+        app = self.app
+        st = app.settings
         self.page("reading")
         g = self.group(tr("Вид текста"))
         self.spin(g, tr("Размер шрифта"), "fontSize", 12, 40)
@@ -419,14 +434,19 @@ class SettingsPage(QWidget):
         self.row(g, tr("Скорость воспроизведения"), rate, tr("Без изменения высоты голоса"))
         self.col.addStretch()
 
-        # --- Интеграции
+    def _build_integrations(self):
+        """Вкладка «Интеграции»."""
+        app = self.app
         self.page("integrations")
         g = self.group(tr("Сервисы"), tr("Сторонние сервисы, с которыми работает приложение."))
         self.button(g, "Singularity", tr("Настроить…"), app.show_singularity_dialog,
                     tr("Задачи «Читаю», прогресс в заметках, привычка ежедневного чтения"), service="singularity")
         self.col.addStretch()
 
-        # --- Резервные копии
+    def _build_backup(self):
+        """Вкладка «Резервные копии»."""
+        app = self.app
+        st = app.settings
         self.page("backup")
         g = self.group(tr("Резервные копии"), tr("Копия «Все библиотеки» — настройки, статистика, Singularity и данные "
                        "всех библиотек; копия одной библиотеки — её отметки, место чтения и граф. Книги и обложки "
@@ -464,7 +484,9 @@ class SettingsPage(QWidget):
         self._fill_backups()
         self.col.addStretch()
 
-        # --- Дополнительно
+    def _build_advanced(self):
+        """Вкладка «Дополнительно»."""
+        app = self.app
         self.page("advanced")
         g = self.group(tr("Синхронизация с ЛитРес"))
         self.spin(g, tr("Обновлять библиотеку с ЛитРес каждые"), "remoteSyncMin", 0, 120, 5, tr(" мин"),
@@ -500,8 +522,6 @@ class SettingsPage(QWidget):
                     lambda: QDesktopServices.openUrl(QUrl("https://github.com/arvino-t/muninhall")),
                     "github.com/arvino-t/muninhall")
         self.col.addStretch()
-
-        self.show_tab(st.get("settingsTab") or "general")
 
     # --- обработчики
 

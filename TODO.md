@@ -14,11 +14,10 @@ Reviewed: 2026-10-09 (after 0.18.0).
 ## Refactoring towards SOLID
 Behaviour doesn't change; every step — tests plus a full flow run on the installed build. Numbers are from
 the review after 1.0.0. Step 3 prepares new connectors (OPDS).
-- [ ] **5. Real components instead of mixins (SRP, ISP):** `LibraryPage` as a widget with explicit
-  dependencies (library model, settings, notifications) instead of a mixin sharing `App` state; settings
-  tabs as separate classes (`SettingsPage` is 753 lines, `build()` 171); give `LitresConnector` (27 `App`
-  attributes) and the settings page (32) narrow interfaces instead of the whole `App`; move the LitRes
-  folders dialog out of the connector.
+- [ ] **5. Narrow interfaces (ISP), the rest of step 5:** the library page is a component now
+  (`LibraryView`), settings tabs are separate builder methods and the LitRes folders dialog has its own
+  module; still left — `LitresConnector` and the settings page reach into the whole `App` (≈27 and 32
+  attributes); pass them only what they need (library model, settings, notifications, navigation).
 - [ ] **6. Long methods:** `PlayerPage.__init__` (137 lines), `singularity.show_dialog` (122),
   `LitresConnector.download_book` (92) and `sync` (82), `ReaderPage._build_settings` (87) and `_on_message`
   (72), `App.__init__` (93) and `main` (78).

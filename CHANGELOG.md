@@ -10,6 +10,9 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 - Internal refactoring (no behaviour change): the `Library` model left `core.py` and is split by
   responsibility — `model.py` (books, positions, status), `library_store.py` (files and `.library/` stores),
   `folder_scan.py` (your folders), `litres_data.py` (LitRes data and folders), `reading_stats.py` (statistics).
+- The library page is a component (`library.LibraryView`, `app.library_view`) instead of a mixin sharing
+  `App` state; the settings page builds each tab in its own method; the LitRes folders dialog moved to
+  `litres_folders.py`.
 - `libraries.LibrarySource` with `FolderLibrary` and `LitresLibrary` (in `KINDS`): each kind provides its
   Source-filter items, which books it contains, filter matching and its data folder; the library filter,
   the Libraries tab (a row method per kind) and backups use it instead of `kind == …` checks.

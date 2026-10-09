@@ -100,7 +100,7 @@ Environment variables:
 | `muninhall/litres_data.py` | LitRes data: merging the account's books, "Reading now", LitRes folders and their queue |
 | `muninhall/reading_stats.py` | `ReadingStats`: time per day, book and library, finished books (`stats.json`) |
 | `muninhall/libraries.py` | the registry of libraries (`libraries` setting) and its migration |
-| `muninhall/litres_connector.py` | the LitRes connector: sign-in, sync, downloads, LitRes folders, remote position |
+| `muninhall/litres_connector.py` | the LitRes connector: sign-in, sync, downloads, remote position (`litres_folders.py` — folders dialog) |
 | `muninhall/litres.py` | LitRes session and API inside the built-in Chromium (QtWebEngine) |
 | `muninhall/reader.py` | reader page (foliate-js in QtWebEngine), `litreader://` scheme |
 | `muninhall/player.py` | audiobook player (QtMultimedia), M4B chapter parsing |

@@ -331,7 +331,8 @@ class App(QObject, Appearance):
         self.library.hidden_sources = set() if on else {"litres"}
         self.library_view.account_action.setVisible(on)
         self.library_view.download_all_action.setVisible(on)
-        self.library_view.sync_btn.setToolTip(tr("Обновить список книг с ЛитРес (F5)") if on else tr("Обновить список книг (F5)"))
+        self.library_view.sync_btn.setToolTip(tr("Обновить список книг с ЛитРес (F5)") if on
+                                              else tr("Обновить список книг (F5)"))
         self.library_view.empty_login_btn.setVisible(on)
         self._update_account_ui()
 
