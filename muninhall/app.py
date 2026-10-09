@@ -13,10 +13,10 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket, QNetworkAccessManager
 from PySide6.QtWidgets import (QApplication, QFileDialog, QInputDialog, QMainWindow, QMessageBox,
                                QStackedWidget, QVBoxLayout, QWidget)
 
-from . import __version__, backup, core, libraries, singularity, style, widgets
+from . import __version__, backup, core, folder_scan, libraries, singularity, style, widgets
 from .i18n import tr
 from .core import (APP_ICON, APP_ID, APP_NAME, APP_SLUG, OLD_APP_IDS, AUDIO_FORMATS, CONFIG_FILE,
-                   DEFAULT_SETTINGS, READABLE, Library, books_dir, load_json, log, save_json, set_books_dir)
+                   DEFAULT_SETTINGS, READABLE, books_dir, load_json, log, save_json, set_books_dir)
 from .graph import GraphPage
 from .settings import SettingsPage
 from .litres import LitresSession
@@ -26,6 +26,7 @@ from .litres_connector import LitresConnector
 from .singularity import SingularitySync
 from .appearance import SHORTCUTS, Appearance
 from .library import LibraryPage
+from .model import Library
 from .widgets import BookCard, cls, HeaderBar, IconButton, Toast
 
 EBOOK_PATTERNS = "*.epub *.fb2 *.fb2.zip *.fbz *.mobi *.azw3"
@@ -190,7 +191,7 @@ class App(QObject, LibraryPage, Appearance):
         if self.has_litres():
             # встроенный Chromium для ЛитРес — когда окно уже на экране
             QTimer.singleShot(400, self.litres.start)
-        self.library.scan_folders(self.local_folders())
+        folder_scan.scan_folders(self.library, self.local_folders())
         self.refresh_library()
         QTimer.singleShot(0, self._open_last_book)
         QTimer.singleShot(1500, self._make_pdf_covers)
@@ -380,7 +381,7 @@ class App(QObject, LibraryPage, Appearance):
         self.library.save()
         self.refresh_card(book["id"])
         if finished:
-            self.library.mark_finished_stat(book["id"])
+            self.library.reading.mark_finished(book["id"])
         if auto:
             self._toast_finished(book, tr("Книга дочитана — отмечена прочитанной"))
         if book.get("source") != "litres" or not self.litres.logged_in:
@@ -567,7 +568,7 @@ class App(QObject, LibraryPage, Appearance):
         return libraries.folder_libraries(self.settings)
 
     def rescan_local(self, report=False):
-        n = self.library.scan_folders(self.local_folders())
+        n = folder_scan.scan_folders(self.library, self.local_folders())
         self._fill_type_combo()
         self.refresh_library()
         QTimer.singleShot(500, self._make_pdf_covers)
@@ -629,7 +630,7 @@ class App(QObject, LibraryPage, Appearance):
         tts = self.reader is not None and getattr(self.reader, "tts_active", False)
         if reading or tts or self.player.playing:
             bid = self.reader.book["id"] if (reading or tts) else self.player.book_id
-            self.library.add_reading_time(bid, 30)
+            self.library.reading.add_reading_time(bid, 30)
             self.singularity.add_reading_time(30)
             if self.player.playing:
                 self.singularity.schedule()

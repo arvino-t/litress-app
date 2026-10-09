@@ -3,7 +3,9 @@ import json
 import shutil
 
 from muninhall import backup, core, libraries
-from muninhall.core import Library, folder_library_id
+from muninhall.core import folder_library_id
+from muninhall import folder_scan
+from muninhall.model import Library
 
 
 def make_lib(root):
@@ -21,7 +23,7 @@ def bid_of(lib, rel):
 def test_progress_and_marks_go_to_library_store(clean_data, tmp_path):
     folder = make_lib(tmp_path / "articles")
     lib = Library()
-    lib.scan_folders([folder])
+    folder_scan.scan_folders(lib, [folder])
     b = bid_of(lib, "sub/b.pdf")
     lib.books[b]["finished"] = True
     lib.set_progress(b, None, 0.4)
@@ -44,7 +46,7 @@ def test_migration_from_old_version(clean_data, tmp_path):
                                                            "title": "a", "finished": True}}, "order": [old_bid]})
     core.save_json(core.PROGRESS_FILE, {old_bid: {"cfi": "epubcfi(/6/4)", "fraction": 0.7}})
     lib = Library()
-    lib.scan_folders([folder])
+    folder_scan.scan_folders(lib, [folder])
     assert lib.progress[old_bid]["fraction"] == 0.7 and lib.books[old_bid]["finished"] is True
     store = tmp_path / "articles" / ".library"
     assert json.loads((store / "progress.json").read_text())["a.epub"]["cfi"] == "epubcfi(/6/4)"
@@ -54,23 +56,23 @@ def test_migration_from_old_version(clean_data, tmp_path):
 def test_store_travels_with_folder(clean_data, tmp_path):
     """На другом компьютере путь другой — данные находятся по пути внутри библиотеки."""
     lib = Library()
-    lib.scan_folders([make_lib(tmp_path / "pc1" / "articles")])
+    folder_scan.scan_folders(lib, [make_lib(tmp_path / "pc1" / "articles")])
     lib.set_progress(bid_of(lib, "a.epub"), "cfi", 0.55)
     lib.flush()
     shutil.copytree(tmp_path / "pc1" / "articles", tmp_path / "pc2" / "docs" / "articles")
     other = Library()
     other.progress.clear()
-    other.scan_folders([{"path": str(tmp_path / "pc2" / "docs" / "articles"), "name": "Статьи"}])
+    folder_scan.scan_folders(other, [{"path": str(tmp_path / "pc2" / "docs" / "articles"), "name": "Статьи"}])
     assert other.progress[bid_of(other, "a.epub")]["fraction"] == 0.55
 
 
 def test_rescan_keeps_unsaved_progress(clean_data, tmp_path):
     folder = make_lib(tmp_path / "articles")
     lib = Library()
-    lib.scan_folders([folder])
+    folder_scan.scan_folders(lib, [folder])
     b = bid_of(lib, "a.epub")
     lib.set_progress(b, "cfi", 0.9)          # ещё не записано (таймер 2 с)
-    lib.scan_folders([folder])
+    folder_scan.scan_folders(lib, [folder])
     assert lib.progress[b]["fraction"] == 0.9
 
 
@@ -90,7 +92,7 @@ def test_backup_includes_library_store(clean_data, tmp_path):
     settings = {"backupDir": str(tmp_path / "bk"), "libraries": [{"kind": "folder", **folder}]}
     core.save_json(core.CONFIG_FILE, settings)
     lib = Library()
-    lib.scan_folders([folder])
+    folder_scan.scan_folders(lib, [folder])
     lib.set_progress(bid_of(lib, "a.epub"), "cfi", 0.3)
     lib.flush()
     path = backup.create(settings)
@@ -108,7 +110,7 @@ def test_backup_per_library(clean_data, tmp_path):
     core.save_json(core.CONFIG_FILE, settings)
     core.save_json(core.LIBRARY_FILE, {"books": {"1": {"id": "1", "source": "litres"}}, "order": ["1"]})
     lib = Library()
-    lib.scan_folders([a, b])
+    folder_scan.scan_folders(lib, [a, b])
     lib.set_progress(bid_of(lib, "a.epub"), "cfi", 0.5)
     lib.flush()
     import zipfile

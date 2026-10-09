@@ -16,6 +16,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer, QUrl, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLineEdit, QMessageBox, QVBoxLayout, QWidget
 
+from . import litres_data
 from .i18n import plural, tr
 from .core import (AUDIO_FILE_TYPES, AUDIO_FORMATS, FORMAT_ORDER, LOCAL_SUFFIX, LOGIN_URL, API, READABLE,
                    SITE, books_dir, looks_like_book)
@@ -131,7 +132,7 @@ class LitresConnector(QObject):
             # Отметки «прочитано», которые не успели уйти на ЛитРес, важнее ответа сервера
             pending = {bid: b["finished_pending"] for bid, b in self.app.library.books.items()
                        if "finished_pending" in b}
-            self.app.library.merge_litres(arts)
+            litres_data.merge_litres(self.app.library, arts)
             for bid, value in pending.items():
                 if bid in self.app.library.books:
                     self.app.set_finished(self.app.library.books[bid], value)
@@ -143,7 +144,7 @@ class LitresConnector(QObject):
             if arts is None:
                 problems.append(tr("«Читаю сейчас»"))
             else:
-                self.app.library.set_in_progress(a.get("id") for a in arts)
+                litres_data.set_in_progress(self.app.library, [a.get("id") for a in arts])
             self.app.litres.fetch_folders(got_folders)
 
         def got_folders(folders, _status):
@@ -152,7 +153,7 @@ class LitresConnector(QObject):
                 finish(tr('Книг в аккаунте: {0}', state['count']))
                 return
             if state["has_folders_field"] or not folders:
-                self.app.library.set_folders(folders, None)
+                litres_data.set_folders(self.app.library, folders, None)
                 finish(tr('Книг в аккаунте: {0}', state['count']))
                 return
             members: dict[str, list[str]] = {}
@@ -160,7 +161,7 @@ class LitresConnector(QObject):
 
             def next_folder():
                 if not queue:
-                    self.app.library.set_folders(folders, members)
+                    litres_data.set_folders(self.app.library, folders, members)
                     finish(tr('Книг в аккаунте: {0}', state['count']))
                     return
                 fid = queue.pop(0)
@@ -417,7 +418,7 @@ class LitresConnector(QObject):
                     self.app.toast(tr("Не удалось создать папку на ЛитРес"))
                     return
                 entry.clear()
-                self.app.library.set_folders(folders, None)
+                litres_data.set_folders(self.app.library, folders, None)
                 add_row(new_id, folders[new_id])
                 desc.setText(tr("Изменения сразу отправляются на ЛитРес"))
                 switches[-1].setChecked(True)   # сразу кладём книгу в новую папку
@@ -431,7 +432,7 @@ class LitresConnector(QObject):
     def set_book_folder(self, book, fid, inside: bool):
         if inside == (fid in (book.get("folders") or [])):
             return
-        self.app.library.set_in_folder(book["id"], fid, inside)
+        litres_data.set_in_folder(self.app.library, book["id"], fid, inside)
         self.app._update_filter_bar()
         self.app._apply_filter()
         self.flush_folder_ops()

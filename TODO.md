@@ -25,8 +25,6 @@ the review after 1.0.0. Step 3 prepares new connectors (OPDS).
 - [ ] **3. `LibrarySource` interface (OCP, SRP):** `FolderLibrary` and `LitresLibrary` implement id, name,
   scanning/sync, subfolders for the filter, graph tags, backup files and capabilities, replacing the
   `kind == "litres"` / `"folder"` checks spread over app, library, settings, graph, statistics and backups.
-- [ ] **4. Split `Library` (`core.py`, 27 methods):** a store (books, progress, `.library/` files), the
-  folder scanner, the LitRes merge (into the connector) and reading statistics.
 - [ ] **5. Real components instead of mixins (SRP, ISP):** `LibraryPage` as a widget with explicit
   dependencies (library model, settings, notifications) instead of a mixin sharing `App` state; settings
   tabs as separate classes (`SettingsPage` is 753 lines, `build()` 171); give `LitresConnector` (27 `App`

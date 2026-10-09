@@ -6,6 +6,11 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 
 ## [Unreleased]
 
+### Changed
+- Internal refactoring (no behaviour change): the `Library` model left `core.py` and is split by
+  responsibility — `model.py` (books, positions, status), `library_store.py` (files and `.library/` stores),
+  `folder_scan.py` (your folders), `litres_data.py` (LitRes data and folders), `reading_stats.py` (statistics).
+
 ## [1.0.0] — 2026-10-09
 
 First stable release of Muninhall — a manager for your own library of e-books and articles:

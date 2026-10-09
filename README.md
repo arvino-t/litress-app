@@ -93,7 +93,12 @@ Environment variables:
 | `muninhall/app.py` | `App`: window, navigation, libraries, reader/player wiring, backups, app startup |
 | `muninhall/library.py` | the library page (mixin of `App`): filters, cards created in batches, covers, book menu |
 | `muninhall/appearance.py` | appearance (mixin of `App`): theme, accent, app icon, keyboard shortcuts (`SHORTCUTS`) |
-| `muninhall/core.py` | paths, default settings, the `Library` model (books, progress, statistics, per-library stores) |
+| `muninhall/core.py` | paths, default settings, data migration, small helpers |
+| `muninhall/model.py` | the `Library` model: books of all libraries, order, reading positions, status and percent |
+| `muninhall/library_store.py` | `LibraryStore`: `library.json`, `progress.json` and the `.library/` stores (writes only changes) |
+| `muninhall/folder_scan.py` | scanning your libraries' folders and migrating their data into `.library/` |
+| `muninhall/litres_data.py` | LitRes data: merging the account's books, "Reading now", LitRes folders and their queue |
+| `muninhall/reading_stats.py` | `ReadingStats`: time per day, book and library, finished books (`stats.json`) |
 | `muninhall/libraries.py` | the registry of libraries (`libraries` setting) and its migration |
 | `muninhall/litres_connector.py` | the LitRes connector: sign-in, sync, downloads, LitRes folders, remote position |
 | `muninhall/litres.py` | LitRes session and API inside the built-in Chromium (QtWebEngine) |
