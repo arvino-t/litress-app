@@ -11,6 +11,31 @@ Reviewed: 2026-10-09 (after 0.18.0).
   associations, uninstall, restart after a restore in the frozen build) and `Muninhall.flatpak` on Linux
   (data shared with the native install, LitRes sign-in inside the sandbox).
 
+## Refactoring towards SOLID
+Behaviour doesn't change; every step — tests plus a full flow run on the installed build. Numbers are from
+the review after 1.0.0. Step 3 prepares new connectors (OPDS).
+- [ ] **1. Shared widgets (duplication):** `LibraryScopeCombo` — the "All libraries + list" selector built
+  three times (graph, statistics, backups) plus the Source filter → library mapping done twice;
+  `BoxedList` — the Adwaita boxed-list rows assembled by hand in statistics, Singularity and LitRes folders
+  (settings have `group()`/`row()`); `confirm()` — the Cancel + destructive-button dialog repeated 4 times.
+- [ ] **2. A `Settings` class (DIP):** typed properties and a `changed` signal instead of the raw dict read
+  by string keys in 10 modules and manual `save_settings()` calls. Move module-level state into objects:
+  accent/theme overrides in `style`, `_books_dir` and `DEBUG` in `core`, `widgets.THUMBS_DIR` (set by
+  `App`), the reader's web profile, the settings page's network manager.
+- [ ] **3. `LibrarySource` interface (OCP, SRP):** `FolderLibrary` and `LitresLibrary` implement id, name,
+  scanning/sync, subfolders for the filter, graph tags, backup files and capabilities, replacing the
+  `kind == "litres"` / `"folder"` checks spread over app, library, settings, graph, statistics and backups.
+- [ ] **4. Split `Library` (`core.py`, 27 methods):** a store (books, progress, `.library/` files), the
+  folder scanner, the LitRes merge (into the connector) and reading statistics.
+- [ ] **5. Real components instead of mixins (SRP, ISP):** `LibraryPage` as a widget with explicit
+  dependencies (library model, settings, notifications) instead of a mixin sharing `App` state; settings
+  tabs as separate classes (`SettingsPage` is 753 lines, `build()` 171); give `LitresConnector` (27 `App`
+  attributes) and the settings page (32) narrow interfaces instead of the whole `App`; move the LitRes
+  folders dialog out of the connector.
+- [ ] **6. Long methods:** `PlayerPage.__init__` (137 lines), `singularity.show_dialog` (122),
+  `LitresConnector.download_book` (92) and `sync` (82), `ReaderPage._build_settings` (87) and `_on_message`
+  (72), `App.__init__` (93) and `main` (78).
+
 ## Reader — first priority
 - [ ] **Highlights and notes exported to Obsidian.** Select a quote, add a comment; quotes are collected
   on the book's page in the wiki with links back to the place in the book. foliate-js can already draw
