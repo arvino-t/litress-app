@@ -93,177 +93,17 @@ class LitresConnector(QObject):
         if not self.app.litres.logged_in:
             self.show_login()
             return
-        self.app._set_syncing(True)
-        problems = []
-        state = {}
-
-        def finish(text):
-            self.app._set_syncing(False)
-            self.app.library_view.refresh_library()
-            self._fetch_details()
-            # Открытая книга могла уйти дальше на ЛитРес — подтягиваем место
-            for bid in {self.app.reader.book["id"] if self.app.reader else None, self.app.player.book_id} - {None}:
-                if bid in self.app.library.books:
-                    self.apply_remote_position(self.app.library.books[bid])
-            if problems:
-                text += tr(". Не получено: ") + ", ".join(problems)
-            if not quiet or problems:
-                self.app.toast(text)
-            self.app.singularity.schedule(soon=True)
-
-        def got_arts(arts, status):
-            if arts is None:
-                self.app._set_syncing(False)
-                if status in (401, 403):
-                    self.app.litres.logged_in = False
-                    self.app._update_account_ui()
-                    self.app.toast(tr("Сессия ЛитРес истекла — войдите снова"))
-                else:
-                    self.app.toast(tr('Не удалось получить список книг (код {0})', status))
-                return
-            # Отметки «прочитано», которые не успели уйти на ЛитРес, важнее ответа сервера
-            pending = {bid: b["finished_pending"] for bid, b in self.app.library.books.items()
-                       if "finished_pending" in b}
-            litres_data.merge_litres(self.app.library, arts)
-            for bid, value in pending.items():
-                if bid in self.app.library.books:
-                    self.app.set_finished(self.app.library.books[bid], value)
-            state["count"] = len(arts)
-            state["has_folders_field"] = any("in_folders" in a for a in arts)
-            self.app.litres.fetch_list("/users/me/arts/in-progress", got_progress)
-
-        def got_progress(arts, _status):
-            if arts is None:
-                problems.append(tr("«Читаю сейчас»"))
-            else:
-                litres_data.set_in_progress(self.app.library, [a.get("id") for a in arts])
-            self.app.litres.fetch_folders(got_folders)
-
-        def got_folders(folders, _status):
-            if folders is None:
-                problems.append(tr("папки"))
-                finish(tr('Книг в аккаунте: {0}', state['count']))
-                return
-            if state["has_folders_field"] or not folders:
-                litres_data.set_folders(self.app.library, folders, None)
-                finish(tr('Книг в аккаунте: {0}', state['count']))
-                return
-            members: dict[str, list[str]] = {}
-            queue = list(folders)
-
-            def next_folder():
-                if not queue:
-                    litres_data.set_folders(self.app.library, folders, members)
-                    finish(tr('Книг в аккаунте: {0}', state['count']))
-                    return
-                fid = queue.pop(0)
-
-                def got(arts, _st):
-                    if arts is None:
-                        problems.append(tr('папка «{0}»', folders[fid]))
-                    else:
-                        members[fid] = [str(a.get("id")) for a in arts]
-                    next_folder()
-                self.app.litres.fetch_list(f"/folders/{fid}/arts", got)
-            next_folder()
-
-        # Сначала отправляем свои изменения папок, потом забираем состояние с сервера
-        self.flush_folder_ops(lambda: self.app.litres.fetch_library(got_arts))
+        _SyncRun(self, quiet).start()
 
     def download_book(self, book, open_after=False, on_finished=None):
         """on_finished(ok, текст ошибки) — для скачивания всех книг: тогда ошибки не всплывают по одной."""
-        bid = book["id"]
-        if bid in self.downloading:
+        if book["id"] in self.downloading:
             return
         if not self.app.litres.logged_in:
             self.app.toast(tr("Сначала войдите в ЛитРес"))
             self.show_login()
             return
-        self.downloading.add(bid)
-        card = self.app.library_view.cards.get(bid)
-        if card:
-            card.set_download_progress(0)
-
-        def fail(text):
-            self.downloading.discard(bid)
-            if card:
-                card.set_download_progress(None)
-            if on_finished:
-                on_finished(False, text)
-            else:
-                self.app.toast(text)
-
-        def got_files(files, status):
-            if files is None:
-                fail(tr('Не удалось получить файлы книги (код {0})', status))
-                return
-            main = [f for f in files if not f.get("is_additional")] or files
-            if book.get("is_audio"):
-                by_type = {f.get("file_type"): f for f in main if f.get("file_type")}
-                choice = next(((t, ext) for t, ext in AUDIO_FILE_TYPES if t in by_type), None)
-                if not choice:
-                    fail(tr("Для этой аудиокниги доступны только отдельные главы — пока не поддерживается"))
-                    return
-                ftype, local = choice
-                f = by_type[ftype]
-                remote_ext = f.get("extension") or local
-                dest = books_dir() / f"{bid}.{local}"
-                try_next([f"{SITE}/download_book/{bid}/{f['id']}/{bid}.{remote_ext}",
-                          f"{SITE}/download_book_subscr/{bid}/{f['id']}/{bid}.{remote_ext}"], dest, local, local)
-                return
-            by_ext = {f.get("extension"): f for f in main if f.get("extension")}
-            fmt = next((e for e in FORMAT_ORDER if e in by_ext), None)
-            if not fmt:
-                fail(tr("У этой книги нет формата для чтения (возможно, только онлайн-чтение)"))
-                return
-            file_id = by_ext[fmt]["id"]
-            local_ext = LOCAL_SUFFIX.get(fmt, fmt)
-            dest = books_dir() / f"{bid}.{local_ext}"
-            try_next([f"{SITE}/download_book/{bid}/{file_id}/{bid}.{fmt}",
-                      f"{SITE}/download_book_subscr/{bid}/{file_id}/{bid}.{fmt}"], dest, fmt, local_ext)
-
-        def finished_ok(file_name, fmt_saved, path):
-            self.downloading.discard(bid)
-            if card:
-                card.set_download_progress(None)
-            book.update(file=file_name, format=fmt_saved)
-            self.app.library.save()
-            self.app.library_view.refresh_card(bid)
-            if on_finished:
-                on_finished(True, None)
-                return
-            if book.get("is_drm"):
-                self.app.toast(tr("Книга защищена DRM — она может не открыться"))
-            if open_after:
-                self.app.open_book(book, path)
-
-        def try_next(attempts, dest, fmt, local_ext):
-            url = attempts.pop(0)
-
-            def done(ok, err):
-                if ok and looks_like_book(dest, fmt) and book.get("is_audio") and fmt == "zip":
-                    folder = books_dir() / bid   # MP3-архив распаковываем в папку книги
-
-                    def extracted(error):
-                        if error:
-                            fail(tr('Не удалось распаковать аудиокнигу: {0}', error))
-                        else:
-                            finished_ok(folder.name, "mp3dir", folder)
-                    self._extract_zip(dest, folder, extracted)
-                    return
-                if ok and looks_like_book(dest, fmt):
-                    finished_ok(dest.name, local_ext if local_ext in READABLE | AUDIO_FORMATS else fmt, dest)
-                    return
-                dest.unlink(missing_ok=True)
-                if attempts:
-                    try_next(attempts, dest, fmt, local_ext)
-                else:
-                    fail(tr('ЛитРес не отдал файл книги ({0})', err or tr('неверный ответ')))
-
-            self.app.litres.download(url, dest, lambda f: card and card.set_download_progress(f), done)
-
-        self.app.litres.fetch_files(bid, got_files)
-
+        _Download(self, book, open_after, on_finished).start()
 
     def download_all(self):
         if self.bulk:
@@ -457,3 +297,199 @@ class LitresConnector(QObject):
             self.app._remote_timer.start(minutes * 60 * 1000)
         else:
             self.app._remote_timer.stop()
+
+
+def pick_download(book: dict, files: list[dict], bid: str):
+    """Какой файл книги скачать: (адреса по очереди, формат на ЛитРес, расширение у себя) или (None, ошибка)."""
+    main = [f for f in files if not f.get("is_additional")] or files
+    if book.get("is_audio"):
+        by_type = {f.get("file_type"): f for f in main if f.get("file_type")}
+        choice = next(((t, ext) for t, ext in AUDIO_FILE_TYPES if t in by_type), None)
+        if not choice:
+            return None, tr("Для этой аудиокниги доступны только отдельные главы — пока не поддерживается")
+        ftype, local = choice
+        f = by_type[ftype]
+        remote_ext = f.get("extension") or local
+        return ([f"{SITE}/download_book/{bid}/{f['id']}/{bid}.{remote_ext}",
+                 f"{SITE}/download_book_subscr/{bid}/{f['id']}/{bid}.{remote_ext}"], local, local), None
+    by_ext = {f.get("extension"): f for f in main if f.get("extension")}
+    fmt = next((e for e in FORMAT_ORDER if e in by_ext), None)
+    if not fmt:
+        return None, tr("У этой книги нет формата для чтения (возможно, только онлайн-чтение)")
+    file_id = by_ext[fmt]["id"]
+    return ([f"{SITE}/download_book/{bid}/{file_id}/{bid}.{fmt}",
+             f"{SITE}/download_book_subscr/{bid}/{file_id}/{bid}.{fmt}"], fmt, LOCAL_SUFFIX.get(fmt, fmt)), None
+
+
+class _SyncRun:
+    """Одна синхронизация с ЛитРес: свои изменения папок → список книг → «Читаю сейчас» → папки."""
+
+    def __init__(self, connector: LitresConnector, quiet: bool):
+        self.c = connector
+        self.app = connector.app
+        self.quiet = quiet
+        self.problems: list[str] = []
+        self.count = 0
+        self.has_folders_field = False
+
+    def start(self):
+        self.app._set_syncing(True)
+        # Сначала отправляем свои изменения папок, потом забираем состояние с сервера
+        self.c.flush_folder_ops(lambda: self.app.litres.fetch_library(self.got_arts))
+
+    def got_arts(self, arts, status):
+        app = self.app
+        if arts is None:
+            app._set_syncing(False)
+            if status in (401, 403):
+                app.litres.logged_in = False
+                app._update_account_ui()
+                app.toast(tr("Сессия ЛитРес истекла — войдите снова"))
+            else:
+                app.toast(tr('Не удалось получить список книг (код {0})', status))
+            return
+        # Отметки «прочитано», которые не успели уйти на ЛитРес, важнее ответа сервера
+        pending = {bid: b["finished_pending"] for bid, b in app.library.books.items() if "finished_pending" in b}
+        litres_data.merge_litres(app.library, arts)
+        for bid, value in pending.items():
+            if bid in app.library.books:
+                app.set_finished(app.library.books[bid], value)
+        self.count = len(arts)
+        self.has_folders_field = any("in_folders" in a for a in arts)
+        app.litres.fetch_list("/users/me/arts/in-progress", self.got_progress)
+
+    def got_progress(self, arts, _status):
+        if arts is None:
+            self.problems.append(tr("«Читаю сейчас»"))
+        else:
+            litres_data.set_in_progress(self.app.library, [a.get("id") for a in arts])
+        self.app.litres.fetch_folders(self.got_folders)
+
+    def got_folders(self, folders, _status):
+        if folders is None:
+            self.problems.append(tr("папки"))
+            self.finish()
+        elif self.has_folders_field or not folders:
+            litres_data.set_folders(self.app.library, folders, None)
+            self.finish()
+        else:
+            self.fetch_members(folders, {}, list(folders))
+
+    def fetch_members(self, folders, members: dict[str, list[str]], queue: list[str]):
+        """Старый ответ API без in_folders: состав папок — по одной папке за запрос."""
+        if not queue:
+            litres_data.set_folders(self.app.library, folders, members)
+            self.finish()
+            return
+        fid = queue.pop(0)
+
+        def got(arts, _st):
+            if arts is None:
+                self.problems.append(tr('папка «{0}»', folders[fid]))
+            else:
+                members[fid] = [str(a.get("id")) for a in arts]
+            self.fetch_members(folders, members, queue)
+        self.app.litres.fetch_list(f"/folders/{fid}/arts", got)
+
+    def finish(self):
+        app = self.app
+        app._set_syncing(False)
+        app.library_view.refresh_library()
+        self.c._fetch_details()
+        # Открытая книга могла уйти дальше на ЛитРес — подтягиваем место
+        for bid in {app.reader.book["id"] if app.reader else None, app.player.book_id} - {None}:
+            if bid in app.library.books:
+                self.c.apply_remote_position(app.library.books[bid])
+        text = tr('Книг в аккаунте: {0}', self.count)
+        if self.problems:
+            text += tr(". Не получено: ") + ", ".join(self.problems)
+        if not self.quiet or self.problems:
+            app.toast(text)
+        app.singularity.schedule(soon=True)
+
+
+class _Download:
+    """Скачивание одной книги ЛитРес: выбор файла → попытки по адресам → распаковка MP3-архива."""
+
+    def __init__(self, connector: LitresConnector, book: dict, open_after: bool, on_finished):
+        self.c = connector
+        self.app = connector.app
+        self.book = book
+        self.bid = book["id"]
+        self.open_after = open_after
+        self.on_finished = on_finished
+        self.card = self.app.library_view.cards.get(self.bid)
+
+    def start(self):
+        self.c.downloading.add(self.bid)
+        self._progress(0)
+        self.app.litres.fetch_files(self.bid, self.got_files)
+
+    def _progress(self, fraction):
+        if self.card:
+            self.card.set_download_progress(fraction)
+
+    def _done(self):
+        self.c.downloading.discard(self.bid)
+        self._progress(None)
+
+    def fail(self, text):
+        self._done()
+        if self.on_finished:
+            self.on_finished(False, text)
+        else:
+            self.app.toast(text)
+
+    def got_files(self, files, status):
+        if files is None:
+            self.fail(tr('Не удалось получить файлы книги (код {0})', status))
+            return
+        choice, error = pick_download(self.book, files, self.bid)
+        if error:
+            self.fail(error)
+            return
+        urls, fmt, local_ext = choice
+        self.try_next(urls, books_dir() / f"{self.bid}.{local_ext}", fmt, local_ext)
+
+    def try_next(self, attempts, dest, fmt, local_ext):
+        url = attempts.pop(0)
+
+        def done(ok, err):
+            good = ok and looks_like_book(dest, fmt)
+            if good and self.book.get("is_audio") and fmt == "zip":
+                self.extract(dest)
+            elif good:
+                self.finished_ok(dest.name, local_ext if local_ext in READABLE | AUDIO_FORMATS else fmt, dest)
+            else:
+                dest.unlink(missing_ok=True)
+                if attempts:
+                    self.try_next(attempts, dest, fmt, local_ext)
+                else:
+                    self.fail(tr('ЛитРес не отдал файл книги ({0})', err or tr('неверный ответ')))
+
+        self.app.litres.download(url, dest, self._progress, done)
+
+    def extract(self, archive):
+        """MP3-архив распаковываем в папку книги."""
+        folder = books_dir() / self.bid
+
+        def extracted(error):
+            if error:
+                self.fail(tr('Не удалось распаковать аудиокнигу: {0}', error))
+            else:
+                self.finished_ok(folder.name, "mp3dir", folder)
+        self.c._extract_zip(archive, folder, extracted)
+
+    def finished_ok(self, file_name, fmt_saved, path):
+        self._done()
+        self.book.update(file=file_name, format=fmt_saved)
+        self.app.library.save()
+        self.app.library_view.refresh_card(self.bid)
+        if self.on_finished:
+            self.on_finished(True, None)
+            return
+        if self.book.get("is_drm"):
+            self.app.toast(tr("Книга защищена DRM — она может не открыться"))
+        if self.open_after:
+            self.app.open_book(self.book, path)
+

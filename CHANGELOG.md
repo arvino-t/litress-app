@@ -10,6 +10,10 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 - Internal refactoring (no behaviour change): the `Library` model left `core.py` and is split by
   responsibility — `model.py` (books, positions, status), `library_store.py` (files and `.library/` stores),
   `folder_scan.py` (your folders), `litres_data.py` (LitRes data and folders), `reading_stats.py` (statistics).
+- Long methods split: the audiobook page builds its header, cover, seek bar, controls and speed in separate
+  methods; the Singularity window is a `SingularityDialog` class; LitRes sync and download are small
+  step-by-step classes (`_SyncRun`, `_Download`) with file choice in `pick_download()`; tests run them
+  against a fake LitRes.
 - The library page is a component (`library.LibraryView`, `app.library_view`) instead of a mixin sharing
   `App` state; the settings page builds each tab in its own method; the LitRes folders dialog moved to
   `litres_folders.py`.

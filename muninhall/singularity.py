@@ -413,104 +413,134 @@ class SingularitySync(QObject):
 
 # --- окно настроек (раньше было в App)
 
-def show_dialog(app):
+def _switches():
+    """Что синхронизировать: (ключ состояния, заголовок, пояснение)."""
+    return (
+        ("reading", tr("Задачи «Читаю»"), tr("Начатые книги — задачи в проекте «Книги», дочитанные закрываются")),
+        ("progress", tr("Прогресс в задаче"), tr("Процент и текущая глава в заметке задачи")),
+        ("wishlist", tr("«Хочу прочитать»"), tr("Непрочитанные книги — задачи в отдельном проекте")),
+        ("daily", tr("Ежедневное чтение"), tr("Привычка отмечается сама, когда за день набралось N минут")),
+    )
+
+
+class SingularityDialog:
     """Окно «Singularity»: токен, что синхронизировать, библиотеки, цель чтения в день."""
-    s = app.singularity
-    dlg, v = frameless_dialog(app.window, "Singularity", 460)
 
-    body = QWidget()
-    b = QVBoxLayout(body)
-    b.setContentsMargins(18, 18, 18, 18)
-    b.setSpacing(8)
-    intro = label(tr("Книги, прогресс и ежедневное чтение — в планировщике SingularityApp.<br>"
-                  "Токен создаётся в <a href='https://me.singularity-app.com'>личном кабинете</a> → "
-                  "«Доступ к API» (нужен доступ к задачам, проектам и привычкам)."), wrap=True, rich=True)
-    intro.setOpenExternalLinks(True)
-    b.addWidget(intro)
-    token = QLineEdit(s.state.get("token", ""))
-    token.setEchoMode(QLineEdit.EchoMode.Password)
-    token.setPlaceholderText(tr("API-токен Singularity"))
-    b.addWidget(token)
-    b.addSpacing(6)
+    def __init__(self, app):
+        self.app = app
+        self.sync: SingularitySync = app.singularity
+        self.dlg, v = frameless_dialog(app.window, "Singularity", 460)
+        body = QWidget()
+        self.box = QVBoxLayout(body)
+        self.box.setContentsMargins(18, 18, 18, 18)
+        self.box.setSpacing(8)
+        self._build_token()
+        self._build_switches()
+        self._build_libraries()
+        self._build_goal()
+        self._build_buttons()
+        v.addWidget(body)
 
-    boxed = BoxedList()
-    switches = {}
-    for key, title, hint in (
-            ("reading", tr("Задачи «Читаю»"),
-             tr("Начатые книги — задачи в проекте «Книги», дочитанные закрываются")),
-            ("progress", tr("Прогресс в задаче"), tr("Процент и текущая глава в заметке задачи")),
-            ("wishlist", tr("«Хочу прочитать»"), tr("Непрочитанные книги — задачи в отдельном проекте")),
-            ("daily", tr("Ежедневное чтение"), tr("Привычка отмечается сама, когда за день набралось N минут"))):
-        sw = Switch(bool(s.state.get(key)))
-        boxed.add_row(title, hint, sw)
-        switches[key] = sw
-    b.addWidget(boxed)
+    def exec(self):
+        self.sync.status.connect(self.status.setText)
+        exec_dialog(self.dlg)
+        self.apply()
+        self.sync.status.disconnect(self.status.setText)
 
-    # книги каких библиотек ведутся задачами («Хочу прочитать» — только ЛитРес)
-    libs = libraries.all_libraries(app.settings)
-    allowed = s.state.get("libraries")
-    lib_switches = {}
-    if len(libs) > 1:
-        b.addWidget(label(tr("Библиотеки"), "heading"))
+    # --- разделы окна
+
+    def _build_token(self):
+        b = self.box
+        intro = label(tr("Книги, прогресс и ежедневное чтение — в планировщике SingularityApp.<br>"
+                      "Токен создаётся в <a href='https://me.singularity-app.com'>личном кабинете</a> → "
+                      "«Доступ к API» (нужен доступ к задачам, проектам и привычкам)."), wrap=True, rich=True)
+        intro.setOpenExternalLinks(True)
+        b.addWidget(intro)
+        self.token = QLineEdit(self.sync.state.get("token", ""))
+        self.token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.token.setPlaceholderText(tr("API-токен Singularity"))
+        b.addWidget(self.token)
+        b.addSpacing(6)
+
+    def _build_switches(self):
+        boxed = BoxedList()
+        self.switches = {}
+        for key, title, hint in _switches():
+            sw = Switch(bool(self.sync.state.get(key)))
+            boxed.add_row(title, hint, sw)
+            self.switches[key] = sw
+        self.box.addWidget(boxed)
+
+    def _build_libraries(self):
+        """Книги каких библиотек ведутся задачами («Хочу прочитать» — только ЛитРес)."""
+        libs = libraries.all_libraries(self.app.settings)
+        allowed = self.sync.state.get("libraries")
+        self.lib_switches = {}
+        if len(libs) < 2:
+            return
+        self.box.addWidget(label(tr("Библиотеки"), "heading"))
         lib_box = BoxedList()
         for lib in libs:
             sw = Switch(allowed is None or lib["id"] in allowed)
             lib_box.add_row(lib["name"], "", sw, padding=(14, 6))
-            lib_switches[lib["id"]] = sw
-        b.addWidget(lib_box)
+            self.lib_switches[lib["id"]] = sw
+        self.box.addWidget(lib_box)
 
-    goal_row = QHBoxLayout()
-    goal_row.addWidget(label(tr("Цель чтения в день, минут")), 1)
-    goal = QSpinBox()
-    goal.setRange(5, 240)
-    goal.setSingleStep(5)
-    goal.setValue(int(s.state.get("dailyMinutes") or 20))
-    goal_row.addWidget(goal)
-    b.addLayout(goal_row)
-    b.addWidget(label(tr('Сегодня прочитано и прослушано: {0} мин', s.today_minutes()), "dim", "caption"))
+    def _build_goal(self):
+        goal_row = QHBoxLayout()
+        goal_row.addWidget(label(tr("Цель чтения в день, минут")), 1)
+        self.goal = QSpinBox()
+        self.goal.setRange(5, 240)
+        self.goal.setSingleStep(5)
+        self.goal.setValue(int(self.sync.state.get("dailyMinutes") or 20))
+        goal_row.addWidget(self.goal)
+        self.box.addLayout(goal_row)
+        self.box.addWidget(label(tr('Сегодня прочитано и прослушано: {0} мин', self.sync.today_minutes()),
+                                 "dim", "caption"))
 
-    status = label("", "dim", wrap=True)
-    b.addWidget(status)
-    s.status.connect(status.setText)
-    buttons = QHBoxLayout()
-    disconnect = QPushButton(tr("Отключить"))
-    run = QPushButton(tr("Проверить и синхронизировать"))
-    cls(run, "suggested")
-    buttons.addWidget(disconnect)
-    buttons.addStretch()
-    buttons.addWidget(run)
-    b.addSpacing(6)
-    b.addLayout(buttons)
-    v.addWidget(body)
+    def _build_buttons(self):
+        self.status = label("", "dim", wrap=True)
+        self.box.addWidget(self.status)
+        buttons = QHBoxLayout()
+        disconnect = QPushButton(tr("Отключить"))
+        disconnect.clicked.connect(self.disconnect)
+        self.run = QPushButton(tr("Проверить и синхронизировать"))
+        cls(self.run, "suggested")
+        self.run.clicked.connect(self.check_and_sync)
+        buttons.addWidget(disconnect)
+        buttons.addStretch()
+        buttons.addWidget(self.run)
+        self.box.addSpacing(6)
+        self.box.addLayout(buttons)
 
-    def apply():
-        chosen = [lid for lid, sw in lib_switches.items() if sw.isChecked()]
-        s.configure(token=token.text().strip(), dailyMinutes=goal.value(),
-                    libraries=None if len(chosen) == len(lib_switches) else chosen,
-                    **{k: sw.isChecked() for k, sw in switches.items()})
+    # --- действия
 
-    def check_and_sync():
-        apply()
-        if not s.enabled:
-            status.setText(tr("Вставьте токен"))
+    def apply(self):
+        chosen = [lid for lid, sw in self.lib_switches.items() if sw.isChecked()]
+        self.sync.configure(token=self.token.text().strip(), dailyMinutes=self.goal.value(),
+                            libraries=None if len(chosen) == len(self.lib_switches) else chosen,
+                            **{k: sw.isChecked() for k, sw in self.switches.items()})
+
+    def check_and_sync(self):
+        self.apply()
+        if not self.sync.enabled:
+            self.status.setText(tr("Вставьте токен"))
             return
-        status.setText(tr("Проверяю токен…"))
-        run.setEnabled(False)
+        self.status.setText(tr("Проверяю токен…"))
+        self.run.setEnabled(False)
 
         def checked(ok, text):
-            run.setEnabled(True)
-            status.setText(text + (tr("; синхронизирую…") if ok else ""))
+            self.run.setEnabled(True)
+            self.status.setText(text + (tr("; синхронизирую…") if ok else ""))
             if ok:
-                s.sync()
-        s.check_token(checked)
+                self.sync.sync()
+        self.sync.check_token(checked)
 
-    def off():
-        s.configure(token="")
-        token.clear()
-        status.setText(tr("Синхронизация с Singularity отключена"))
-    run.clicked.connect(check_and_sync)
-    disconnect.clicked.connect(off)
+    def disconnect(self):
+        self.sync.configure(token="")
+        self.token.clear()
+        self.status.setText(tr("Синхронизация с Singularity отключена"))
 
-    exec_dialog(dlg)
-    apply()
-    s.status.disconnect(status.setText)
+
+def show_dialog(app):
+    SingularityDialog(app).exec()

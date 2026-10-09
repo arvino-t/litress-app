@@ -383,6 +383,48 @@ class PlayerPage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
+        outer.addWidget(self._build_header())
+
+        body = QWidget()
+        box = QVBoxLayout(body)
+        box.setContentsMargins(24, 24, 24, 24)
+        box.setSpacing(12)
+        box.addStretch()
+        box.addWidget(self._build_cover())
+        box.addWidget(label(book.get("title") or "", "title2", wrap=True, align=Qt.AlignmentFlag.AlignCenter))
+        box.addWidget(label(", ".join(book.get("authors") or []), "dim", wrap=True,
+                            align=Qt.AlignmentFlag.AlignCenter))
+        self.track_label = label("", "caption", align=Qt.AlignmentFlag.AlignCenter)
+        box.addWidget(self.track_label)
+        self._build_seek(box)
+        self._build_controls(box)
+        self._build_speed(box)
+        box.addStretch()
+
+        # Колонка по центру не шире 520 px (как Adw.Clamp)
+        clamp = QWidget()
+        cl = QHBoxLayout(clamp)
+        cl.addStretch()
+        body.setMaximumWidth(520)
+        cl.addWidget(body, 10)
+        cl.addStretch()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(clamp)
+        outer.addWidget(scroll, 1)
+
+        self.player.state_changed.connect(self._sync_buttons)
+        self.player.track_changed.connect(self._on_track_changed)
+        self._fill_tracks()
+        self._on_track_changed()
+        self._sync_buttons()
+        self._tick = QTimer(self, interval=500)
+        self._tick.timeout.connect(self._update_position)
+        self._tick.start()
+
+    def _build_header(self) -> HeaderBar:
+        """Шапка: назад, список глав, таймер сна."""
+        app, book = self.app, self.book
         self.header = HeaderBar(app.window, book.get("title") or tr("Аудиокнига"))
         back = IconButton("go-previous", tr("Назад"))
         back.clicked.connect(app.go_back)
@@ -410,14 +452,10 @@ class PlayerPage(QWidget):
         self.sleep_popover = Popover(sleep_box)
         attach_popover(self.sleep_btn, self.sleep_popover)
         self.header.pack_end(self.sleep_btn)
-        outer.addWidget(self.header)
+        return self.header
 
-        body = QWidget()
-        box = QVBoxLayout(body)
-        box.setContentsMargins(24, 24, 24, 24)
-        box.setSpacing(12)
-        box.addStretch()
-
+    def _build_cover(self) -> QLabel:
+        app, book = self.app, self.book
         self.cover = QLabel()
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cover_path = app.library.cover_path(book)
@@ -430,14 +468,10 @@ class PlayerPage(QWidget):
         else:
             self._cover_icon = True
             self.cover.setPixmap(style.icon("audio-headphones", "#9a9a9e", 160).pixmap(160, 160))
-        box.addWidget(self.cover)
+        return self.cover
 
-        box.addWidget(label(book.get("title") or "", "title2", wrap=True, align=Qt.AlignmentFlag.AlignCenter))
-        box.addWidget(label(", ".join(book.get("authors") or []), "dim", wrap=True,
-                            align=Qt.AlignmentFlag.AlignCenter))
-        self.track_label = label("", "caption", align=Qt.AlignmentFlag.AlignCenter)
-        box.addWidget(self.track_label)
-
+    def _build_seek(self, box):
+        """Ползунок главы и время: прошло, всего, осталось."""
         self.slider = SeekSlider()
         # Ползунок и время — внутри текущей главы; при перетаскивании время меняется сразу
         self.slider.sliderReleased.connect(self._on_seek)
@@ -452,6 +486,8 @@ class PlayerPage(QWidget):
         times.addWidget(self.left_label, 1)
         box.addLayout(times)
 
+    def _build_controls(self, box):
+        """Кнопки: главы, перемотка, слушать/пауза."""
         controls = QHBoxLayout()
         controls.setSpacing(12)
         controls.addStretch()
@@ -474,6 +510,8 @@ class PlayerPage(QWidget):
         controls.addStretch()
         box.addLayout(controls)
 
+    def _build_speed(self, box):
+        app = self.app
         self.speed = QComboBox()
         self.speed.setToolTip(tr("Скорость"))
         self.speed.addItems([f"{s:g}×" for s in SPEEDS])
@@ -485,28 +523,6 @@ class PlayerPage(QWidget):
         sp.addWidget(self.speed)
         sp.addStretch()
         box.addLayout(sp)
-        box.addStretch()
-
-        # Колонка по центру не шире 520 px (как Adw.Clamp)
-        clamp = QWidget()
-        cl = QHBoxLayout(clamp)
-        cl.addStretch()
-        body.setMaximumWidth(520)
-        cl.addWidget(body, 10)
-        cl.addStretch()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(clamp)
-        outer.addWidget(scroll, 1)
-
-        self.player.state_changed.connect(self._sync_buttons)
-        self.player.track_changed.connect(self._on_track_changed)
-        self._fill_tracks()
-        self._on_track_changed()
-        self._sync_buttons()
-        self._tick = QTimer(self, interval=500)
-        self._tick.timeout.connect(self._update_position)
-        self._tick.start()
 
     # --- обновление экрана
 
