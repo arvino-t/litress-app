@@ -2,6 +2,11 @@
 
 Ideas for the next versions, most useful first. Finished items move to [CHANGELOG.md](CHANGELOG.md).
 
+## Rename the project
+The app is no longer just a LitRes reader (see 0.15.0). Candidates: Librarium, Shelfwise, Bookhold,
+«Полка» (Shelf). Touches `APP_NAME`, `APP_ID`, the desktop entry, the package and command, data
+directories (with migration) and the GitHub repository.
+
 ## Refactoring — before the bigger items below
 Behaviour doesn't change; after each step, check the installed version.
 - [x] **Tests** (before splitting the code): `Library` (merging with LitRes, statuses, percentages),
