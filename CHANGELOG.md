@@ -27,6 +27,10 @@ All notable changes to LitRes Reader. The format is based on
   your libraries; Subfolder shows the folders of the selected library.
 - LitRes is optional: when disconnected, its books, sign-in, sync and "Download all" disappear from
   the app (data and session are kept); F5 then rescans your folders.
+- **Graph per library:** a library selector in the graph header (All libraries, LitRes, each of your
+  libraries), defaulting to the library chosen in the Source filter. Each library keeps its own graph
+  state (tag kinds, filters): your library in `.library/graph.json` (also backed up), LitRes and All in
+  the settings. The All / LitRes / Mine toggle is hidden for a single library.
 - LitRes is now a connector (`litres_connector.py`): sign-in, sync, downloads (single and all),
   LitRes folders, the position from the phone and genre loading moved out of the main window class.
 

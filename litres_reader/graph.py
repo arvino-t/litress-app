@@ -8,10 +8,10 @@ from __future__ import annotations
 import json
 
 from PySide6.QtCore import QUrl
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QVBoxLayout, QWidget
 
-from . import style
-from .core import SCHEME
+from . import libraries, style
+from .core import SCHEME, STORE_GRAPH, folder_store_dir, load_json, save_json
 from .reader import _ReaderWebPage, reader_profile
 from .widgets import HeaderBar, IconButton
 from .i18n import tr, web_strings
@@ -27,8 +27,17 @@ KINDS = (
 )
 
 
-def build_graph(lib) -> dict:
-    """Узлы и рёбра для всех видов тегов; фильтрует уже страница."""
+def in_scope(book, scope: str) -> bool:
+    """scope: "all" — все библиотеки, "litres" — ЛитРес, иначе id своей библиотеки."""
+    if scope == "all":
+        return True
+    if scope == "litres":
+        return book.get("source") == "litres"
+    return book.get("library") == scope
+
+
+def build_graph(lib, scope: str = "all") -> dict:
+    """Узлы и рёбра для всех видов тегов выбранной библиотеки; фильтрует уже страница."""
     dark = style.is_dark()
     status_color = {
         "reading": style.ACCENT,
@@ -46,6 +55,8 @@ def build_graph(lib) -> dict:
         links.append({"source": bid, "target": tid})
 
     for book in lib.ordered():
+        if not in_scope(book, scope):
+            continue
         bid = book["id"]
         authors = book.get("authors") or []
         status = lib.status(book)
@@ -75,6 +86,7 @@ def build_graph(lib) -> dict:
         "nodes": nodes + list(tags.values()),
         "links": links,
         "kinds": [{"id": k, "label": label, "color": color, "on": on} for k, label, color, on in KINDS],
+        "single": scope != "all",          # одна библиотека — переключатель «ЛитРес / Мои» не нужен
         "i18n": web_strings(),
         "theme": {
             "dark": dark,
@@ -99,6 +111,13 @@ class GraphPage(QWidget):
         back = IconButton("go-previous", tr("Назад"))
         back.clicked.connect(app.go_back)
         self.header.pack_start(back)
+        # у каждой библиотеки свой граф; «Все» — общий
+        self.scope = "all"
+        self._scopes: list[str] = []
+        self.scope_combo = QComboBox()
+        self.scope_combo.setToolTip(tr("Библиотека"))
+        self.scope_combo.currentIndexChanged.connect(self._on_scope_selected)
+        self.header.pack_end(self.scope_combo)
 
         from PySide6.QtWebEngineWidgets import QWebEngineView
         self.web = QWebEngineView(self)
@@ -114,19 +133,68 @@ class GraphPage(QWidget):
         self._sync_subtitle()
 
     def _data_js(self) -> str:
-        return json.dumps(build_graph(self.app.library), ensure_ascii=False)
+        return json.dumps(build_graph(self.app.library, self.scope), ensure_ascii=False)
+
+    # --- выбор библиотеки и состояние графа по библиотекам
+
+    def fill_scopes(self, scope=None):
+        libs = libraries.all_libraries(self.app.settings)
+        self._scopes = ["all"] + [lib["id"] for lib in libs]
+        self.scope_combo.blockSignals(True)
+        self.scope_combo.clear()
+        self.scope_combo.addItems([tr("Все библиотеки")] + [lib["name"] for lib in libs])
+        target = scope if scope in self._scopes else (self.scope if self.scope in self._scopes else "all")
+        self.scope_combo.setCurrentIndex(self._scopes.index(target))
+        self.scope_combo.blockSignals(False)
+        self.scope_combo.setVisible(len(self._scopes) > 2)
+        if target != self.scope:
+            self.set_scope(target)
+
+    def _on_scope_selected(self, idx):
+        if 0 <= idx < len(self._scopes):
+            self.set_scope(self._scopes[idx])
+
+    def set_scope(self, scope):
+        self.scope = scope
+        self._layout_done = False
+        self._sync_subtitle()
+        if self.ready:
+            self.page.runJavaScript(f"window.graph.load({self._data_js()}, {json.dumps(self._load_state())})")
+
+    def _state_file(self):
+        """Своя библиотека — graph.json в её .library; ЛитРес и «Все» — в настройках."""
+        lib = next((l for l in libraries.folder_libraries(self.app.settings) if l["id"] == self.scope), None)
+        return folder_store_dir(lib["path"], lib["id"]) / STORE_GRAPH if lib else None
+
+    def _load_state(self) -> dict:
+        path = self._state_file()
+        if path:
+            return load_json(path, {})
+        states = self.app.settings.get("graphStates") or {"all": self.app.settings.get("graph") or {}}
+        return states.get(self.scope) or {}
+
+    def _save_state(self, state):
+        path = self._state_file()
+        if path:
+            try:
+                save_json(path, state)
+            except OSError:
+                pass
+            return
+        states = dict(self.app.settings.get("graphStates") or {"all": self.app.settings.get("graph") or {}})
+        states[self.scope] = state
+        self.app.settings["graphStates"] = states
+        self.app.save_settings()
 
     def _on_message(self, msg):
         t = msg.get("type")
         if t == "ready":
             self.ready = True
-            saved = self.app.settings.get("graph") or {}
-            self.page.runJavaScript(f"window.graph.load({self._data_js()}, {json.dumps(saved)})")
+            self.page.runJavaScript(f"window.graph.load({self._data_js()}, {json.dumps(self._load_state())})")
         elif t == "open":
             self.app.on_book_activated(msg.get("id"))
         elif t == "state":
-            self.app.settings["graph"] = msg.get("state") or {}
-            self.app.save_settings()
+            self._save_state(msg.get("state") or {})
         elif t == "escape":
             self.app.go_back()
         elif t == "layout-done":

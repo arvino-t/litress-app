@@ -63,6 +63,7 @@ STATS_FILE = DATA_DIR / "stats.json"
 LIBRARY_STORE = ".library"
 STORE_BOOKS = "books.json"
 STORE_PROGRESS = "progress.json"
+STORE_GRAPH = "graph.json"
 # Поля книги из папки, которые получаются сканированием (в хранилище библиотеки не пишутся)
 FOLDER_DERIVED = {"id", "source", "format", "path", "title", "authors", "section", "collection", "library", "rel"}
 

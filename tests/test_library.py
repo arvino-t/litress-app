@@ -76,3 +76,16 @@ def test_library_persists(clean_data):
     again = Library()
     assert again.books["7"]["title"] == "Книга 7"
     assert again.progress["7"]["fraction"] == 0.5
+
+
+def test_graph_scope(clean_data, tmp_path):
+    from litres_reader.graph import build_graph
+    make_tree(tmp_path / "articles")
+    lib = Library()
+    lib.merge_litres([art(1, persons=[{"role": "author", "full_name": "Автор"}])])
+    lib.scan_folders([{"id": "folder-0123456789", "path": str(tmp_path / "articles"), "name": "Статьи"}])
+    books = lambda scope: {n["id"] for n in build_graph(lib, scope)["nodes"] if n["kind"] == "book"}
+    assert len(books("all")) == 4
+    assert books("litres") == {"1"}
+    assert len(books("folder-0123456789")) == 3 and "1" not in books("folder-0123456789")
+    assert build_graph(lib, "all")["single"] is False and build_graph(lib, "litres")["single"] is True

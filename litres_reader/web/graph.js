@@ -442,11 +442,15 @@ document.addEventListener('keydown', e => {
 window.graph = {
     load(d, saved) {
         data = d
+        // одна библиотека — переключатель «Все / ЛитРес / Мои» не нужен
+        $('source').closest('section').hidden = !!d.single
+        if (d.single) saved = { ...(saved || {}), source: 'all' }
         I18N = d.i18n || {}
         translatePage()
         document.documentElement.dataset.theme = d.theme.dark ? 'dark' : 'light'
         document.documentElement.style.setProperty('--accent', d.theme.accent)
-        Object.assign(state, saved || {})
+        // у каждой библиотеки своё состояние — сначала исходное, потом сохранённое
+        Object.assign(state, { source: 'all', kinds: null, minDeg: 2, orphans: false }, saved || {})
         const ids = d.kinds.map(k => k.id)
         state.kinds = (state.kinds || d.kinds.filter(k => k.on).map(k => k.id)).filter(id => ids.includes(id))
         setupPanel()

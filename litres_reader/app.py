@@ -1070,10 +1070,16 @@ class App(QObject):
     # --- граф книг
 
     def show_graph(self):
+        """Граф библиотеки, выбранной в фильтре «Источник» (или всех)."""
+        kind = self.settings.get("libraryType", "all")
+        scope = ("litres" if kind in ("litres", "text", "audio") else
+                 kind[len("lib:"):] if kind.startswith("lib:") else "all")
         if self.graph_page is None:
             self.graph_page = GraphPage(self)
+        self.graph_page.fill_scopes(scope)
         self.push(self.graph_page)
-        self.litres_lib._fetch_details()
+        if self.has_litres():
+            self.litres_lib._fetch_details()
 
     # --- свои книги и статьи
 

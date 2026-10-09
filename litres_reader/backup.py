@@ -23,7 +23,7 @@ from PySide6.QtCore import QStandardPaths
 
 from . import __version__
 from .core import (CONFIG_DIR, CONFIG_FILE, DATA_DIR, LIBRARY_FILE, PROGRESS_FILE, STATS_FILE, STORE_BOOKS,
-                   STORE_PROGRESS, folder_store_dir, load_json, save_json)
+                   STORE_GRAPH, STORE_PROGRESS, folder_store_dir, load_json, save_json)
 from .i18n import tr
 
 SINGULARITY_FILE = CONFIG_DIR / "singularity.json"
@@ -40,7 +40,8 @@ MAX_FILE = 50 * 1024 * 1024
 INTERVALS = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
 # Настройки, которые не берутся из копии: они про этот компьютер и про сами копии
 # Данные своих библиотек (их хранилища `.library/`) — в архиве как libraries/<id>/<файл>
-STORE_ENTRY = re.compile(r"^libraries/(folder-[0-9a-f]{10})/(%s|%s)$" % (re.escape(STORE_BOOKS), re.escape(STORE_PROGRESS)))
+STORE_FILES = (STORE_BOOKS, STORE_PROGRESS, STORE_GRAPH)
+STORE_ENTRY = re.compile(r"^libraries/(folder-[0-9a-f]{10})/(%s)$" % "|".join(map(re.escape, STORE_FILES)))
 LOCAL_SETTINGS = ("booksDir", "libraries", "localFolders", "backupDir", "backupLast")
 
 
@@ -91,7 +92,7 @@ def create(settings, reason: str = "") -> Path:
             z.writestr(arc, data)
             stored.append(arc)
         for lib_id, store in _folder_stores(settings).items():
-            for name in (STORE_BOOKS, STORE_PROGRESS):
+            for name in STORE_FILES:
                 if (store / name).exists():
                     arc = f"libraries/{lib_id}/{name}"
                     z.writestr(arc, (store / name).read_bytes())
