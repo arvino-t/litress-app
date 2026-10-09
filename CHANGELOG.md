@@ -6,6 +6,19 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-10-09
+
+First stable release of Muninhall — a manager for your own library of e-books and articles:
+
+- **Libraries** — folders on disk with their data in `.library/` (travels with the folder), browsed together
+  as one big library; LitRes as an optional pluggable library (sign-in on the website, sync, downloads).
+- **Reader and player** — EPUB, FB2, MOBI, PDF; themes, gestures, auto page turn, read aloud; audiobooks with
+  chapters, speed and a sleep timer; continue reading across devices.
+- **Graph, statistics, backups** — per library or for all of them; Singularity integration.
+- **Settings** — General, Libraries, Appearance (theme, accent, nine app icons, keyboard shortcuts),
+  Reading, Integrations, Backups, Advanced; Russian and English.
+- **Installers** — `Muninhall-Setup-1.0.0.exe` for Windows and `Muninhall.flatpak` for Linux.
+
 ### Changed
 - Internal refactoring (no behaviour change): `App` is split into the library page (`library.py`) and
   appearance (`appearance.py`) mixins and the Singularity window moved to `singularity.py` (`App`: 1400 → 630
@@ -295,7 +308,8 @@ library. The interface stays the same — "Source" is now the name of a library.
   pitch and a sleep timer.
 - VPN bypass for LitRes (`vpn-bypass/`).
 
-[Unreleased]: https://github.com/arvino-t/muninhall/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/arvino-t/muninhall/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/arvino-t/muninhall/compare/v0.18.0...v1.0.0
 [0.18.0]: https://github.com/arvino-t/muninhall/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/arvino-t/muninhall/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/arvino-t/muninhall/compare/v0.15.0...v0.16.0

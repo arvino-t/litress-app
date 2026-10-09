@@ -22,6 +22,9 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.0" date="2026-10-09">
+      <description><p>First stable release.</p></description>
+    </release>
     <release version="0.18.0" date="2026-10-09"/>
   </releases>
 </component>
