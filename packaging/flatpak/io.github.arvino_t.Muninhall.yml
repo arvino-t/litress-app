@@ -21,6 +21,25 @@ finish-args:
   - --env=QTWEBENGINE_DISABLE_SANDBOX=1
   - --env=QT_QPA_PLATFORM=wayland;xcb
 modules:
+  # Kerberos: libgssapi_krb5 нужна QtNetwork из колёс PySide6, а в среде freedesktop её нет
+  - name: krb5
+    subdir: src
+    config-opts:
+      - --localstatedir=/var/lib
+      - --sbindir=/app/bin
+      - --disable-rpath
+      - --disable-static
+      - --without-system-verto
+    cleanup:
+      - /bin
+      - /share/examples
+      - /share/man
+      - /include
+    sources:
+      - type: archive
+        url: https://kerberos.org/dist/krb5/1.21/krb5-1.21.3.tar.gz
+        sha256: b7a4cd5ead67fb08b980b21abd150ff7217e85ea320c9ed0c6dadd304840ad35
+
   # PySide6 — готовые колёса с PyPI (Qt и Chromium внутри)
   - name: pyside6
     buildsystem: simple
