@@ -90,7 +90,9 @@ Environment variables:
 
 | Path | Contents |
 |---|---|
-| `muninhall/app.py` | main window, library page and filters, own libraries, dialogs, app startup |
+| `muninhall/app.py` | `App`: window, navigation, libraries, reader/player wiring, backups, app startup |
+| `muninhall/library.py` | the library page (mixin of `App`): filters, cards created in batches, covers, book menu |
+| `muninhall/appearance.py` | appearance (mixin of `App`): theme, accent, app icon, keyboard shortcuts (`SHORTCUTS`) |
 | `muninhall/core.py` | paths, default settings, the `Library` model (books, progress, statistics, per-library stores) |
 | `muninhall/libraries.py` | the registry of libraries (`libraries` setting) and its migration |
 | `muninhall/litres_connector.py` | the LitRes connector: sign-in, sync, downloads, LitRes folders, remote position |
@@ -101,7 +103,7 @@ Environment variables:
 | `muninhall/backup.py` | backup archives (all libraries or one) and two-step restore |
 | `muninhall/graph.py` | book graph data and page |
 | `muninhall/stats.py` | reading statistics dialog |
-| `muninhall/singularity.py` | SingularityApp sync |
+| `muninhall/singularity.py` | SingularityApp sync and its settings window |
 | `muninhall/i18n.py`, `i18n_en.py` | translations: `tr()` with Russian source strings as keys, English dictionary |
 | `muninhall/widgets.py`, `style.py` | libadwaita-style widgets and stylesheet |
 | `muninhall/web/` | reader and graph pages, `litres-hook.js` (passes API headers from the LitRes site; doesn't touch passwords or forms) |

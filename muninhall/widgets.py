@@ -4,9 +4,9 @@ from __future__ import annotations
 import hashlib
 import os
 
-from PySide6.QtCore import (QEasingCurve, QPoint, QPropertyAnimation, QRect, QSize, Qt, QTimer,
-                            Signal, Property)
-from PySide6.QtGui import QColor, QGuiApplication, QImageReader, QPainter, QPainterPath, QPixmap
+from PySide6.QtCore import (Property, QEasingCurve, QPoint, QPropertyAnimation, QRect, QRectF, QSize, QTimer,
+                            Qt, Signal)
+from PySide6.QtGui import QColor, QGuiApplication, QImageReader, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractButton, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
                                QLayout, QProgressBar, QPushButton, QSizePolicy, QSlider, QStyle,
                                QStyleOptionSlider,
@@ -812,3 +812,32 @@ def exec_dialog(dlg):
     frame.lower()
     dlg.resizeEvent = lambda e: frame.setGeometry(dlg.rect())
     return dlg.exec()
+
+
+class Spinner(QWidget):
+    """Крутящийся индикатор (Adw.Spinner)."""
+
+    def __init__(self):
+        super().__init__()
+        self.setFixedSize(34, 34)
+        self._angle = 0
+        self._timer = QTimer(self, interval=16)
+        self._timer.timeout.connect(self._tick)
+
+    def _tick(self):
+        self._angle = (self._angle + 6) % 360
+        self.update()
+
+    def setVisible(self, v):
+        super().setVisible(v)
+        self._timer.start() if v else self._timer.stop()
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(style.solid_fg(), 2.2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+        r = QRectF(9, 9, 16, 16)
+        p.drawArc(r, -self._angle * 16, 270 * 16)
+        p.end()

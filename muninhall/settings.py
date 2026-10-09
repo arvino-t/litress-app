@@ -742,7 +742,7 @@ class SettingsPage(QWidget):
         self.app.apply_app_icon(name)
 
     def _fill_shortcuts(self):
-        from .app import SHORTCUTS
+        from .appearance import SHORTCUTS
         g = self.shortcuts_group
         for w in self._shortcut_rows:
             g.removeWidget(w)

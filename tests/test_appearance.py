@@ -19,7 +19,7 @@ def test_theme_and_accent_overrides():
 
 
 def test_default_shortcuts_unique():
-    from muninhall.app import SHORTCUTS
+    from muninhall.appearance import SHORTCUTS
     keys = [k for _a, _t, ks, _s in SHORTCUTS for k in ks]
     assert len(keys) == len(set(keys))
     assert len({a for a, *_ in SHORTCUTS}) == len(SHORTCUTS)

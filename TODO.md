@@ -11,19 +11,6 @@ Reviewed: 2026-10-09 (after 0.18.0).
   associations, uninstall, restart after a restore in the frozen build) and `Muninhall.flatpak` on Linux
   (data shared with the native install, LitRes sign-in inside the sandbox).
 
-## Refactoring
-Behaviour doesn't change; after each step, check the installed version.
-- [ ] **Split the `App` class** (`app.py`: ~1400 lines, 97 methods — it grew again with libraries,
-  appearance and shortcuts):
-  - `library.py` — the library page: filters, grid, lazy cards, "Continue reading";
-  - `appearance.py` — theme, accent, app icon, shortcuts (`SHORTCUTS` table and `apply_*`);
-  - the Singularity dialog → `singularity.py`;
-  - `App` keeps the window, navigation and the wiring between parts.
-- [ ] **Remove duplication:** theme and font lists in `reader.py` and `settings.py`; the frameless dialog
-  boilerplate (statistics, LitRes folders, Singularity) → a shared widget in `widgets.py`.
-- [ ] **Small things:** 13 lines longer than 120 characters, the `_books_word` wrapper around `plural`
-  in `litres_connector.py`, `except Exception` in `app.py` (PDF covers) to narrow down.
-
 ## Reader — first priority
 - [ ] **Highlights and notes exported to Obsidian.** Select a quote, add a comment; quotes are collected
   on the book's page in the wiki with links back to the place in the book. foliate-js can already draw

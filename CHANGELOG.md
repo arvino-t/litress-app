@@ -6,6 +6,11 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 
 ## [Unreleased]
 
+### Changed
+- Internal refactoring (no behaviour change): `App` is split into the library page (`library.py`) and
+  appearance (`appearance.py`) mixins and the Singularity window moved to `singularity.py` (`App`: 1400 → 630
+  lines); one shared frameless dialog helper; theme and font lists defined once; small cleanups.
+
 ## [0.18.0] — 2026-10-09
 
 ### Changed
