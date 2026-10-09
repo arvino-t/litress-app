@@ -99,7 +99,7 @@ class LitresConnector(QObject):
 
         def finish(text):
             self.app._set_syncing(False)
-            self.app.refresh_library()
+            self.app.library_view.refresh_library()
             self._fetch_details()
             # Открытая книга могла уйти дальше на ЛитРес — подтягиваем место
             for bid in {self.app.reader.book["id"] if self.app.reader else None, self.app.player.book_id} - {None}:
@@ -180,7 +180,7 @@ class LitresConnector(QObject):
             self.show_login()
             return
         self.downloading.add(bid)
-        card = self.app.cards.get(bid)
+        card = self.app.library_view.cards.get(bid)
         if card:
             card.set_download_progress(0)
 
@@ -228,7 +228,7 @@ class LitresConnector(QObject):
                 card.set_download_progress(None)
             book.update(file=file_name, format=fmt_saved)
             self.app.library.save()
-            self.app.refresh_card(bid)
+            self.app.library_view.refresh_card(bid)
             if on_finished:
                 on_finished(True, None)
                 return
@@ -268,7 +268,7 @@ class LitresConnector(QObject):
     def download_all(self):
         if self.bulk:
             self.bulk["queue"].clear()      # текущая книга докачается, остальные — нет
-            self.app.download_all_action.setText(tr("Скачивание останавливается…"))
+            self.app.library_view.download_all_action.setText(tr("Скачивание останавливается…"))
             return
         if not self.app.litres.logged_in:
             self.app.toast(tr("Сначала войдите в ЛитРес"))
@@ -301,7 +301,7 @@ class LitresConnector(QObject):
             return
         queue = missing if clicked is everything else texts
         self.bulk = {"queue": list(queue), "total": len(queue), "done": 0, "failed": 0, "errors": []}
-        self.app.download_all_action.setText(tr("Остановить скачивание книг"))
+        self.app.library_view.download_all_action.setText(tr("Остановить скачивание книг"))
         self._bulk_next()
 
     def _bulk_next(self):
@@ -309,7 +309,7 @@ class LitresConnector(QObject):
         self.app._update_account_ui()
         if not b["queue"]:
             self.bulk = None
-            self.app.download_all_action.setText(tr("Скачать все книги…"))
+            self.app.library_view.download_all_action.setText(tr("Скачать все книги…"))
             self.app._update_account_ui()
             stopped = b["done"] + b["failed"] < b["total"]
             text = tr('Скачано {0} из {1}', b['done'], b['total']) + (tr(" — остановлено") if stopped else "")
@@ -405,7 +405,7 @@ class LitresConnector(QObject):
                 add_row(new_id, folders[new_id])
                 desc.setText(tr("Изменения сразу отправляются на ЛитРес"))
                 switches[-1].setChecked(True)   # сразу кладём книгу в новую папку
-                self.app._update_filter_bar()
+                self.app.library_view._update_filter_bar()
             self.app.litres.create_folder(title, done)
         entry.returnPressed.connect(create)
         v.addWidget(body)
@@ -416,8 +416,8 @@ class LitresConnector(QObject):
         if inside == (fid in (book.get("folders") or [])):
             return
         litres_data.set_in_folder(self.app.library, book["id"], fid, inside)
-        self.app._update_filter_bar()
-        self.app._apply_filter()
+        self.app.library_view._update_filter_bar()
+        self.app.library_view._apply_filter()
         self.flush_folder_ops()
 
     def apply_remote_position(self, book, _attempt=0):

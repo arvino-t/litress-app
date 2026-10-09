@@ -91,7 +91,7 @@ Environment variables:
 | Path | Contents |
 |---|---|
 | `muninhall/app.py` | `App`: window, navigation, libraries, reader/player wiring, backups, app startup |
-| `muninhall/library.py` | the library page (mixin of `App`): filters, cards created in batches, covers, book menu |
+| `muninhall/library.py` | `LibraryView`: the library page — filters, cards created in batches, covers, book menu (`app.library_view`) |
 | `muninhall/appearance.py` | appearance (mixin of `App`): theme, accent, app icon, keyboard shortcuts (`SHORTCUTS`) |
 | `muninhall/core.py` | paths, default settings, data migration, small helpers |
 | `muninhall/model.py` | the `Library` model: books of all libraries, order, reading positions, status and percent |

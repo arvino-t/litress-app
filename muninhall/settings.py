@@ -347,8 +347,8 @@ class SettingsPage(QWidget):
         g = self.group(tr("Запуск и библиотека"))
         self.switch(g, tr("Открывать последнюю текстовую книгу при запуске"), "openLastBook",
                     tr("Самую свежую из начатых и скачанных — с учётом чтения на телефоне"))
-        only = Switch(app.only_downloaded)
-        only.toggled.connect(app.only_action.setChecked)
+        only = Switch(app.library_view.only_downloaded)
+        only.toggled.connect(app.library_view.only_action.setChecked)
         self.row(g, tr("Показывать только скачанные книги"), only)
         if app.has_litres():
             self.button(g, tr("Скачать все книги"), tr("Скачать…"), app.download_all,

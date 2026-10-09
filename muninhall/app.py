@@ -26,9 +26,9 @@ from .litres_connector import LitresConnector
 from .singularity import SingularitySync
 from .appearance import SHORTCUTS, Appearance
 from .config import Settings
-from .library import LibraryPage
+from .library import LibraryView
 from .model import Library
-from .widgets import BookCard, confirm, HeaderBar, IconButton, Toast
+from .widgets import confirm, HeaderBar, IconButton, Toast
 
 EBOOK_PATTERNS = "*.epub *.fb2 *.fb2.zip *.fbz *.mobi *.azw3"
 
@@ -105,10 +105,11 @@ class MainWindow(QMainWindow):
         super().closeEvent(e)
 
 
-class App(QObject, LibraryPage, Appearance):
+class App(QObject, Appearance):
     def __init__(self, qapp: QApplication):
         super().__init__()
         self.qapp = qapp
+        self.library_view = LibraryView(self)      # страница библиотеки
         self.settings = Settings(parent=self)
         core.set_debug(self.settings.get("debugLog"))
         if libraries.ensure_registry(self.settings):      # первый запуск с библиотеками — перенос настроек
@@ -125,17 +126,13 @@ class App(QObject, LibraryPage, Appearance):
         self._backup_timer.timeout.connect(self.auto_backup)
         self._backup_timer.start()
         QTimer.singleShot(60_000, self.auto_backup)
-        self.cards: dict[str, BookCard] = {}
         self.litres_lib = LitresConnector(self)   # подключаемая библиотека ЛитРес
-        self.only_downloaded = False
         self.reader: ReaderPage | None = None
         self.graph_page: GraphPage | None = None
         self.settings_page: SettingsPage | None = None
         self._details_running = False
         self.player_page: PlayerPage | None = None
         self.net = QNetworkAccessManager(self)
-        self._covers_running = 0
-        self._cover_queue: list[str] = []
 
         style.read_portal_scheme()
         style.set_overrides(self.settings.get("uiTheme"), self.settings.get("accent"))
@@ -173,7 +170,7 @@ class App(QObject, LibraryPage, Appearance):
         self.window.setCentralWidget(self.stack)
         self.history: list[QWidget] = []
 
-        self.library_page = self._build_library_page()
+        self.library_page = self.library_view._build_library_page()
         self.login_page = self._build_login_page()
         self.push(self.library_page)
 
@@ -181,7 +178,7 @@ class App(QObject, LibraryPage, Appearance):
         self.shortcuts: dict[str, QShortcut] = {}
         for action, _title, _keys, slot in SHORTCUTS:
             sc = QShortcut(self.window)
-            sc.activated.connect(getattr(self, slot))
+            sc.activated.connect(getattr(self, slot, None) or getattr(self.library_view, slot))
             self.shortcuts[action] = sc
         self.apply_shortcuts()
 
@@ -190,9 +187,9 @@ class App(QObject, LibraryPage, Appearance):
             # встроенный Chromium для ЛитРес — когда окно уже на экране
             QTimer.singleShot(400, self.litres.start)
         folder_scan.scan_folders(self.library, self.local_folders())
-        self.refresh_library()
+        self.library_view.refresh_library()
         QTimer.singleShot(0, self._open_last_book)
-        QTimer.singleShot(1500, self._make_pdf_covers)
+        QTimer.singleShot(1500, self.library_view._make_pdf_covers)
         # Пока окно открыто — тихо подтягиваем с ЛитРес прочитанное на других устройствах
         self._remote_timer = QTimer(self)
         self._remote_timer.timeout.connect(self.litres_lib._periodic_sync)
@@ -261,7 +258,7 @@ class App(QObject, LibraryPage, Appearance):
             self.graph_page = None
         elif page is self.login_page:
             pass
-        self.refresh_library()
+        self.library_view.refresh_library()
 
     def toggle_fullscreen(self):
         w = self.window
@@ -332,35 +329,35 @@ class App(QObject, LibraryPage, Appearance):
         """ЛитРес отключён — в интерфейсе нет ничего про него (данные и вход сохраняются)."""
         on = self.has_litres()
         self.library.hidden_sources = set() if on else {"litres"}
-        self.account_action.setVisible(on)
-        self.download_all_action.setVisible(on)
-        self.sync_btn.setToolTip(tr("Обновить список книг с ЛитРес (F5)") if on else tr("Обновить список книг (F5)"))
-        self.empty_login_btn.setVisible(on)
+        self.library_view.account_action.setVisible(on)
+        self.library_view.download_all_action.setVisible(on)
+        self.library_view.sync_btn.setToolTip(tr("Обновить список книг с ЛитРес (F5)") if on else tr("Обновить список книг (F5)"))
+        self.library_view.empty_login_btn.setVisible(on)
         self._update_account_ui()
 
     def _update_account_ui(self):
         if not self.has_litres():
             libs = libraries.all_libraries(self.settings)
-            self.lib_header.set_title(tr("Библиотека"), tr("Библиотек: {0} · книг: {1}", len(libs),
+            self.library_view.lib_header.set_title(tr("Библиотека"), tr("Библиотек: {0} · книг: {1}", len(libs),
                                                            len(self.library.ordered())))
         elif self.litres_lib.bulk:
             b = self.litres_lib.bulk
-            self.lib_header.set_title(tr("Библиотека"),
+            self.library_view.lib_header.set_title(tr("Библиотека"),
                                       tr('Скачиваю книги: {0} из {1}', b['done'] + b['failed'], b['total']))
         elif self.litres.logged_in:
-            self.account_action.setText(tr("Выйти из ЛитРес"))
-            self.lib_header.set_title(tr("Библиотека"), tr('ЛитРес: {0}', self.litres.user_name)
+            self.library_view.account_action.setText(tr("Выйти из ЛитРес"))
+            self.library_view.lib_header.set_title(tr("Библиотека"), tr('ЛитРес: {0}', self.litres.user_name)
                                       if self.litres.user_name else tr("ЛитРес: вход выполнен"))
         else:
-            self.account_action.setText(tr("Войти в ЛитРес"))
-            self.lib_header.set_title(tr("Библиотека"), tr("Вход в ЛитРес не выполнен"))
+            self.library_view.account_action.setText(tr("Войти в ЛитРес"))
+            self.library_view.lib_header.set_title(tr("Библиотека"), tr("Вход в ЛитРес не выполнен"))
 
     # --- синхронизация
 
     def _set_syncing(self, on):
         self.litres_lib.syncing = on
-        self.sync_btn.setVisible(not on)
-        self.sync_spinner.setVisible(on)
+        self.library_view.sync_btn.setVisible(not on)
+        self.library_view.sync_spinner.setVisible(on)
 
     def set_finished(self, book, finished: bool, auto=False):
         """Отметка «прочитано»: локально и на ЛитРес (сразу или при следующей синхронизации)."""
@@ -369,7 +366,7 @@ class App(QObject, LibraryPage, Appearance):
         if book.get("source") == "litres":
             book["finished_pending"] = finished
         self.library.save()
-        self.refresh_card(book["id"])
+        self.library_view.refresh_card(book["id"])
         if finished:
             self.library.reading.mark_finished(book["id"])
         if auto:
@@ -435,9 +432,9 @@ class App(QObject, LibraryPage, Appearance):
                 self.player_page.deleteLater()
                 self.player_page = None
             self.player.unload()
-            self.now_playing_btn.setVisible(False)
+            self.library_view.now_playing_btn.setVisible(False)
         self.library.remove_file(bid)
-        self.refresh_library()
+        self.library_view.refresh_library()
 
     # --- папки
 
@@ -481,19 +478,19 @@ class App(QObject, LibraryPage, Appearance):
         ch = self.player.chapters[self.player.current_chapter()]["title"] if self.player.chapters else ""
         self.library.set_audio_progress(bid, self.player.index, self.player.position(),
                                         self.player.fraction(), ch)
-        if bid in self.cards and not self.player.playing:
-            self.refresh_card(bid)
+        if bid in self.library_view.cards and not self.player.playing:
+            self.library_view.refresh_card(bid)
 
     def _on_player_state(self):
         book = self.library.books.get(self.player.book_id or "")
         if not book:
             return
         name = "media-playback-start" if self.player.playing else "media-playback-pause"
-        self.now_playing_btn.setIcon(style.icon(name))
+        self.library_view.now_playing_btn.setIcon(style.icon(name))
         title = book.get("title") or ""
-        self.now_playing_btn.setText(" " + self.now_playing_btn.fontMetrics().elidedText(
+        self.library_view.now_playing_btn.setText(" " + self.library_view.now_playing_btn.fontMetrics().elidedText(
             title, Qt.TextElideMode.ElideRight, 200))
-        self.now_playing_btn.setVisible(True)
+        self.library_view.now_playing_btn.setVisible(True)
         self.save_audio_progress()
 
     def _on_audio_finished(self):
@@ -513,7 +510,7 @@ class App(QObject, LibraryPage, Appearance):
         except OSError as e:
             self.toast(tr('Не удалось открыть файл: {0}', e.strerror))
             return
-        self.refresh_library()
+        self.library_view.refresh_library()
         book = self.library.books[bid]
         self.open_book(book, self.library.file_path(book))
 
@@ -530,7 +527,7 @@ class App(QObject, LibraryPage, Appearance):
         self.library.save()
         self.settings["booksDir"] = str(new_dir)
         self.save_settings()
-        self.refresh_library()
+        self.library_view.refresh_library()
         if errors:
             self.toast(tr('Книги теперь в {0}. Перенесено: {1}, не удалось: {2} — ', new_dir, moved, len(errors))
                        + errors[0], timeout=10000)
@@ -557,9 +554,9 @@ class App(QObject, LibraryPage, Appearance):
 
     def rescan_local(self, report=False):
         n = folder_scan.scan_folders(self.library, self.local_folders())
-        self._fill_type_combo()
-        self.refresh_library()
-        QTimer.singleShot(500, self._make_pdf_covers)
+        self.library_view._fill_type_combo()
+        self.library_view.refresh_library()
+        QTimer.singleShot(500, self.library_view._make_pdf_covers)
         if report:
             self.toast(tr('Своих книг и статей: {0}', n))
 

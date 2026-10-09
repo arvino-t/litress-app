@@ -346,7 +346,7 @@ class ReaderPage(QWidget):
         elif t == "opened":
             self.set_ui_visible(self.ui_visible)
             self._fill_toc(msg.get("toc") or [])
-            self.app.on_book_metadata(self.book["id"], msg.get("title"), msg.get("author"))
+            self.app.library_view.on_book_metadata(self.book["id"], msg.get("title"), msg.get("author"))
         elif t == "relocate":
             if msg.get("fraction") is None:
                 return

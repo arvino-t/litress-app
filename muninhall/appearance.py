@@ -81,10 +81,10 @@ class Appearance:
         style.apply_palette(self.qapp)
         for w in self.window.findChildren(HeaderBar):
             w.refresh_icons()
-        for card in self.cards.values():
+        for card in self.library_view.cards.values():
             card.refresh_icons()
             card.cover.update()
-        self.sync_btn.refresh_icon()
+        self.library_view.sync_btn.refresh_icon()
         if self.reader:
             self.reader.refresh_style()
         if self.player_page:
