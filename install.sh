@@ -53,7 +53,8 @@ fi
 refresh_caches() {
     update-desktop-database "$PREFIX/applications" 2>/dev/null || true
     update-mime-database "$PREFIX/mime" 2>/dev/null || true
-    gtk-update-icon-cache -q "$PREFIX/icons/hicolor" 2>/dev/null || true
+    # в пользовательской теме нет index.theme — без -t кэш не обновится, а старый кэш прячет новые значки
+    gtk-update-icon-cache -q -f -t "$PREFIX/icons/hicolor" 2>/dev/null || true
 }
 
 if [[ "${1:-}" == "--uninstall" ]]; then
