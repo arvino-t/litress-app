@@ -1,12 +1,13 @@
 # TODO
 
 Ideas for the next versions, most useful first. Finished items move to [CHANGELOG.md](CHANGELOG.md).
-Reviewed: 2026-10-09 (after 0.18.0).
+Reviewed: 2026-10-10 (after 1.1.0).
 
 ## Check first
-- [ ] **LitRes with a real session after the connector move (0.15) and the lazy Chromium (0.18):**
-  sign-in, F5 sync, downloading one book and "Download all", LitRes folders, the position from the phone.
-  Covered by smoke tests only without a signed-in account.
+- [ ] **LitRes with a real session after the connector move (0.15), the lazy Chromium (0.18) and the
+  sync/download split (1.1):** sign-in, F5 sync, downloading one book and "Download all", LitRes folders,
+  the position from the phone. Sync and download logic are tested against a fake server
+  (`tests/test_litres_connector.py`); the real site and the web view are not.
 - [ ] **Installers on real machines:** `Muninhall-Setup-*.exe` on Windows 10/11 (install, file
   associations, uninstall, restart after a restore in the frozen build) and `Muninhall.flatpak` on Linux
   (data shared with the native install, LitRes sign-in inside the sandbox).
@@ -38,8 +39,9 @@ Reviewed: 2026-10-09 (after 0.18.0).
   connectors next to LitRes (a new `LibrarySource` subclass in `libraries.KINDS`; `litres_connector.py` is the pattern for sync).
 - [ ] **Conflicting `.library` copies** — when a library folder is edited on two computers, cloud sync
   (rclone) leaves conflict copies; merge them (positions — latest wins, marks and bookmarks — union).
-- [ ] **Library metadata from files:** title, authors and cover from EPUB/FB2 metadata instead of the file
-  name (PDF covers already come from the first page).
+- [ ] **Library metadata from files:** books in library folders are titled by the file name (recomputed on
+  every scan); read title, authors and cover from EPUB/FB2 metadata during the scan. PDF covers already
+  come from the first page; a file opened with "Open file" already takes title and author from the book.
 - [ ] **Rework the backup logic** — per-library backups are done. Still to revisit: restoring one library
   without a restart, automatic backups per library, how backups relate to cloud sync.
 - [ ] **Sync app-level data with the cloud** — your libraries' data already travels with their folders
@@ -69,12 +71,11 @@ Reviewed: 2026-10-09 (after 0.18.0).
   book's card in the wiki.
 
 ## Performance
-- [ ] **First start after an update** rebuilds the cover thumbnail cache (~3.5 s once); stale thumbnails
-  of removed covers are never deleted — prune `<cache>/thumbs`.
-- [ ] **Graph and reader pages** each create their own QtWebEngine view; reuse one profile/process where
-  possible to save memory.
+- [ ] **Stale cover thumbnails** are never deleted — prune `<cache>/thumbs` of covers that no longer exist
+  (the cache is rebuilt once after an update, ~3.5 s).
 
 ## Distribution
-- [ ] **Flathub** — submit the Flatpak (metainfo screenshots, release notes in metainfo per version).
+- [ ] **Flathub** — submit the Flatpak; metainfo still lacks screenshots, and release notes there are
+  written for 1.0.0 and 1.1.0 only.
 - [ ] **Windows code signing** — the unsigned installer triggers a SmartScreen warning.
 - [ ] **Update check** — tell the user when a newer release is on GitHub.
