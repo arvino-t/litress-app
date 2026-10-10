@@ -28,6 +28,10 @@ class _Bridge(QObject):
 
 
 class LitresConnector(QObject):
+    """Подключаемая библиотека ЛитРес: вход, синхронизация, скачивание, жанры и теги для графа."""
+    details_progress = Signal(int, int)     # подгрузка жанров и тегов: готово, всего
+    details_changed = Signal()              # жанры и теги обновились — граф перестроить
+
     def __init__(self, app):
         super().__init__(app)
         self.app = app
@@ -35,12 +39,16 @@ class LitresConnector(QObject):
         self.bulk = None        # скачивание всех книг разом: очередь и счётчики
         self.syncing = False
         self._startup_synced = False
+        self._details_running = False
+        # Пока окно открыто — тихо подтягиваем с ЛитРес прочитанное на других устройствах
+        self._remote_timer = QTimer(self)
+        self._remote_timer.timeout.connect(self._periodic_sync)
 
     def on_login_state(self):
         if not self.app.has_litres():          # ЛитРес отключён — только заголовок
-            self.app._update_account_ui()
+            self.app.update_account_ui()
             return
-        self.app._update_account_ui()
+        self.app.update_account_ui()
         if self.app.litres.logged_in:
             if self.app.current() is self.app.login_page:
                 self.app.go_back()
@@ -63,7 +71,7 @@ class LitresConnector(QObject):
     def on_logout(self):
         if confirm(self.app.window, tr("Выйти из ЛитРес?"), tr("<b>Выйти из ЛитРес?</b>"),
                    tr("Скачанные книги и закладки останутся на этом компьютере."), tr("Выйти")):
-            self.app.litres.logout(lambda: (self.app._update_account_ui(), self.app.toast(tr("Вы вышли из ЛитРес"))))
+            self.app.litres.logout(lambda: (self.app.update_account_ui(), self.app.toast(tr("Вы вышли из ЛитРес"))))
 
     def flush_folder_ops(self, then=None):
         """Отправляет накопленные изменения папок на ЛитРес по одному."""
@@ -146,11 +154,11 @@ class LitresConnector(QObject):
 
     def _bulk_next(self):
         b = self.bulk
-        self.app._update_account_ui()
+        self.app.update_account_ui()
         if not b["queue"]:
             self.bulk = None
             self.app.library_view.download_all_action.setText(tr("Скачать все книги…"))
-            self.app._update_account_ui()
+            self.app.update_account_ui()
             stopped = b["done"] + b["failed"] < b["total"]
             text = tr('Скачано {0} из {1}', b['done'], b['total']) + (tr(" — остановлено") if stopped else "")
             if b["failed"]:
@@ -199,8 +207,7 @@ class LitresConnector(QObject):
         if inside == (fid in (book.get("folders") or [])):
             return
         litres_data.set_in_folder(self.app.library, book["id"], fid, inside)
-        self.app.library_view._update_filter_bar()
-        self.app.library_view._apply_filter()
+        self.app.library_view.refresh_filters()
         self.flush_folder_ops()
 
     def apply_remote_position(self, book, _attempt=0):
@@ -252,21 +259,19 @@ class LitresConnector(QObject):
     def _fetch_details(self):
         """Жанры и теги книг ЛитРес — их нет в списке книг, только в карточке каждой.
         Подгружаем в фоне по одной (раз на книгу), потом обновляем граф."""
-        if self.app._details_running or not self.app.litres.logged_in:
+        if self._details_running or not self.app.litres.logged_in:
             return
         todo = [b for b in self.app.library.books.values() if b.get("source") == "litres" and "genres" not in b]
         if not todo:
             return
-        self.app._details_running = True
+        self._details_running = True
 
         def step(i):
-            if self.app.graph_page:
-                self.app.graph_page.set_fetch_progress(i, len(todo))
+            self.details_progress.emit(i, len(todo))
             if i >= len(todo) or not self.app.litres.logged_in:
-                self.app._details_running = False
+                self._details_running = False
                 self.app.library.save()
-                if self.app.graph_page:
-                    self.app.graph_page.refresh()
+                self.details_changed.emit()
                 return
             book = todo[i]
 
@@ -279,8 +284,7 @@ class LitresConnector(QObject):
                     book["genres"], book["tags"] = [], []
                 if i % 20 == 19:
                     self.app.library.save()
-                    if self.app.graph_page:
-                        self.app.graph_page.refresh()
+                    self.details_changed.emit()
                 QTimer.singleShot(250, lambda: step(i + 1))
             self.app.litres.api_get(f"{API}/arts/{book['id']}", done)
         step(0)
@@ -294,9 +298,9 @@ class LitresConnector(QObject):
     def apply_remote_sync(self):
         minutes = int(self.app.settings.get("remoteSyncMin") or 0)
         if minutes > 0:
-            self.app._remote_timer.start(minutes * 60 * 1000)
+            self._remote_timer.start(minutes * 60 * 1000)
         else:
-            self.app._remote_timer.stop()
+            self._remote_timer.stop()
 
 
 def pick_download(book: dict, files: list[dict], bid: str):
@@ -333,17 +337,17 @@ class _SyncRun:
         self.has_folders_field = False
 
     def start(self):
-        self.app._set_syncing(True)
+        self.app.set_syncing(True)
         # Сначала отправляем свои изменения папок, потом забираем состояние с сервера
         self.c.flush_folder_ops(lambda: self.app.litres.fetch_library(self.got_arts))
 
     def got_arts(self, arts, status):
         app = self.app
         if arts is None:
-            app._set_syncing(False)
+            app.set_syncing(False)
             if status in (401, 403):
                 app.litres.logged_in = False
-                app._update_account_ui()
+                app.update_account_ui()
                 app.toast(tr("Сессия ЛитРес истекла — войдите снова"))
             else:
                 app.toast(tr('Не удалось получить список книг (код {0})', status))
@@ -393,7 +397,7 @@ class _SyncRun:
 
     def finish(self):
         app = self.app
-        app._set_syncing(False)
+        app.set_syncing(False)
         app.library_view.refresh_library()
         self.c._fetch_details()
         # Открытая книга могла уйти дальше на ЛитРес — подтягиваем место

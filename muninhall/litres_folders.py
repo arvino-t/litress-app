@@ -68,7 +68,7 @@ def show_folders_dialog(connector, book):
             add_row(new_id, folders[new_id])
             desc.setText(tr("Изменения сразу отправляются на ЛитРес"))
             switches[-1].setChecked(True)   # сразу кладём книгу в новую папку
-            connector.app.library_view._update_filter_bar()
+            connector.app.library_view.refresh_filters(apply=False)
         connector.app.litres.create_folder(title, done)
     entry.returnPressed.connect(create)
     v.addWidget(body)

@@ -77,7 +77,15 @@ Requires Python 3.10+ and `PySide6>=6.10,<6.12` (Qt 6 with QtWebEngine).
 
 The tests use the source tree and a temporary data directory (never your real data). They cover
 the library model and folder scanning, library stores and migration, backups (all and per library),
-the graph scope, per-library statistics, the Singularity filter, translation coverage and package data.
+the graph scope, per-library statistics, the Singularity filter, settings autosave, library kinds, LitRes sync and
+download against a fake server, translation coverage and package data.
+
+Scenario check on the installed build (Linux) — filters, reader, player, dialogs, settings tabs, graph,
+LitRes connect/disconnect — against a copy of your data in a temporary profile:
+
+```
+bash install.sh && bash tools/flow_check.sh
+```
 
 Environment variables:
 
@@ -119,6 +127,7 @@ Environment variables:
 | `vpn-bypass/` | Linux scripts to reach LitRes directly while a VPN is on |
 | `docs/en/`, `docs/ru/` | user guide in English and Russian |
 | `tests/` | pytest suite |
+| `tools/flow_check.sh` | scenario check of the installed build |
 
 ### Translations
 

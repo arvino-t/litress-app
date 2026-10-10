@@ -11,14 +11,6 @@ Reviewed: 2026-10-09 (after 0.18.0).
   associations, uninstall, restart after a restore in the frozen build) and `Muninhall.flatpak` on Linux
   (data shared with the native install, LitRes sign-in inside the sandbox).
 
-## Refactoring towards SOLID
-Behaviour doesn't change; every step — tests plus a full flow run on the installed build. Numbers are from
-the review after 1.0.0. Step 3 prepares new connectors (OPDS).
-- [ ] **5. Narrow interfaces (ISP), the rest of step 5:** the library page is a component now
-  (`LibraryView`), settings tabs are separate builder methods and the LitRes folders dialog has its own
-  module; still left — `LitresConnector` and the settings page reach into the whole `App` (≈27 and 32
-  attributes); pass them only what they need (library model, settings, notifications, navigation).
-
 ## Reader — first priority
 - [ ] **Highlights and notes exported to Obsidian.** Select a quote, add a comment; quotes are collected
   on the book's page in the wiki with links back to the place in the book. foliate-js can already draw
@@ -65,6 +57,9 @@ the review after 1.0.0. Step 3 prepares new connectors (OPDS).
 - [ ] **Evening reminder to read** if the daily goal isn't reached.
 
 ## Appearance and convenience
+- [ ] **Narrow window mode is unreachable:** the window's minimum width is 1025 px (header and filter bar
+  size hints), so the "Continue reading" panel, which hides below 900 px, never hides; let the filter bar
+  wrap or shrink so the window can get narrower (tablet portrait).
 - [ ] **Menu and tooltip labels follow custom shortcuts** — "Book graph (Ctrl+G)", "Search (Ctrl+F)" still
   show the defaults after a shortcut is changed.
 - [ ] **App icon choice on Windows** — today it changes only the window icon; the Start menu and desktop

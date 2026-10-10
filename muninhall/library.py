@@ -126,7 +126,7 @@ class LibraryView:
         body.addWidget(self.recent_panel)
         return body
 
-    def _update_recent_panel(self):
+    def update_recent_panel(self):
         books = self.app.library.recent(2, self.app.settings.get("lastBook"))
         self.recent_panel.update_books(books, self.app.library)
         # На узком окне (портрет на планшете) панель прячем — книгам нужнее место
@@ -432,6 +432,12 @@ class LibraryView:
         self.grid.invalidate()
         self.grid_widget.adjustSize()
 
+    def refresh_filters(self, apply=True):
+        """Папки или реестр поменялись: перестроить фильтры (и заново применить их к карточкам)."""
+        self._update_filter_bar()
+        if apply:
+            self._apply_filter()
+
     def _update_filter_bar(self):
         self._fill_folder_combo()
         self._update_status_counts()
@@ -485,7 +491,7 @@ class LibraryView:
         self.content.setCurrentIndex(1 if self.cards or pending else 0)
         self._update_filter_bar()
         self._apply_filter()
-        self._update_recent_panel()
+        self.update_recent_panel()
 
     def _create_more_cards(self):
         """Следующая порция отложенных карточек; в конце — порядок, если он нарушился."""
@@ -513,7 +519,7 @@ class LibraryView:
             card.update_book(book, self.app.library)
             self._update_filter_bar()
             self._apply_filter()
-            self._update_recent_panel()
+            self.update_recent_panel()
 
     def on_book_metadata(self, bid, title, author):
         book = self.app.library.books.get(bid)

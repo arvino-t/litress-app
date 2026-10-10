@@ -90,8 +90,9 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self._place_grips()
-        if hasattr(self.app, "recent_panel"):
-            self.app._update_recent_panel()
+        view = getattr(self.app, "library_view", None)
+        if view is not None and hasattr(view, "recent_panel"):    # окно уже собрано
+            view.update_recent_panel()
         for t in self.findChildren(Toast):
             t.reposition()
 
@@ -140,7 +141,6 @@ class App(QObject, Appearance):
         self.reader: ReaderPage | None = None
         self.graph_page: GraphPage | None = None
         self.settings_page: SettingsPage | None = None
-        self._details_running = False
         self.player_page: PlayerPage | None = None
         self.net = QNetworkAccessManager(self)
 
@@ -210,8 +210,6 @@ class App(QObject, Appearance):
         QTimer.singleShot(0, self._open_last_book)
         QTimer.singleShot(1500, self.library_view._make_pdf_covers)
         # Пока окно открыто — тихо подтягиваем с ЛитРес прочитанное на других устройствах
-        self._remote_timer = QTimer(self)
-        self._remote_timer.timeout.connect(self.litres_lib._periodic_sync)
         self.litres_lib.apply_remote_sync()
 
     def show_settings(self):
@@ -353,28 +351,29 @@ class App(QObject, Appearance):
         self.library_view.sync_btn.setToolTip(tr("Обновить список книг с ЛитРес (F5)") if on
                                               else tr("Обновить список книг (F5)"))
         self.library_view.empty_login_btn.setVisible(on)
-        self._update_account_ui()
+        self.update_account_ui()
 
-    def _update_account_ui(self):
+    def update_account_ui(self):
+        """Подзаголовок библиотеки и пункт меню «Войти/Выйти» по состоянию ЛитРес."""
+        view = self.library_view
         if not self.has_litres():
-            libs = libraries.all_libraries(self.settings)
-            self.library_view.lib_header.set_title(tr("Библиотека"), tr("Библиотек: {0} · книг: {1}", len(libs),
-                                                           len(self.library.ordered())))
+            subtitle = tr("Библиотек: {0} · книг: {1}", len(libraries.all_libraries(self.settings)),
+                          len(self.library.ordered()))
         elif self.litres_lib.bulk:
             b = self.litres_lib.bulk
-            self.library_view.lib_header.set_title(tr("Библиотека"),
-                                      tr('Скачиваю книги: {0} из {1}', b['done'] + b['failed'], b['total']))
+            subtitle = tr('Скачиваю книги: {0} из {1}', b['done'] + b['failed'], b['total'])
         elif self.litres.logged_in:
-            self.library_view.account_action.setText(tr("Выйти из ЛитРес"))
-            self.library_view.lib_header.set_title(tr("Библиотека"), tr('ЛитРес: {0}', self.litres.user_name)
-                                      if self.litres.user_name else tr("ЛитРес: вход выполнен"))
+            view.account_action.setText(tr("Выйти из ЛитРес"))
+            subtitle = (tr('ЛитРес: {0}', self.litres.user_name) if self.litres.user_name
+                        else tr("ЛитРес: вход выполнен"))
         else:
-            self.library_view.account_action.setText(tr("Войти в ЛитРес"))
-            self.library_view.lib_header.set_title(tr("Библиотека"), tr("Вход в ЛитРес не выполнен"))
+            view.account_action.setText(tr("Войти в ЛитРес"))
+            subtitle = tr("Вход в ЛитРес не выполнен")
+        view.lib_header.set_title(tr("Библиотека"), subtitle)
 
     # --- синхронизация
 
-    def _set_syncing(self, on):
+    def set_syncing(self, on):
         self.litres_lib.syncing = on
         self.library_view.sync_btn.setVisible(not on)
         self.library_view.sync_spinner.setVisible(on)

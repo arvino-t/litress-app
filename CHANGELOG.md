@@ -10,6 +10,12 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 - Internal refactoring (no behaviour change): the `Library` model left `core.py` and is split by
   responsibility — `model.py` (books, positions, status), `library_store.py` (files and `.library/` stores),
   `folder_scan.py` (your folders), `litres_data.py` (LitRes data and folders), `reading_stats.py` (statistics).
+- The LitRes connector owns its state (details fetching, the periodic-sync timer) and tells the graph page
+  about genre/tag loading through signals (`details_progress`, `details_changed`) instead of reaching into
+  it; `App.set_syncing`/`update_account_ui` and `LibraryView.refresh_filters`/`update_recent_panel` are
+  public — no module touches another one's private attributes.
+- `tools/flow_check.sh` — runs the main scenarios (filters, reader, player, dialogs, settings, graph,
+  LitRes connect/disconnect) on the installed build against a copy of your data in a temporary profile.
 - More long methods split: `App.__init__` into init stages and `main()` into startup steps; the reader's
   message handler is a table of `_msg_<type>` methods; the reader's View panel, header and bottom bar and the
   library page's header, menu, search bar and content are separate builders; one `change_font_size()` for

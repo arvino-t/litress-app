@@ -106,6 +106,8 @@ class GraphPage(QWidget):
         self.ready = False
         self._layout_done = False
         self._fetch = None      # (готово, всего) — подгрузка жанров с ЛитРес
+        app.litres_lib.details_progress.connect(self.set_fetch_progress)
+        app.litres_lib.details_changed.connect(self.refresh)
 
         self.header = HeaderBar(app.window, tr("Граф книг"))
         back = IconButton("go-previous", tr("Назад"))
