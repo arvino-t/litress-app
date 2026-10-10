@@ -242,8 +242,10 @@ class ReaderPage(QWidget):
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(12)
 
+        rows = iter(range(100))     # rowCount() у пустой сетки — 1, поэтому считаем сами
+
         def add(text, widget):
-            row = grid.rowCount()
+            row = next(rows)
             if text is None:                    # во всю ширину
                 grid.addWidget(widget, row, 0, 1, 2)
             else:

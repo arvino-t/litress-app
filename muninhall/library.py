@@ -384,11 +384,12 @@ class LibraryView:
 
     def _filter_owner(self, key):
         """Библиотека, которой принадлежит пункт фильтра (запоминается, пока не сменились реестр и пункт)."""
-        cache_key = (id(self.app.settings.get("libraries")), key)
-        if getattr(self, "_owner_cache", (None, None))[0] != cache_key:
+        registry = self.app.settings.get("libraries")
+        cached = getattr(self, "_owner_cache", None)
+        if cached is None or cached[0] is not registry or cached[1] != key:
             owner = next((src for src in libraries.sources(self.app.settings) if src.owns_filter(key)), None)
-            self._owner_cache = (cache_key, owner)
-        return self._owner_cache[1]
+            self._owner_cache = (registry, key, owner)     # сам список, а не id(): id переиспользуется
+        return self._owner_cache[2]
 
     def _in_scope(self, book) -> bool:
         """Источник, подкаталог и «только скачанные» — то, к чему относятся счётчики статусов."""

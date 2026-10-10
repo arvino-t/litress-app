@@ -99,7 +99,10 @@ def run():
         print("  граф: прогресс", f, "→", a.graph_page._fetch)
         assert f == (3, 10) and a.graph_page._fetch is None
         a.go_back()
-        a.litres_lib.details_changed.emit()          # страница графа закрыта — сигнал никуда не падает
+        from PySide6.QtCore import QCoreApplication, QEvent
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)   # страница удалена по-настоящему
+        a.litres_lib.details_progress.emit(1, 10)    # удалённая страница графа не должна получить сигнал
+        a.litres_lib.details_changed.emit()
 
     step("cards", lambda: print("  карточек:", len(v.cards), "из", len(books)))
     for k in list(v._type_keys):

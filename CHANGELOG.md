@@ -6,6 +6,11 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 
 ## [Unreleased]
 
+### Fixed
+- Review of the 1.1.0 refactoring: the reader's View panel no longer starts its grid at row 1 (an empty
+  row 0 after the split), and the Source-filter owner cache compares the library registry itself instead
+  of its `id()`, which Python may reuse for a new list.
+
 ## [1.1.0] — 2026-10-10
 
 ### Changed
