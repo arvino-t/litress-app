@@ -6,6 +6,8 @@ All notable changes to Muninhall (called LitRes Reader / «Читалка Лит
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-10
+
 ### Changed
 - Internal refactoring (no behaviour change): the `Library` model left `core.py` and is split by
   responsibility — `model.py` (books, positions, status), `library_store.py` (files and `.library/` stores),
@@ -337,7 +339,8 @@ library. The interface stays the same — "Source" is now the name of a library.
   pitch and a sleep timer.
 - VPN bypass for LitRes (`vpn-bypass/`).
 
-[Unreleased]: https://github.com/arvino-t/muninhall/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/arvino-t/muninhall/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/arvino-t/muninhall/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/arvino-t/muninhall/compare/v0.18.0...v1.0.0
 [0.18.0]: https://github.com/arvino-t/muninhall/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/arvino-t/muninhall/compare/v0.16.0...v0.17.0

@@ -22,6 +22,9 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.1.0" date="2026-10-10">
+      <description><p>Internal refactoring; the reader's font size label follows the pinch gesture.</p></description>
+    </release>
     <release version="1.0.0" date="2026-10-09">
       <description><p>First stable release.</p></description>
     </release>
